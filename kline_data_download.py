@@ -3,6 +3,7 @@ import asyncio
 import datetime
 import utils
 import pickle
+import json
 from TradingDataManager import FuturesDataControl, SpotDataControl
 
 PARENT_DIR = "/Users/cjupit/Desktop"
@@ -25,6 +26,13 @@ def pickle_dump(file_name: str, data: list):
         pickle.dump(data, file)
     return
 
+def json_dump(file_name: str, data: list):
+    create_folder(folder_path)
+    path_full = os.path.join(folder_path, file_name)
+    with open(path_full, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)  # JSON 파일로 저장
+    return
+
 if __name__ == "__main__":
     obj = FuturesDataControl()
     intervals = [interval for interval in obj.KLINE_INTERVALS[:-4]]
@@ -45,5 +53,5 @@ if __name__ == "__main__":
                 )
             )
         print(f"{ticker} 수신 완료")
-        pickle_dump(file_name=f"{ticker}.pkl", data=data)
+        json_dump(file_name=f"{ticker}.pkl", data=data)
     print("END")

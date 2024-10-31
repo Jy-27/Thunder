@@ -53,5 +53,5 @@ if __name__ == "__main__":
                 )
             )
         print(f"{ticker} 수신 완료")
-        json_dump(file_name=f"{ticker}.pkl", data=data)
+        json_dump(file_name=f"{ticker}.json", data=data)
     print("END")

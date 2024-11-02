@@ -21,7 +21,7 @@ def create_folder(path: str):  # 함수명 오타 수정
         return
 
 
-def pickle_dump(file_name: str, data: list):
+def pickle_dump(file_name: str, data: dict):
     create_folder(folder_path)
     path_full = os.path.join(folder_path, file_name)
     with open(path_full, "wb") as file:
@@ -29,8 +29,9 @@ def pickle_dump(file_name: str, data: list):
     return
 
 
-def json_dump(file_name: str, data: list):
+def json_dump(file_name: str, data: dict):
     create_folder(folder_path)
+    print(type(data))
     path_full = os.path.join(folder_path, file_name)
     with open(path_full, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=4)  # JSON 파일로 저장
@@ -42,8 +43,8 @@ if __name__ == "__main__":
     intervals = [interval for interval in obj.KLINE_INTERVALS[:-4]]
     tickers = ["btcusdt", "xrpusdt", "ethusdt"]
 
-    end_date = utils._convert_to_datetime("2024-10-30 23:59:59")
-    start_date = utils._convert_to_datetime("2024-8-1 00:00:00")
+    end_date = utils._convert_to_datetime("2024-1-1 23:59:59")
+    start_date = utils._convert_to_datetime("2024-2-1 00:00:00")
 
     for ticker in tickers:
         data = {}  # 각 티커마다 초기화

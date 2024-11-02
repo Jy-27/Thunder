@@ -318,6 +318,7 @@ class DataControlManager:
         # 결과 반환
         return {"day": max_days, "limit": max_limit}
 
+    # kline minute 또는 hour의 장시간 대량 데이터 수집
     async def fetch_historical_kline_hour_min(
         self,
         symbol: str,
@@ -325,6 +326,14 @@ class DataControlManager:
         start_date: Optional[Union[str, datetime.datetime]] = None,
         end_date: Optional[Union[str, datetime.datetime]] = None,
     ):
+        """
+        1. 기능 : kline 기간별 데이터를 minute 또는 hour interval기준으로 수신 및 반환
+        2. 매개변수
+            1) symbol : 조회하고자 하는 쌍거래 심볼
+            2) interval : KLINE_INTERVALS 속성 참조
+            3) start_date : '2024-01-01' 또는 datetime.datetime형태 자료
+            3) end_data : '2024-01-01' 또는 datetime.datetime형태 자료
+        """
         active_limit_info = self._get_valid_kline_limit(interval=interval)
         if not start_date and end_date:
             return await self.market_instance.fetch_klines_limit(
@@ -337,7 +346,11 @@ class DataControlManager:
 
         elif start_date and end_date:
             historicla_kline_data = []
+            start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
             end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
+
+            if start_timestamp > end_timestamp:
+                raise ValueError(f'start_date는 end_date보다 클 수 없음.')
 
             while True:
                 data = await self.market_instance.fetch_klines_date(

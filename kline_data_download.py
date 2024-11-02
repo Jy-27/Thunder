@@ -13,11 +13,13 @@ NESTED_FOLDER_NAME = "KlineData"  # 오타 수정
 
 folder_path = os.path.join(PARENT_DIR, MAIN_FOLDER_NAME, NESTED_FOLDER_NAME)
 
+
 def create_folder(path: str):  # 함수명 오타 수정
     if not os.path.isdir(path):
         os.makedirs(path)
     else:
         return
+
 
 def pickle_dump(file_name: str, data: list):
     create_folder(folder_path)
@@ -26,12 +28,14 @@ def pickle_dump(file_name: str, data: list):
         pickle.dump(data, file)
     return
 
+
 def json_dump(file_name: str, data: list):
     create_folder(folder_path)
     path_full = os.path.join(folder_path, file_name)
     with open(path_full, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=4)  # JSON 파일로 저장
     return
+
 
 if __name__ == "__main__":
     obj = FuturesDataControl()

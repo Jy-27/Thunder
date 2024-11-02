@@ -3,7 +3,6 @@ import datetime
 import asyncio
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union
 
-
 T = TypeVar("T")
 
 
@@ -190,6 +189,9 @@ def _get_time_component(
     current_time = datetime.datetime.now()
     if time_unit:
         unit_value = {
+            "year": current_time.year,
+            "month": current_time.month,
+            "day": current_time.day,
             "hour": current_time.hour,
             "minute": current_time.minute,
             "second": current_time.second,
@@ -198,6 +200,7 @@ def _get_time_component(
             raise ValueError(f"time_unit 입력 오류. {time_unit}")
         return unit_value
     return current_time
+
 
 # 문자형 시간 또는 datetime.datetime 형태 타입 변수를 밀리초 timestampe로 변환 및 반환.
 def _convert_to_timestamp_ms(date: Union[str, datetime.datetime]) -> int:
@@ -216,6 +219,7 @@ def _convert_to_timestamp_ms(date: Union[str, datetime.datetime]) -> int:
             datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S").timestamp()
             * MS_SECOND
         )
+
 
 # 문자열 시간을 datetime 형태로로 변환 및 반환.
 def _convert_to_datetime(date: Union[str, datetime.datetime, int]) -> datetime.datetime:

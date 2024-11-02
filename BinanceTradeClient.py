@@ -19,6 +19,7 @@ class BinanceOrderManager:
 
         self._api_key = data["apiKey"]
         self._secret_key = data["secret"]
+        self.account_balance: Optional[Union[Dict]] = None
 
     # API-key정보 json파일 로드.
     def load_api_keys(self) -> Optional[Dict[str, str]]:
@@ -238,6 +239,9 @@ class BinanceOrderManager:
         params["reduceOnly"] = "true" if reduce_only else "false"
 
         return self._send_request("POST", endpoint, params)
+
+    # 현재 보유중인 자산 전체를 매각 정리한다.
+    # def sumit_liquidate_all_holdings(self):
 
     # 현재 주문상태를 상세 조회(체결, 미체결 등등...)
     def fetch_order_details(self, symbol: str, order_id: int) -> Dict:

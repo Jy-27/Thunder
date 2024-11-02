@@ -48,7 +48,7 @@ class BinanceHandler:
         2. 매개변수
             1) endpoint : 각 용도별 endpoint 입력
         """
-        
+
         if endpoint in self.ENDPOINT:
             return endpoint
         else:
@@ -82,7 +82,7 @@ class BinanceHandler:
         2. 매개변수
             1) ws : websocket 정보
         """
-        
+
         self.stop_event.clear()
         while not self.stop_event.is_set():
             message = await ws.receive()
@@ -125,7 +125,7 @@ class BinanceHandler:
         2. 매개변수
             1) symbols : list 또는 str 타입 쌍거래 심볼
             2) ws_type : stream 타입.ENDPOINT 속성의 kline타입 외 전체 참조
-        
+
         """
         self.stream_type = stream_type
         url = self._streams(symbols=symbols, ws_type=stream_type)
@@ -138,7 +138,7 @@ class BinanceHandler:
         2. 매개변수
             1) symbols : list 또는 str 타입 쌍거래 심볼
             2) ws_type : kline 타입.ENDPOINT 속성의 kline타입 전체 참조
-        
+
         """
         self.stream_type = "kline"
         url = self._streams(symbols=symbols, ws_type=intervals)

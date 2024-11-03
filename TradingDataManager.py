@@ -423,6 +423,28 @@ class SpotDataControl(DataControlManager):
             SpotTickers(), SpotHandler(), my_client.SpotOrderManager(), SpotAPI()
         )
 
+    # Spot Balance 상태를 수신하여 유효한 asset값만 반환
+    def get_account_balance(self) -> Optional[Dict[str, Dict[str, float]]]:
+        """
+        1. 기능 : Spot Balance 상태를 수신하여 필요한 부분만 후처리 하여 반환함.
+        2. 매개변수 : 해당없음.
+        """
+        balance_result = {}
+        spot_order_manager = my_client.SpotOrderManager()
+        account_balances = spot_order_manager.fetch_account_balance().get('balances')
+        parsed_balances = utils._collections_to_literal(account_balances)
+        
+        for asset_data in parsed_balances:
+            asset = asset_data.get('asset')
+            free_balance = asset_data.get('free')
+            locked_balance = asset_data.get('locked')
+            total_balance = free_balance + locked_balance
+            
+            if total_balance != 0:
+                balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
+        
+        return balance_result
+
 
 class FuturesDataControl(DataControlManager):
     def __init__(self):
@@ -432,6 +454,38 @@ class FuturesDataControl(DataControlManager):
             my_client.FuturesOrderManager(),
             FuturesAPI(),
         )
+    
+    def get_account_balance(self):
+        """
+        1. 기능 : Spot Balance 상태를 수신하여 필요한 부분만 후처리 하여 반환함.
+        2. 매개변수 : 해당없음.
+        """
+        balance_result = {}
+        futures_order_manager = my_client.FuturesOrderManager()
+        account_balances = futures_order_manager.fetch_account_balance().get('positions')
+        
+        for position_data in account_balances:
+            parsed_balances = utils._collections_to_literal([position_data])[0]
+            if parsed_balances.get('positionAmt') != 0:
+                symbol = parsed_balances.get('symbol')
+                balance_result[symbol] = {}
+                for key, nested_data in parsed_balances.items():
+                    if key == 'symbol':
+                        ...
+                    else:
+                        balance_result[symbol][key] = nested_data
+        return balance_result
+        # for asset_data in parsed_balances:
+        #     asset = asset_data.get('asset')
+        #     free_balance = asset_data.get('free')
+        #     locked_balance = asset_data.get('locked')
+        #     total_balance = free_balance + locked_balance
+            
+        #     if total_balance != 0:
+        #         balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
+        
+        # return balance_result
+    
 
 
 if __name__ == "__main__":

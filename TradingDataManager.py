@@ -455,26 +455,6 @@ class FuturesDataControl(DataControlManager):
             FuturesAPI(),
         )
     
-    def get_account_balance(self):
-        """
-        1. 기능 : Spot Balance 상태를 수신하여 필요한 부분만 후처리 하여 반환함.
-        2. 매개변수 : 해당없음.
-        """
-        balance_result = {}
-        futures_order_manager = my_client.FuturesOrderManager()
-        account_balances = futures_order_manager.fetch_account_balance().get('positions')
-        
-        for position_data in account_balances:
-            parsed_balances = utils._collections_to_literal([position_data])[0]
-            if parsed_balances.get('positionAmt') != 0:
-                symbol = parsed_balances.get('symbol')
-                balance_result[symbol] = {}
-                for key, nested_data in parsed_balances.items():
-                    if key == 'symbol':
-                        ...
-                    else:
-                        balance_result[symbol][key] = nested_data
-        return balance_result
         # for asset_data in parsed_balances:
         #     asset = asset_data.get('asset')
         #     free_balance = asset_data.get('free')
@@ -486,6 +466,9 @@ class FuturesDataControl(DataControlManager):
         
         # return balance_result
     
+    def _sumit_liquidate_all_holdings(self):
+        get_balance = self.get_account_balance()
+        
 
 
 if __name__ == "__main__":

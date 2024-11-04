@@ -280,15 +280,6 @@ class BinanceAPIBase:
         result = await self._fetch_data_with_params("aggTrades", params=params)
         return utils._none_or(result)
 
-    # 거래소의 메타데이터 수신
-    async def fetch_exchange_info(self) -> Optional[Dict]:
-        """
-        1. 기능 : market type별 거래소 메타데이터 정보를 수신 및 반환한다.
-        2. 매개변수 : 해당없음.
-        """
-        result = await self._fetch_data_with_params("exchangeInfo")
-        return utils._none_or(result)
-
     # Ticker별 평균가격 수신
     async def fetch_avg_price(
         self, symbol: str
@@ -318,12 +309,41 @@ class SpotAPI(BinanceAPIBase):
     def __init__(self):
         super().__init__(base_url=self.BASE_URL)
 
+    # spot 거래소의 메타데이터 수신
+    async def fetch_exchange_info(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """
+        1. 기능 : spot type별 거래소 메타데이터 정보를 수신 및 반환한다.
+        2. 매개변수
+            1) symbol : BTCUSDT (symbols 타입 입력안됨.)
+        """
+        if symbol:
+            symbol = symbol.upper()
+            query_params = {"symbol": symbol}
+            exchange_data = await self._fetch_data_with_params(
+                "exchangeInfo", params=query_params
+            )
+            return exchange_data if exchange_data is not None else {}
+
+        # 전체 거래소 정보를 가져오는 경우
+        exchange_data = await self._fetch_data_with_params("exchangeInfo")
+        return exchange_data if exchange_data is not None else {}
+
 
 class FuturesAPI(BinanceAPIBase):
     BASE_URL = "https://fapi.binance.com/fapi/v1/"
 
     def __init__(self):
         super().__init__(base_url=self.BASE_URL)
+
+    # Futures 거래소의 메타데이터 수신
+    async def fetch_exchange_info(self) -> Dict[str, Any]:
+        """
+        1. 기능 : futures type별 거래소 메타데이터 정보를 수신 및 반환한다.
+        2. 매개변수
+            1) symbol : BTCUSDT (symbols 타입 입력안됨.)
+        """
+        exchange_data = await self._fetch_data_with_params("exchangeInfo")
+        return exchange_data if exchange_data is not None else {}
 
 
 # 비동기 실행

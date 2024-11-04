@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import utils
+from MarketDataFetcher import SpotAPI, FuturesAPI
 from typing import Dict, Optional, List, Union, Any
 
 
@@ -20,6 +21,7 @@ class BinanceOrderManager:
         self._api_key = data["apiKey"]
         self._secret_key = data["secret"]
         self.account_balance: Optional[Union[Dict]] = None
+        self.market_type: str = self.__class__.__name__.split("OrderManager")[0]
 
     # API-key정보 json파일 로드.
     def load_api_keys(self) -> Optional[Dict[str, str]]:
@@ -188,7 +190,7 @@ class BinanceOrderManager:
         2. 매개변수
             1) 공통
                 - symbol : 쌍거래 자산
-                - type : 주문 타입
+                - order_type : 주문 타입
                     >> "LIMIT" : 지정가
                     >> "MARKET" : 시장가
                     >> "STOP_MARKET" : StopLoss 설정시
@@ -240,8 +242,10 @@ class BinanceOrderManager:
 
         return self._send_request("POST", endpoint, params)
 
-    # 현재 보유중인 자산 전체를 매각 정리한다.
-    # def sumit_liquidate_all_holdings(self):
+    # 현재 보유중인 자산 전체를 현재가 매각(정리/청산)한다.
+    def submit_liquidate_all_holdings(self):
+        amount = {'Spot':'free',
+                  'Futures':'positionAmt'}.get(self.market_type)
 
     # 현재 주문상태를 상세 조회(체결, 미체결 등등...)
     def fetch_order_details(self, symbol: str, order_id: int) -> Dict:
@@ -286,10 +290,89 @@ class BinanceOrderManager:
 class SpotOrderManager(BinanceOrderManager):
     BASE_URL = "https://api.binance.com"
 
+    def __init__(self, spot_api: Optional=None):
+        self.spot_api = SpotAPI()
+    
+    async def get_min_trade_quantity(self, symbol: str) -> Dict[str, Any]:
+        exchange_info_data = await self.spot_api.fetch_exchange_info(symbol=symbol)    
+        for filter in exchange_info_data["symbols"][0]["filters"]:
+            if filter["filterType"] == "LOT_SIZE":
+                min_qty = float(filter["minQty"])  # 최소 수량
+                step_size = float(filter["stepSize"])  # 최소 거래 단위
+                return max(min_qty, step_size) 
+
+    # Spot 전체 잔고 수신 후 보유 내역값만 반환
+    def get_account_balance(self) -> Optional[Dict[str, Dict[str, float]]]:
+        """
+        1. 기능 : Spot 전체 잔고 수신 후 보유내역만 후처리 하여 반환
+        2. 매개변수 : 해당없음.
+        """
+        balance_result = {}
+        account_balances = self.fetch_account_balance().get('balances')
+        parsed_balances = utils._collections_to_literal(account_balances)
+        
+        for asset_data in parsed_balances:
+            asset = asset_data.get('asset')
+            free_balance = asset_data.get('free')
+            locked_balance = asset_data.get('locked')
+            total_balance = free_balance + locked_balance
+            
+            if total_balance != 0:
+                balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
+        
+        return balance_result
+
+    # Spot 시장의 주문(매수/매도)신호를 보낸다.
+    def submit_spot_order(
+        self,
+        symbol: str,
+        side: str,
+        order_type: str,
+        quantity: float,
+        price: Optional[float] = None,
+        time_in_force: str = "GTC"
+    ) -> Dict:
+        """
+        1. 기능 : 현물시장에 구매(매도) 주문을 넣는다.
+        2. 매개변수
+            1) symbol : 쌍거래 자산
+            2) side : 주문 방향 결정
+                >> "BUY" : 매수
+                >> "SELL" : 매도
+            3) order_type : 주문 타입
+                >> "LIMIT" : 지정가
+                >> "MARKET" : 시장가
+                >> "STOP_MARKET" : StopLoss 설정시
+                >> "TAKE_PROFIT_MARKET" : 수익실현 설정시, 지정가 도달시 시장가 주문 실행
+            4) quantity : 거래 주문 수량
+            5) price : 주문 단가 (type : LIMIT일때만)
+        """
+        endpoint = "/api/v3/order"  # 현물 시장 API 엔드포인트
+
+        # 공통 파라미터 설정
+        params = {
+            "symbol": symbol.upper(),
+            "side": side.lower(),
+            "type": order_type.lower(),
+            "quantity": quantity,
+            "timestamp": int(time.time() * 1000),
+        }
+
+        # 지정가 주문일 경우 추가 파라미터
+        if order_type == "LIMIT":
+            params["timeInForce"] = time_in_force
+        if price:
+            params["price"] = price
+
+        return self._send_request("POST", endpoint, params)
+        
 
 class FuturesOrderManager(BinanceOrderManager):
     BASE_URL = "https://fapi.binance.com"
 
+    def __init__(self, futures_api: Optional=None):
+        self.futures_api = FuturesAPI()
+    
     # Ticker의 leverage 정보 수신 및 반환
     def _get_leverage_brackets(self, symbol: str) -> Dict:
         """
@@ -368,6 +451,133 @@ class FuturesOrderManager(BinanceOrderManager):
         }
         return self._send_request("POST", endpoint, params)
 
+    # Futures 전체 잔고 수신 후 보유 내역값만 반환
+    def get_account_balance(self):
+        """
+        1. 기능 : Futures 전체 잔고 수신 후 보유내역만 후처리 하여 반환
+        2. 매개변수 : 해당없음.
+        """
+        balance_result = {}
+        account_balances = self.fetch_account_balance().get('positions')
+        
+        for position_data in account_balances:
+            parsed_balances = utils._collections_to_literal([position_data])[0]
+            if parsed_balances.get('positionAmt') != 0:
+                symbol = parsed_balances.get('symbol')
+                balance_result[symbol] = {}
+                for key, nested_data in parsed_balances.items():
+                    if key == 'symbol':
+                        ...
+                    else:
+                        balance_result[symbol][key] = nested_data
+        return balance_result
+
+    # Futures 시장의 주문(long/short)신호를 보낸다.
+    def submit_order(
+        self,
+        symbol: str,
+        side: str,
+        order_type: str,
+        quantity: float,
+        price: Optional[float] = None,
+        time_in_force: str = "GTC",
+        position_side: str = "BOTH",
+        reduce_only: bool = False
+    ) -> Dict:
+        """
+        1. 기능 : 선물시장 주문을 넣는다.
+        2. 매개변수
+            1) symbol : 쌍거래 자산
+            2) side : 주문 방향 결정
+                >> "BUY" : 매수
+                >> "SELL" : 매도
+            3) order_type : 주문 타입
+                >> "LIMIT" : 지정가
+                >> "MARKET" : 시장가
+                >> "STOP_MARKET" : StopLoss 설정시
+                >> "TAKE_PROFIT_MARKET" : 수익실현 설정시, 지정가 도달시 시장가 주문 실행
+            4) quantity : 거래 주문 수량
+            5) price : 주문 단가 (type : LIMIT일때만)
+            6) time_in_force : 주문유효기간
+                >> "GTC" : 사용자가 취소할떄까지 유지
+                >> "IOC" : 주문 즉시 체결 가능한 부분만 체결, 나머지 취소
+                >> "FOK" : 주문 전체가 체결되지 않으면 주문을 취소
+            7) position_side : 포지션 방향 설정
+                >> "BOTH" : 방향을 지정하지 않고 포지션 유지
+                >> "LONG" : 롱 포지션
+                >> "SHORT" : 숏 포지션
+            8) reduce_only : 포지션 청산시에 사용.
+                >> True : 소량 자산 포지션 종료.
+                >> False : 일반 주문
+        """
+        endpoint = "/fapi/v1/order"  # 선물 시장 API 엔드포인트
+
+        # 공통 파라미터 설정
+        params = {
+            "symbol": symbol.upper(),
+            "side": side.upper(),
+            "type": order_type,
+            "quantity": quantity,
+            "timestamp": int(time.time() * 1000),
+        }
+
+        # 지정가 주문일 경우 추가 파라미터
+        if order_type == "LIMIT":
+            params["timeInForce"] = time_in_force
+        if price:
+            params["price"] = price
+
+        # 선물거래의 경우에만 positionSide와 reduceOnly 설정
+        params["positionSide"] = position_side
+        params["reduceOnly"] = "true" if reduce_only else "false"
+
+        return self._send_request("POST", endpoint, params)
+
+
+    # 수정포인트!!!!!!!
+    async def get_min_trade_quantity(self, symbol: str) -> Dict[str, Any]:
+        symbol = symbol.upper()
+        exchange_info_data = await self.futures_api.fetch_exchange_info()
+        
+        symbol_data = next(
+            (item for item in exchange_info_data.get('symbols') if item.get('symbol') == symbol),
+            None)
+        filters = symbol_data.get('filters')
+        min_qty = None
+        notional = None
+        
+        for filter_item in filters:
+            if filter_item['filterType'] in ['LOT_SIZE', 'MARKET_LOT_SIZE']:
+                min_qty = float(filter_item.get('minQty'))
+            if filter_item['filterType'] == 'MIN_NOTIONAL':
+                notional = float(filter_item.get('notional'))
+                
+        if min_qty is None or notional is None:
+            raise ValueError(f"Required filter data (minQty or notional) not found for symbol {symbol}.")
+
+        # 현재 가격을 가져옵니다
+        try:
+            current_price = float(self.futures_api.fetch_ticker_price(symbol=symbol).get('price'))
+        except:
+            print(f"Error fetching price for {symbol}")
+            raise
+
+        # 최소 거래 금액과 현재 가격을 이용하여 최소 주문 수량을 계산합니다
+        min_order_value = notional / current_price
+        minimum_order_quantity = math.ceil(min_order_value / min_qty) * min_qty
+        if '.' in str(min_qty):
+            minimum_order_quantity = round(minimum_order_quantity, len(str(min_qty).split('.')[1]))
+        else:
+            minimum_order_quantity = round(minimum_order_quantity, 0)
+
+        return minimum_order_quantity + float(min_qty)
+        
+    # 포지션 종료 order신고 발생
+    def submit_close_position(self, symbol: str, order_type: str, quantity: float, price: Optional[float] = None, time_in_force: str = "GTC") -> Dict:
+        reduce_only: bool = False
+        account_balance = self.get_account_balance()
+        
+        # if account_balance.get(symbol):
 
 if __name__ == "__main__":
     spot_obj = SpotOrderManager()

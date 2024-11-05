@@ -25,6 +25,7 @@ OHLCV_COLUMNS: Final[List[str]] = [
 ]
 
 load_data = {}
+print('데이터 로딩')
 for file in FILES:
     if file.endswith('.json'):
         path = os.path.join(BASE_PATH, file)
@@ -32,26 +33,29 @@ for file in FILES:
         symbol = file.split(".")[0].upper()
         load_data[symbol] = utils._load_json(path)
 
+print('데이터 로딩 완료')
+
+print('데이터 형태 변형')
 def preprocess_data(data: List):
     data_literals = utils._convert_nested_list_to_literals(data)
     return np.array(data_literals)
+print('데이터 형태 변형 완료')
 
+print('numpy 이동평균선 연산')
 def moving_average(data, window_size: int, index: int=4):
     weights = np.ones(window_size) / window_size
     return np.convolve(data[:, index], weights, mode='valid')
+print('numpy 이동평균선 연산 완료')
 
-
-# target_data = load_data.get("BTCUSDT").get(INTERVALS[1])
-# target_data = preprocess_data(target_data)
-
-# df_ = pd.DataFrame(target_data, columns=OHLCV_COLUMNS)
-
+print('pandas DataFrame 진행')
 df_ = {}
-for interval in INTERVALS:
-    for file in FILES:
+for file in FILES:
+    if file.endswith('.json'):
         symbol = file.split('.')[0].upper()
-        get_data = load_data.get(symbol).get(interval)
-        literals_data = preprocess_data(get_data)
-        key = f"{symbol}_{interval}"
-        df_[key] = pd.DataFrame(get_data, columns=OHLCV_COLUMNS)
-        
+        df_[symbol] = {}
+        for interval in INTERVALS:
+            get_data = load_data.get(symbol).get(interval)
+            literals_data = preprocess_data(get_data)
+            key = f"{symbol}_{interval}"
+            df_[symbol][interval] = pd.DataFrame(get_data, columns=OHLCV_COLUMNS)
+print('complete!')

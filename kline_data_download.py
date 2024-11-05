@@ -44,7 +44,7 @@ if __name__ == "__main__":
     tickers = ["btcusdt", "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "neirousdt", "trxusdt"]
 
     end_date = utils._convert_to_datetime("2024-10-31 23:59:59")
-    start_date = utils._convert_to_datetime("2020-1-1 00:00:00")
+    start_date = utils._convert_to_datetime("2024-1-1 00:00:00")
 
     for ticker in tickers:
         data = {}  # 각 티커마다 초기화

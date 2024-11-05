@@ -558,18 +558,52 @@ class FuturesOrderManager(BinanceOrderManager):
         return min_trade_quantity
 
     # # 포지션 종료 order신고 발생
-    # async def submit_close_position(
-    #     self,
-    #     symbol: str,
-    #     order_type: str,
-    #     quantity: float,
-    #     price: Optional[float] = None,
-    #     time_in_force: str = "GTC",
-    # ) -> Dict:
-    #     reduce_only: bool = False
-    #     account_balance = self.get_account_balance()
+    async def submit_close_position(
+        self,
+        symbol: str,
+        order_type: str,
+        quantity: Optional[float] = None,
+        price: Optional[float] = None,
+        time_in_force: str = "GTC",
+    ) -> Optional[Dict]:
+        # account_balance 가져오고, dict인지 확인
+        account_balance = await self.get_account_balance()
+        print(account_balance)
+        # account_balance가 dict인지 확인하고 아니라면 None 반환
+        if not isinstance(account_balance, dict):
+            return None
 
-    # if account_balance.get(symbol):
+        # 포지션 데이터 가져오기
+        position_data: Optional[Dict[str, Any]] = account_balance.get(symbol.upper())
+
+        if not position_data:
+            return None
+
+        # 포지션 양 가져오기
+        position_amount = position_data.get("positionAmt")
+        if position_amount is None or position_amount == 0:
+            return None  # 닫을 포지션이 없음
+
+        # 포지션 방향에 따라 주문 방향 설정
+        side = "BUY" if position_amount < 0 else "SELL"
+
+        # 수량이 주어지지 않은 경우 포지션 양의 절대값 사용
+        if quantity is None:
+            quantity = abs(position_amount)
+
+        # TEST ZONE
+        print(symbol, side, order_type, quantity, price)
+
+        # reduce_only 플래그를 사용하여 포지션 청산 주문 제출
+        return await self.submit_order(
+            symbol=symbol,
+            side=side,
+            order_type=order_type,
+            quantity=quantity,
+            price=price,
+            time_in_force=time_in_force,
+            reduce_only=True,
+        )
 
 
 if __name__ == "__main__":

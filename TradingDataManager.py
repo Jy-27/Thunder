@@ -1,6 +1,6 @@
 from TickerDataFetcher import SpotTickers, FuturesTickers
 from DataHandler import SpotHandler, FuturesHandler
-from typing import Dict, List, Optional, Union, Tuple, Final, cast
+from typing import Dict, List, Optional, Union, Tuple, Final, cast, Any
 from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotAPI, FuturesAPI
@@ -127,13 +127,13 @@ class DataControlManager:
             await utils._wait_until_next_interval(time_unit="minute", interval=2)
 
     # 계좌정보 업데이트
-    def fetch_active_positions(self):
+    async def fetch_active_positions(self):
         """
         1. 기능 : 활성 포지션을 요약하여 포지션 요약 정보와 활성 심볼 목록을 생성.
         2. 매개변수 : 해당없음.
         """
         # 계좌 잔고 데이터 가져오기
-        self.account_balance_raw = self.client_instance.fetch_account_balance()
+        self.account_balance_raw = await self.client_instance.fetch_account_balance()
 
         # 시장 유형에 따라 주요 필드명 설정
         primary_field_name = {"Futures": "positions", "Spot": "balances"}.get(
@@ -350,7 +350,7 @@ class DataControlManager:
             end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
 
             if start_timestamp > end_timestamp:
-                raise ValueError(f'start_date는 end_date보다 클 수 없음.')
+                raise ValueError(f"start_date는 end_date보다 클 수 없음.")
 
             while True:
                 data = await self.market_instance.fetch_klines_date(
@@ -362,6 +362,7 @@ class DataControlManager:
                 historicla_kline_data.extend(data)
                 if data[-1][6] > end_timestamp:
                     break
+
             return historicla_kline_data
 
     # kline 데이터 interval map별 수집
@@ -406,44 +407,12 @@ class DataControlManager:
                                     )
         return self.kline_data
 
-    # test zone
-    async def test_princ(self):
-        while True:
-            data = await self.handler_instance.asyncio_queue.get()
-            print(data)
-
-    # Anlysis 만들것
-
-    # sync_kline_data <<생성할 것.
-
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
         super().__init__(
             SpotTickers(), SpotHandler(), my_client.SpotOrderManager(), SpotAPI()
         )
-
-    # Spot Balance 상태를 수신하여 유효한 asset값만 반환
-    def get_account_balance(self) -> Optional[Dict[str, Dict[str, float]]]:
-        """
-        1. 기능 : Spot Balance 상태를 수신하여 필요한 부분만 후처리 하여 반환함.
-        2. 매개변수 : 해당없음.
-        """
-        balance_result = {}
-        spot_order_manager = my_client.SpotOrderManager()
-        account_balances = spot_order_manager.fetch_account_balance().get('balances')
-        parsed_balances = utils._collections_to_literal(account_balances)
-        
-        for asset_data in parsed_balances:
-            asset = asset_data.get('asset')
-            free_balance = asset_data.get('free')
-            locked_balance = asset_data.get('locked')
-            total_balance = free_balance + locked_balance
-            
-            if total_balance != 0:
-                balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
-        
-        return balance_result
 
 
 class FuturesDataControl(DataControlManager):
@@ -454,21 +423,6 @@ class FuturesDataControl(DataControlManager):
             my_client.FuturesOrderManager(),
             FuturesAPI(),
         )
-    
-        # for asset_data in parsed_balances:
-        #     asset = asset_data.get('asset')
-        #     free_balance = asset_data.get('free')
-        #     locked_balance = asset_data.get('locked')
-        #     total_balance = free_balance + locked_balance
-            
-        #     if total_balance != 0:
-        #         balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
-        
-        # return balance_result
-    
-    def _sumit_liquidate_all_holdings(self):
-        get_balance = self.get_account_balance()
-        
 
 
 if __name__ == "__main__":

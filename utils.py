@@ -1,6 +1,7 @@
 import ast
 import datetime
 import asyncio
+import json
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 
 T = TypeVar("T")
@@ -27,10 +28,33 @@ def _str_to_list(data: Union[list, str], to_upper: bool = False) -> list:
 
 # 리터럴 값으로 파싱
 def _convert_to_literal(input_value) -> Union[str, int, float, bool]:
+    """
+    1. 기능 : 문자형으로 구성된 int, float, bool 등 원래의 자료형태로 적용 및 반환.
+    2. 매개변수
+        1) input_value : 리터럴 처리하고자 하는 단일 값
+    """
     try:
         return ast.literal_eval(input_value)
     except:
         return input_value
+
+# List 안의 자료를 리터럴 값으로 파싱
+def _convert_nested_list_to_literals(nested_list) -> List[Any]:
+    """
+    리스트 타입의 리스트를 입력받아, 내부 리스트의 각 요소를 리터럴 형태로 변환하여 반환합니다.
+
+    :param nested_list: 변환할 리스트 타입의 리스트
+    :return: 내부 요소들이 리터럴 형태로 변환된 리스트
+    """
+    converted_result = []
+    for inner_list in nested_list:
+        converted_list = []
+        for item in inner_list:
+            converted_list.append(_convert_to_literal(item))
+        converted_result.append(converted_list)
+    
+    return converted_result
+
 
 
 # 반환된 데이터를 리터럴값 반영
@@ -237,3 +261,22 @@ def _convert_to_datetime(date: Union[str, datetime.datetime, int]) -> datetime.d
         return datetime.datetime.fromtimestamp(date / 1000)
     elif isinstance(date, str):
         return datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+
+# json파일을 로드한다.
+def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
+    """
+    JSON 파일을 로드하여 Python 딕셔너리 또는 리스트로 반환합니다.
+    
+    :param file_path: JSON 파일의 경로 (예: 'data.json')
+    :return: JSON 데이터가 포함된 Python 딕셔너리 또는 리스트
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        print(f"파일을 찾을 수 없습니다: {file_path}")
+        return None
+    except json.JSONDecodeError:
+        print("JSON 파일을 파싱하는 데 실패했습니다.")
+        return None

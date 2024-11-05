@@ -1,7 +1,7 @@
 import ast
 import datetime
 import asyncio
-from typing import Optional, TypeVar, Union, Final, Dict, List, Union
+from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 
 T = TypeVar("T")
 
@@ -34,7 +34,7 @@ def _convert_to_literal(input_value) -> Union[str, int, float, bool]:
 
 
 # 반환된 데이터를 리터럴값 반영
-def _collections_to_literal(input_data: List[Dict[str, Union[str, int, float, bool]]]):
+def _collections_to_literal(input_data: List[Dict[str, Any]]):
     result = []
     for dict_data in input_data:
         dict_ = {}

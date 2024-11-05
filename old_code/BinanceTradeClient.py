@@ -1,5 +1,8 @@
-import aiohttp
-import asyncio
+"""
+'24.11.5(화) 동기식에서 비동기식으로 전체 코드 수정진행함.
+mypy 검사시 수정사항 많음.
+"""
+import requests
 import time
 import hashlib
 import hmac
@@ -7,9 +10,8 @@ import json
 import os
 import utils
 import math
-import requests
 from MarketDataFetcher import SpotAPI, FuturesAPI
-from typing import Dict, Optional, List, Union, Any, cast
+from typing import Dict, Optional, List, Union, Any
 from decimal import Decimal, ROUND_UP
 
 
@@ -52,7 +54,7 @@ class BinanceOrderManager:
         return None
 
     # API필요한 headers생성
-    async def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> Dict[str, str]:
         """
         1. 기능 : API에 필요한 headers생성
         2. 매개변수 : 해당없음.
@@ -60,7 +62,7 @@ class BinanceOrderManager:
         return {"X-MBX-APIKEY": self._api_key}
 
     # API 요청의 매개변수 서명 추가
-    async def _sign_params(self, params: Dict) -> Dict:
+    def _sign_params(self, params: Dict) -> Dict:
         """
         1. 기능 : Binance API 요청의 매개변수에 서명을 추가
         2. 매개변수
@@ -76,7 +78,7 @@ class BinanceOrderManager:
         return params
 
     # API 요청 생성 및 서버 전송, 응답처리
-    async def _send_request(self, method: str, endpoint: str, params: dict) -> dict:
+    def _send_request(self, method: str, endpoint: str, params: dict) -> dict:
         """
         1. 기능 : API 요청을 생성 및 서버로 전송, 응답처리
         2. 매개변수
@@ -85,8 +87,8 @@ class BinanceOrderManager:
             3) params : 각 함수별 수집된 params
         """
         url = f"{self.BASE_URL}{endpoint}"
-        headers = await self._get_headers()
-        params = await self._sign_params(params)
+        headers = self._get_headers()
+        params = self._sign_params(params)
 
         # TEST ZONE - 요청 정보와 시그니처 출력
         # print("Request URL:", url)
@@ -103,7 +105,7 @@ class BinanceOrderManager:
         return response.json()
 
     # 현물시장, 선물시장 계좌 잔고 조회
-    async def fetch_account_balance(self) -> Dict:
+    def fetch_account_balance(self) -> Dict:
         """
         1. 기능 : Market별 재고현황을 수신 및 반환한다.
         2. 매개변수 : 해당없음.
@@ -114,10 +116,10 @@ class BinanceOrderManager:
             else "/fapi/v2/account"
         )
         params: dict = {"timestamp": int(time.time() * 1000)}
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
 
     # Ticker의 미체결 주문상태 조회 및 반환
-    async def fetch_order_status(self, symbol: Optional[str] = None) -> Dict:
+    def fetch_order_status(self, symbol: Optional[str] = None) -> Dict:
         """
         1. 기능 : Ticker 미체결 주문상태를 조회 및 반환한다.
         2. 매개변수
@@ -132,10 +134,10 @@ class BinanceOrderManager:
         params: dict = {"timestamp": int(time.time() * 1000)}
         if symbol:
             params["symbol"] = symbol
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
 
     # Ticker의 전체 주문내역 조회 및 반환
-    async def fetch_order_history(self, symbol: str, limit: int = 500) -> Dict:
+    def fetch_order_history(self, symbol: str, limit: int = 500) -> Dict:
         """
         1. 기능 : 전체 주문 내역(체결, 미체결, 취소된 주문 등등..)을 조회 및 반환한다.
         2. 매개변수
@@ -153,10 +155,10 @@ class BinanceOrderManager:
             "limit": limit,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
 
     # Ticker의 거래내역 조회 및 반환
-    async def fetch_trade_history(self, symbol: str, limit: int = 500) -> Dict:
+    def fetch_trade_history(self, symbol: str, limit: int = 500) -> Dict:
         """
         1. 기능 : 개별 거래 내역을 조회 및 반환한다.
         2. 매개변수
@@ -175,10 +177,84 @@ class BinanceOrderManager:
             "timestamp": int(time.time() * 1000),
             "recvWindow": 5000,
         }
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
+
+    # 현물시장 또는 선물시장 주문 생성 및 제출
+    def submit_market_order(
+        self,
+        symbol: str,
+        side: str,
+        order_type: str,
+        quantity: float,
+        price: Optional[float] = None,
+        time_in_force: str = "GTC",
+        position_side: str = "BOTH",
+        reduce_only: bool = False,
+    ) -> Dict:
+        """
+        1. 기능 : 현물시장 또는 선물시장 주문을 넣는다.ABC
+        2. 매개변수
+            1) 공통
+                - symbol : 쌍거래 자산
+                - order_type : 주문 타입
+                    >> "LIMIT" : 지정가
+                    >> "MARKET" : 시장가
+                    >> "STOP_MARKET" : StopLoss 설정시
+                    >> "TAKE_PROFIT_MARKET" : 수익실현 설정시, 지정가 도달시 시장가 주문 실행
+                - quantity : 거래 주문 수량
+                - price : 주문 단가 (type : LIMIT일때만)
+
+            2) 현물거래 (Spot)
+                - side : 주문 방향 결정
+                    >> "BUY" : 매수
+                    >> "SELL" : 매도
+            3) 선물거래 (Futures)
+                - time_in_force : 주문유효기간
+                    >> "GTC" : 사용자가 취소할떄까지 유지
+                    >> "IOC" : 주문 즉시 체결 가능한 부분만 체결, 나머지 취소
+                    >> "FOK" : 주문 전체가 체결되지 않으면 주문을 취소
+                - position_side : 포지션 방향 설정
+                    >> "BOTH" : 방향을 지정하지 않고 포지션 유지
+                    >> "LONG" : 롱 포지션
+                    >> "SHORT" : 숏 포지션
+                - reduce_only : 포지션 청산시에 사용.
+                    >> True : 소량 자산 포지션 종료.
+                    >> False : 일반 주문
+        """
+        endpoint = (
+            "/fapi/v1/order"
+            if "https://fapi.binance.com" in self.BASE_URL
+            else "/api/v3/order"
+        )
+
+        # 공통 및 선물 거래 파라미터
+        params = {
+            "symbol": symbol.upper(),
+            "side": side.upper(),  # BUY or SELL
+            "type": order_type,  # LIMIT, MARKET, etc.
+            "quantity": quantity,
+            "timestamp": int(time.time() * 1000),
+        }
+        # 지정가 주문과 선물 거래 시 필요한 추가 파라미터 설정
+        if order_type == "LIMIT":
+            params["timeInForce"] = time_in_force  # 기본값은 GTC
+
+        if price:
+            params["price"] = price  # 가격이 있을 경우 지정가 주문으로 처리
+
+        # 선물 거래 옵션
+        params["positionSide"] = position_side  # 포지션 방향
+        params["reduceOnly"] = "true" if reduce_only else "false"
+
+        return self._send_request("POST", endpoint, params)
+
+    # 현재 보유중인 자산 전체를 현재가 매각(정리/청산)한다.
+    def submit_liquidate_all_holdings(self):
+        amount = {'Spot':'free',
+                  'Futures':'positionAmt'}.get(self.market_type)
 
     # 현재 주문상태를 상세 조회(체결, 미체결 등등...)
-    async def fetch_order_details(self, symbol: str, order_id: int) -> Dict:
+    def fetch_order_details(self, symbol: str, order_id: int) -> Dict:
         """
         1. 기능 : 현재의 주문 상태를 자세히 조회한다. (체결, 미체결, )
         2. 매개변수
@@ -195,10 +271,10 @@ class BinanceOrderManager:
             "orderId": order_id,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
 
     # 미체결 취소 주문 생성 및 제출
-    async def submit_cancel_order(self, symbol: str, order_id: int) -> Dict:
+    def submit_cancel_order(self, symbol: str, order_id: int) -> Dict:
         """
         1. 기능 : 현재 미체결된 주문을 취소한다.
         2. 매개변수
@@ -214,66 +290,53 @@ class BinanceOrderManager:
             "orderId": order_id,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._send_request("DELETE", endpoint, params)
+        return self._send_request("DELETE", endpoint, params)
 
 
 class SpotOrderManager(BinanceOrderManager):
     BASE_URL = "https://api.binance.com"
 
-    def __init__(self, spot_api: Optional[SpotAPI] = None):
-        super().__init__()
+    def __init__(self, spot_api: Optional=None):
         self.spot_api = SpotAPI()
-
-    async def get_min_trade_quantity(self, symbol: str) -> Union[int, float]:
-        exchange_info_data = await self.spot_api.fetch_exchange_info(symbol=symbol)
+    
+    async def get_min_trade_quantity(self, symbol: str) -> Dict[str, Any]:
+        exchange_info_data = await self.spot_api.fetch_exchange_info(symbol=symbol)    
         for filter in exchange_info_data["symbols"][0]["filters"]:
             if filter["filterType"] == "LOT_SIZE":
                 min_qty = float(filter["minQty"])  # 최소 수량
                 step_size = float(filter["stepSize"])  # 최소 거래 단위
-                return max(min_qty, step_size)
-        return 0
+                return max(min_qty, step_size) 
 
     # Spot 전체 잔고 수신 후 보유 내역값만 반환
-    async def get_account_balance(self) -> Optional[Dict[str, Dict[str, float]]]:
+    def get_account_balance(self) -> Optional[Dict[str, Dict[str, float]]]:
         """
         1. 기능 : Spot 전체 잔고 수신 후 보유내역만 후처리 하여 반환
         2. 매개변수 : 해당없음.
         """
         balance_result = {}
-        response = await self.fetch_account_balance()
-        account_balances = response.get("balances")
-
-        # account_balances가 None이 아닐 때만 utils._collections_to_literal 호출
-        parsed_balances: List[Dict[str, Any]] = (
-            utils._collections_to_literal(account_balances)
-            if account_balances is not None
-            else []
-        )
-
+        account_balances = self.fetch_account_balance().get('balances')
+        parsed_balances = utils._collections_to_literal(account_balances)
+        
         for asset_data in parsed_balances:
-            asset = asset_data.get("asset")
-            if not asset:
-                continue  # asset이 None일 경우 건너뜀
-
-            # 기본값을 설정하여 None이 반환되지 않도록 함
-            free_balance = asset_data.get("free", 0.0)  # 기본값 0.0 설정
-            locked_balance = asset_data.get("locked", 0.0)  # 기본값 0.0 설정
+            asset = asset_data.get('asset')
+            free_balance = asset_data.get('free')
+            locked_balance = asset_data.get('locked')
             total_balance = free_balance + locked_balance
-
+            
             if total_balance != 0:
-                balance_result[asset] = {"free": free_balance, "locked": locked_balance}
-
-        return balance_result if balance_result else None
+                balance_result[asset] = {'free': free_balance, 'locked': locked_balance}
+        
+        return balance_result
 
     # Spot 시장의 주문(매수/매도)신호를 보낸다.
-    async def submit_spot_order(
+    def submit_spot_order(
         self,
         symbol: str,
         side: str,
         order_type: str,
         quantity: float,
         price: Optional[float] = None,
-        time_in_force: str = "GTC",
+        time_in_force: str = "GTC"
     ) -> Dict:
         """
         1. 기능 : 현물시장에 구매(매도) 주문을 넣는다.
@@ -307,18 +370,18 @@ class SpotOrderManager(BinanceOrderManager):
         if price:
             params["price"] = price
 
-        return await self._send_request("POST", endpoint, params)
-
+        return self._send_request("POST", endpoint, params)
+        
 
 class FuturesOrderManager(BinanceOrderManager):
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self, futures_api: Optional[FuturesAPI] = None):
+    def __init__(self, futures_api: Optional=None):
         super().__init__()
         self.futures_api = FuturesAPI()
-
+    
     # Ticker의 leverage 정보 수신 및 반환
-    async def _get_leverage_brackets(self, symbol: str) -> Dict:
+    def _get_leverage_brackets(self, symbol: str) -> Dict:
         """
         1. 기능 : 선물거래 레버리지 설정값 정보 수신
         2. 매개변수
@@ -328,16 +391,16 @@ class FuturesOrderManager(BinanceOrderManager):
         """
         endpoint = "/fapi/v1/leverageBracket"
         params = {"symbol": symbol.upper(), "timestamp": int(time.time() * 1000)}
-        return await self._send_request("GET", endpoint, params)
+        return self._send_request("GET", endpoint, params)
 
     # Ticker의 MAX leverage값 반환
-    async def get_max_leverage(self, symbol: str) -> int:
+    def get_max_leverage(self, symbol: str) -> int:
         """
         1. 기능 : 선물거래 ticker에 대한 MAX leverage값 반환
         2. 매개변수
             1) symbol : BTCUSDT (symbols 타입 입력안됨.)
         """
-        brackets_data = await self._get_leverage_brackets(symbol=symbol)
+        brackets_data = self._get_leverage_brackets(symbol=symbol)
 
         # brackets_data와 필드 검증
         if (
@@ -354,7 +417,7 @@ class FuturesOrderManager(BinanceOrderManager):
         raise ValueError(f"{symbol}에 대한 유효한 레버리지 정보를 찾을 수 없습니다.")
 
     # Ticker의 leverage값 설정
-    async def set_leverage(self, symbol: str, leverage: int) -> dict:
+    def set_leverage(self, symbol: str, leverage: int) -> dict:
         """
         1. 기능 : 선물거래 레버리지값 설정
         2. 매개변수
@@ -375,10 +438,10 @@ class FuturesOrderManager(BinanceOrderManager):
             "leverage": leverage,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._send_request("POST", endpoint, params)
+        return self._send_request("POST", endpoint, params)
 
     # Ticker의 margin type 설정
-    async def set_margin_type(self, symbol: str, margin_type: str) -> Union[str, Any]:
+    def set_margin_type(self, symbol: str, margin_type: str) -> str:
         """
         1. 기능 : 마진 타입 설정
         2. 매개변수
@@ -390,15 +453,10 @@ class FuturesOrderManager(BinanceOrderManager):
         symbol = symbol.upper()
         margin_type = margin_type.upper()
 
-        response = await self.fetch_account_balance()
-        account_balances = response.get("positions")
-
-        if account_balances is None:
-            return f"fetch_account_balance함수 수신정보 없음."
-
         # 계정 데이터에서 심볼에 해당하는 포지션 정보 추출
         position_data = next(
-            (data for data in account_balances if data.get("symbol") == symbol), None
+            (data for data in self.fetch_account_balance().get("positions") if data.get("symbol") == symbol), 
+            None
         )
 
         if position_data is None:
@@ -406,11 +464,9 @@ class FuturesOrderManager(BinanceOrderManager):
 
         # 현재 포지션의 격리 상태 확인
         current_isolated_status = position_data.get("isolated")
-
+        
         # 입력된 마진 타입과 현재 상태가 일치하는지 확인
-        if (current_isolated_status and margin_type == "ISOLATED") or (
-            not current_isolated_status and margin_type == "CROSSED"
-        ):
+        if (current_isolated_status and margin_type == "ISOLATED") or (not current_isolated_status and margin_type == "CROSSED"):
             return f"마진 타입이 이미 설정된 상태입니다 - {margin_type}"
 
         # 마진 타입 설정 요청
@@ -420,35 +476,32 @@ class FuturesOrderManager(BinanceOrderManager):
             "marginType": margin_type,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._send_request("POST", endpoint, params)
+        return self._send_request("POST", endpoint, params)
+
 
     # Futures 전체 잔고 수신 후 보유 내역값만 반환
-    async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:
+    def get_account_balance(self):
         """
         1. 기능 : Futures 전체 잔고 수신 후 보유내역만 후처리 하여 반환
         2. 매개변수 : 해당없음.
         """
-        balance_result: Dict = {}
-        response = await self.fetch_account_balance()
-        account_balances = response.get("positions")
-
-        if account_balances is None:
-            return f"fetch_account_balance함수 수신정보 없음."
-
+        balance_result = {}
+        account_balances = self.fetch_account_balance().get('positions')
+        
         for position_data in account_balances:
             parsed_balances = utils._collections_to_literal([position_data])[0]
-            if parsed_balances.get("positionAmt") != 0:
-                symbol = parsed_balances.get("symbol")
+            if parsed_balances.get('positionAmt') != 0:
+                symbol = parsed_balances.get('symbol')
                 balance_result[symbol] = {}
                 for key, nested_data in parsed_balances.items():
-                    if key == "symbol":
+                    if key == 'symbol':
                         ...
                     else:
                         balance_result[symbol][key] = nested_data
         return balance_result
 
     # Futures 시장의 주문(long/short)신호를 보낸다.
-    async def submit_order(
+    def submit_order(
         self,
         symbol: str,
         side: str,
@@ -457,7 +510,7 @@ class FuturesOrderManager(BinanceOrderManager):
         price: Optional[float] = None,
         time_in_force: str = "GTC",
         position_side: str = "BOTH",
-        reduce_only: bool = False,
+        reduce_only: bool = False
     ) -> Dict:
         """
         1. 기능 : 선물시장 주문을 넣는다.
@@ -506,71 +559,43 @@ class FuturesOrderManager(BinanceOrderManager):
         params["positionSide"] = position_side
         params["reduceOnly"] = "true" if reduce_only else "false"
 
-        return await self._send_request("POST", endpoint, params)
+        return self._send_request("POST", endpoint, params)
 
-    # 선물 시장의 symbol별 최소 거래 수량을 계산한다.
+
+    # 수정포인트!!!!!!!
     async def get_min_trade_quantity(self, symbol: str) -> float:
         symbol = symbol.upper()
         exchange_info = await self.futures_api.fetch_exchange_info()
-
+        
         # 심볼 정보 필터링
-        # 기본값 []로 symbols 데이터 처리
-        symbols = exchange_info.get("symbols", [])
-        symbol_info = next(
-            (item for item in symbols if item.get("symbol") == symbol),
-            None,  # 기본값 None을 설정하여 찾지 못했을 때 대비
-        )
-
-        # symbol_info가 None이 아닌지 확인 후 filters 처리
-        filters = symbol_info.get("filters", []) if symbol_info else []
-
+        symbol_info = next(item for item in exchange_info.get('symbols') if item.get('symbol') == symbol)
+        filters = symbol_info.get('filters')
+        
         # 필터에서 필요한 정보 추출
         min_qty, step_size, notional = None, None, None
-
-        # filters가 None이 아닌지 확인 후 반복
-        if filters:
-            for filter_item in filters:
-                if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
-                    min_qty = float(filter_item.get("minQty", 0))  # 기본값 0
-                    step_size = (
-                        filter_item.get("stepSize") or "1"
-                    )  # None일 경우 문자열 "1" 기본값
-                elif filter_item.get("filterType") == "MIN_NOTIONAL":
-                    notional = float(filter_item.get("notional", 0))  # 기본값 0
+        for filter_item in filters:
+            if filter_item['filterType'] in ['LOT_SIZE', 'MARKET_LOT_SIZE']:
+                min_qty = float(filter_item.get('minQty'))
+                step_size = filter_item.get('stepSize')
+            elif filter_item['filterType'] == 'MIN_NOTIONAL':
+                notional = float(filter_item.get('notional'))
 
         # 현재 가격 가져오기
-        # 기본값 0을 설정하여 current_price_data가 None일 경우 대비
-        current_price_data = (
-            await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
-        )
-        current_price = float(
-            current_price_data.get("price", 0)
-        )  # None일 경우 기본값 0
-
-        # notional이 None일 경우 기본값 0.0으로 설정하여 연산 오류 방지
-        required_quantity: float = (notional or 0.0) / current_price
-        min_trade_quantity = float(
-            Decimal(required_quantity).quantize(
-                Decimal(step_size or 1), rounding=ROUND_UP
-            )
-        )
-
+        current_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol)
+        current_price = float(current_price_data.get('price'))
+        
+        # 최소 거래 수량 계산 및 올림 처리
+        required_quantity = notional / current_price
+        min_trade_quantity = float(Decimal(required_quantity).quantize(Decimal(step_size), rounding=ROUND_UP))
+        
         return min_trade_quantity
 
-    # # 포지션 종료 order신고 발생
-    # async def submit_close_position(
-    #     self,
-    #     symbol: str,
-    #     order_type: str,
-    #     quantity: float,
-    #     price: Optional[float] = None,
-    #     time_in_force: str = "GTC",
-    # ) -> Dict:
-    #     reduce_only: bool = False
-    #     account_balance = self.get_account_balance()
-
-    # if account_balance.get(symbol):
-
+    # 포지션 종료 order신고 발생
+    def submit_close_position(self, symbol: str, order_type: str, quantity: float, price: Optional[float] = None, time_in_force: str = "GTC") -> Dict:
+        reduce_only: bool = False
+        account_balance = self.get_account_balance()
+        
+        # if account_balance.get(symbol):
 
 if __name__ == "__main__":
     spot_obj = SpotOrderManager()

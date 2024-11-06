@@ -89,6 +89,7 @@ class BinanceHandler:
             if message.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(message.data)
                 await self.asyncio_queue.put(data)
+                # print(type(data))
             elif message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
                 break
         await ws.close()
@@ -154,20 +155,20 @@ class FuturesHandler(BinanceHandler):
     def __init__(self):
         super().__init__(base_url="wss://fstream.binance.com/ws/")
 
-    def _streams(self, symbols: Union[list, str], ws_type: Union[list, str]) -> str:
-        symbols = utils._str_to_list(data=symbols)
-        ws_type = utils._str_to_list(data=ws_type)
-        if self.stream_type == "kline":
-            endpoint_str = "kline_"
-            ws_type = [endpoint_str + interval for interval in ws_type]
-        endpoints = [self._normalize_endpoint(endpoint) for endpoint in ws_type]
-        return self.BASE_URL + "/".join(
-            [
-                f"{symbol.lower()}@{endpoint}"
-                for symbol in symbols
-                for endpoint in endpoints
-            ]
-        )
+    # def _streams(self, symbols: Union[list, str], ws_type: Union[list, str]) -> str:
+    #     symbols = utils._str_to_list(data=symbols)
+    #     ws_type = utils._str_to_list(data=ws_type)
+    #     if self.stream_type == "kline":
+    #         endpoint_str = "kline_"
+    #         ws_type = [endpoint_str + interval for interval in ws_type]
+    #     endpoints = [self._normalize_endpoint(endpoint) for endpoint in ws_type]
+    #     return self.BASE_URL + "/".join(
+    #         [
+    #             f"{symbol.lower()}@{endpoint}"
+    #             for symbol in symbols
+    #             for endpoint in endpoints
+    #         ]
+    #     )
 
 
 if __name__ == "__main__":

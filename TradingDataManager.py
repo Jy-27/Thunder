@@ -46,7 +46,7 @@ class DataControlManager:
 
         # instance init 전달
         self.ticker_instance = ticker_instance
-        self.handler_instance = handler_instance
+        self.handler_instance = handler_instance  # asyncio._queue << 속성 여기에 있음.
         self.client_instance = client_instance
         self.market_instance = market_instance
 
@@ -65,7 +65,7 @@ class DataControlManager:
         """
         comparison = "above"  # above : 이상, below : 이하
         absolute = True  # True : 비율 절대값, False : 비율 실제값
-        value = 150_000_000  # 거래대금 : 단위 USD
+        value = 250_000_000  # 거래대금 : 단위 USD
         target_percent = 5  # 변동 비율폭 : 단위 %이며, 음수 가능
         quote_type = "usdt"  # 쌍거래 거래화폐
 
@@ -91,7 +91,7 @@ class DataControlManager:
         1. 기능 : 기준값에 충족하는 tickers를 반환.
         2. 매개변수 : 해당없음.
         """
-        mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT"]
+        mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
         filtered_ticker_data = await self._collect_filtered_ticker_data()
         # 공통 필터링된 티커 요소를 리스트로 반환받음
         common_filtered_tickers = utils._find_common_elements(*filtered_ticker_data)
@@ -118,13 +118,14 @@ class DataControlManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
+                # print(self.active_tickers)
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
             except Exception as e:
                 # 예외 발생 시 로깅 및 오류 메시지 출력
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
-            await utils._wait_until_next_interval(time_unit="minute", interval=2)
+            await utils._wait_until_next_interval(time_unit="minute", interval=30)
 
     # 계좌정보 업데이트
     async def fetch_active_positions(self):
@@ -210,7 +211,7 @@ class DataControlManager:
         """
         1. 기능 : websocket kline 데이터 수신
         2. 매개변수
-            1) ws_intervals : ENDPOINT 속성 참조
+            1) ws_intervals : KLINE_INTERVALS 속성 참조
         """
         self.websocket_type["kline"] = ws_intervals
         # 정시(0초)에 WebSocket 연결을 시작하기 위한 대기 로직
@@ -365,12 +366,39 @@ class DataControlManager:
 
             return historicla_kline_data
 
+    async def update_all_klines(self, max_records: int = 1_000):
+        """
+        1. 기능 : 현재 선택된 ticker에 대한 모든 interval kline을 수신한다.
+        2. 매개변수
+            1) max_recordes : max 1_000, 조회할 데이터의 길이를 정한다.
+        """
+        # 활성화된 티커가 준비될 때까지 대기
+        while not self.active_tickers:
+            await asyncio.sleep(
+                2
+            )  # utils._wait_time_sleep을 asyncio.sleep으로 대체하여 비동기 방식으로 대기
+
+        # 모든 활성화된 티커에 대해 데이터를 수집 및 업데이트
+        for ticker in self.active_tickers:
+            for interval in self.KLINE_INTERVALS:
+                # Kline 데이터를 수집하고 self.kline_data에 업데이트
+                self.kline_data[ticker][interval] = (
+                    await self.market_instance.fetch_klines_limit(
+                        symbol=ticker,
+                        interval=interval,
+                        limit=max_records,
+                    )
+                )
+        print(f"Kline 초기 update완료")
+
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self):
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 1_000
+
+        await self.update_all_klines(max_records=KLINE_LMIT)
 
         while True:
             await utils._wait_until_exact_time(time_unit="minute")
@@ -405,8 +433,96 @@ class DataControlManager:
                                             limit=KLINE_LMIT,
                                         )
                                     )
-        return self.kline_data
+        # return self.kline_data
 
+    # WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
+    async def _transform_websocket_kline(self, kline_data: dict):
+        """
+        1. 기능 : WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
+        2. 매개변수
+            1) kline_Data : websocket kline 수신 데이터
+        """
+        kline_details = kline_data.get("k", {})
+
+        transformed_data = [
+            kline_details.get("t"),  # open_time
+            kline_details.get("o"),  # open_price
+            kline_details.get("h"),  # high_price
+            kline_details.get("l"),  # low_price
+            kline_details.get("c"),  # close_price
+            kline_details.get("v"),  # volume
+            kline_details.get("T"),  # close_time
+            kline_details.get("q"),  # quote_asset_volume
+            kline_details.get("n"),  # trade_count
+            kline_details.get("V"),  # taker_buy_base_volume
+            kline_details.get("Q"),  # taker_buy_quote_volume
+            0,  # Placeholder (Optional)
+        ]
+
+        return transformed_data
+
+    # WebSocket에서 수신한 kline 데이터와 기존 수집된 kline 데이터를 결합
+    async def _merge_kline_data(self, websocket_kline, historical_kline):
+        """
+        1. 기능 : WebSocket에서 수신한 kline 데이터와 기존 수집된 kline 데이터를 결합
+        2. 매개변수
+            1) websocket_kline : WebSocket에서 수신한 변환된 kline 데이터.
+            2) historical_kline : 기존 수집된 kline 데이터.
+        """
+        if isinstance(websocket_kline, list):
+            print(type(websocket_kline))
+            return
+        transformed_kline = await self._transform_websocket_kline(websocket_kline)
+        last_historical_entry = historical_kline[-1]
+
+        # 최신 데이터를 덮어씌우거나 새로 추가
+        if (
+            last_historical_entry[0] == transformed_kline[0]
+            and last_historical_entry[6] == transformed_kline[6]
+        ):
+            websocket_kline[-1] = transformed_kline
+        else:
+            websocket_kline.append(transformed_kline)
+
+        return websocket_kline
+
+    # websocket 수신데이터와 kline데이터를 실시간 결합
+    async def process_kline_data_loop(self):
+        """
+        1. 기능 : 비동기적으로 kline 데이터를 큐에서 가져와 변환 및 병합하여 처리
+        2. 매개변수 : 해당없음.
+        """
+        await utils._wait_time_sleep(time_unit='minute', duration=2)
+        while True:
+            while not self.handler_instance.asyncio_queue.empty():
+                incoming_data = await self.handler_instance.asyncio_queue.get()
+                interval = incoming_data.get("k", {}).get("i", {})
+                symbol = incoming_data.get("s")
+                
+                # kline_data에 symbol과 interval 초기화
+                if symbol not in self.kline_data:
+                    self.kline_data[symbol] = {}
+                if interval not in self.kline_data[symbol]:
+                    self.kline_data[symbol][interval] = []
+
+                # kline 데이터 변환 및 병합
+                transformed_kline = await self._transform_websocket_kline(incoming_data)
+                self.kline_data[symbol][interval] = await self._merge_kline_data(
+                    websocket_kline=transformed_kline,
+                    historical_kline=self.kline_data[symbol][interval],
+                )
+            
+            # 주기적으로 제어권을 다른 작업에 양보
+            await asyncio.sleep(0)
+
+    # TEST DEGUB ZONE
+    async def debug_status_loop(self):
+        # await utils._wait_until_exact_time(time_unit='minute')
+        # await utils._wait_time_sleep(60)
+        while True:
+            await utils._wait_time_sleep(5)
+            print(self.kline_data)
+            print(1)
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
@@ -426,6 +542,20 @@ class FuturesDataControl(DataControlManager):
 
 
 if __name__ == "__main__":
-    obj = FuturesDataControl()
-    data = asyncio.run(obj.collect_kline_by_interval_loop())
-    print(data)
+    
+    async def main_run():
+        obj = FuturesDataControl()
+        
+        intervals=['kline_3m', 'kline_5m', 'kline_15m']
+        
+        task_tickers = asyncio.create_task(obj.ticker_update_loop())
+        task_connect = asyncio.create_task(obj.connect_kline_loop(ws_intervals=intervals))
+        task_merge = asyncio.create_task(obj.process_kline_data_loop())
+        task_debug = asyncio.create_task(obj.debug_status_loop())
+        
+        await asyncio.gather(task_tickers,
+                             task_connect,
+                             task_merge,
+                             task_debug)
+    
+    asyncio.run(main_run())

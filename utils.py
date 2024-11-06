@@ -103,9 +103,10 @@ def _calculate_divisible_intervals(time_unit):
 # 다음 지정 간격까지 대기 (0초 return 발생)
 async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime.datetime:
     """
-    1. 기능 : 다음 지정 간격까지 대기
+    1. 기능 : 다음 지정 interval시간 정각(0초) 까지 대기
     2. 매개변수
         1) time_unit : 'hour', 'minute', 'second'
+        2) interval : INTERVALS값 참조
     """
     valid_intervals = _calculate_divisible_intervals(time_unit=time_unit)
     if interval not in valid_intervals:
@@ -131,10 +132,10 @@ async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime.d
         await asyncio.sleep(1)
 
 
-# 지정된 시간 동안 대기 (timesleep 시간 버전)
+# 지정된 시간 동안 대기 (timesleep버전)
 async def _wait_time_sleep(time_unit: str, duration: int) -> datetime.datetime:
     """
-    1. 기능 : 지정된 시간 동안 대기
+    1. 기능 : 지정된 시간 동안 대기 (timesleep 버전)
     2. 매개변수
         1) time_unit : 시간 종류
             >> 'second' : 초
@@ -164,7 +165,7 @@ async def _wait_time_sleep(time_unit: str, duration: int) -> datetime.datetime:
 # 다음 정각까지 대기 (0초 return 발생)
 async def _wait_until_exact_time(time_unit: str) -> datetime.datetime:
     """
-    1. 기능 : time_unit기준 정각까지 대기
+    1. 기능 : time_unit기준 정각(0초)까지 대기
     2. 매개변수
         1) time_unit : 시간 종류
             >> 'second' : 초

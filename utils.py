@@ -1,7 +1,7 @@
 import ast
-import datetime
 import asyncio
 import json
+from datetime import datetime
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 
 T = TypeVar("T")
@@ -101,7 +101,7 @@ def _calculate_divisible_intervals(time_unit):
 
 
 # 다음 지정 간격까지 대기 (0초 return 발생)
-async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime.datetime:
+async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime:
     """
     1. 기능 : 다음 지정 interval시간 정각(0초) 까지 대기
     2. 매개변수
@@ -117,7 +117,7 @@ async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime.d
 
     while True:
         # 현재 시각 가져오기
-        current_time = datetime.datetime.now()
+        current_time = datetime.now()
         current_value = getattr(current_time, time_unit, None)
 
         # 유효한 값일 때 interval로 나누어떨어지고, 초가 0일 때 종료
@@ -133,7 +133,7 @@ async def _wait_until_next_interval(time_unit: str, interval: int) -> datetime.d
 
 
 # 지정된 시간 동안 대기 (timesleep버전)
-async def _wait_time_sleep(time_unit: str, duration: int) -> datetime.datetime:
+async def _wait_time_sleep(time_unit: str, duration: int) -> datetime:
     """
     1. 기능 : 지정된 시간 동안 대기 (timesleep 버전)
     2. 매개변수
@@ -159,11 +159,11 @@ async def _wait_time_sleep(time_unit: str, duration: int) -> datetime.datetime:
     # await _wait_until_next_interval(unit='minute')
     await asyncio.sleep(total_sleep_time)
 
-    return datetime.datetime.now()
+    return datetime.now()
 
 
 # 다음 정각까지 대기 (0초 return 발생)
-async def _wait_until_exact_time(time_unit: str) -> datetime.datetime:
+async def _wait_until_exact_time(time_unit: str) -> datetime:
     """
     1. 기능 : time_unit기준 정각(0초)까지 대기
     2. 매개변수
@@ -172,7 +172,7 @@ async def _wait_until_exact_time(time_unit: str) -> datetime.datetime:
             >> 'minute' : 분
             >> 'hour' : 시간
     """
-    now = datetime.datetime.now()
+    now = datetime.now()
 
     # 다음 각 단위로 맞추기 위해 대기할 시간 계산
     seconds_until_next_second = (
@@ -196,13 +196,13 @@ async def _wait_until_exact_time(time_unit: str) -> datetime.datetime:
 
     # 지정된 단위에 맞춰 대기
     await asyncio.sleep(target_sleep)
-    return datetime.datetime.now()
+    return datetime.now()
 
 
 # 현재시간을 확보한다.
 def _get_time_component(
     time_unit: Optional[str] = None,
-) -> Union[int, datetime.datetime]:
+) -> Union[int, datetime]:
     """
     1. 기능 : 현재시간을 반환한다.
     2. 매개변수
@@ -211,7 +211,7 @@ def _get_time_component(
             >> 'minute' : 분
             >> 'hour' : 시간
     """
-    current_time = datetime.datetime.now()
+    current_time = datetime.now()
     if time_unit:
         unit_value = {
             "year": current_time.year,
@@ -227,41 +227,55 @@ def _get_time_component(
     return current_time
 
 
-# 문자형 시간 또는 datetime.datetime 형태 타입 변수를 밀리초 timestampe로 변환 및 반환.
-def _convert_to_timestamp_ms(date: Union[str, datetime.datetime]) -> int:
+# 문자형 시간 또는 datetime 형태 타입 변수를 밀리초 timestampe로 변환 및 반환.
+def _convert_to_timestamp_ms(date: Union[str, datetime]) -> int:
     """
-    1. 기능 : 문자형 시간 또는 datetime.datetime형태의 변수를 밀리초 timestamp로 변환 및 반환
+    1. 기능 : 문자형 시간 또는 datetime형태의 변수를 밀리초 timestamp로 변환 및 반환
     2. 매개변수
-        1) date : str(예 : 2024-01-01 17:14:00) 또는 datetime.datetime형태의 시간 문자열
+        1) date : str(예 : 2024-01-01 17:14:00) 또는 datetime형태의 시간 문자열
     """
 
     MS_SECOND = 1000  # 밀리초 변환을 위한 상수
 
-    if isinstance(date, datetime.datetime):
+    if isinstance(date, datetime):
         return int(date.timestamp() * MS_SECOND)
     else:
         return int(
-            datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S").timestamp()
+            datetime.strptime(date, "%Y-%m-%d %H:%M:%S").timestamp()
             * MS_SECOND
         )
 
 
 # 문자열 시간을 datetime 형태로로 변환 및 반환.
-def _convert_to_datetime(date: Union[str, datetime.datetime, int]) -> datetime.datetime:
+def _convert_to_datetime(date: Union[str, datetime, int]) -> datetime:
     """
-    1. 기능 : 문자형 시간 또는 datetime.datetime형태의 변수를 밀리초 timestamp로 변환 및 반환
+    1. 기능 : 문자형 시간 또는 datetime형태의 변수를 밀리초 timestamp로 변환 및 반환
     2. 매개변수
         1) date : str(예 : 2024-01-01 17:14:00)형태 변수
     """
 
     MS_SECOND = 1000  # 밀리초 변환을 위한 상수
 
-    if isinstance(date, datetime.datetime):
+    if isinstance(date, datetime):
         return date
     elif isinstance(date, int):
-        return datetime.datetime.fromtimestamp(date / 1000)
+        return datetime.fromtimestamp(date / 1000)
     elif isinstance(date, str):
-        return datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+        return datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+
+# 시작시간과 종료시간의 차이를 구하는 함수 (문자형, 타임스템프형, datetime형 자유롭기 입력)
+def _get_time_delta(start_time: Union[int, str, datetime], end_time: Union[int, str, datetime]) -> datetime:
+    """
+    1. 기능 : 시작시간과 종료시간의 차이를 datetime형태로 반환한다.
+    2. 매개변수
+        1) start_time : timestamp_ms, datetime, '2024-01-01 00:00:00' 등
+        2) end_time : timestamp_ms, datetime, '2024-01-01 00:00:00' 등
+    """
+    if not isinstance(start_time, datetime):
+        start_time = _convert_to_datetime(start_time)
+    if not isinstance(end_time, datetime):
+        end_time = _convert_to_datetime(end_time)
+    return end_time - start_time
 
 # json파일을 로드한다.
 def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:

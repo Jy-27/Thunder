@@ -1,7 +1,7 @@
 import ast
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 
 T = TypeVar("T")
@@ -264,7 +264,7 @@ def _convert_to_datetime(date: Union[str, datetime, int]) -> datetime:
         return datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
 
 # 시작시간과 종료시간의 차이를 구하는 함수 (문자형, 타임스템프형, datetime형 자유롭기 입력)
-def _get_time_delta(start_time: Union[int, str, datetime], end_time: Union[int, str, datetime]) -> datetime:
+def _get_time_delta(start_time: Union[int, str, datetime], end_time: Union[int, str, datetime]) -> timedelta:
     """
     1. 기능 : 시작시간과 종료시간의 차이를 datetime형태로 반환한다.
     2. 매개변수

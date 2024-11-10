@@ -38,9 +38,8 @@ class DataControlManager:
             "1w",
             # "1M",
         ]
-        self.kline_data: defaultdict[str, defaultdict[str, dict]] = defaultdict(
-            lambda: defaultdict(dict)
-        )
+        self.kline_data: defaultdict[str, defaultdict[str, List[Union[str, int]]]] = defaultdict(lambda: defaultdict(list))
+        
         # anlysis 함수 현재 데이터 유형 확인
         self.websocket_type: dict = {}
 
@@ -118,9 +117,9 @@ class DataControlManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
-                print('tickers 업데이트 완료')
+                print("tickers 업데이트 완료")
                 # 간격 대기 함수 호출 (예: 4시간 간격)
-                
+
                 # ticker update완료시 신규 kline데이터 갱신함.
                 await self.update_all_klines()
 
@@ -179,7 +178,6 @@ class DataControlManager:
         await utils._wait_until_exact_time(time_unit="minute")
         print(f"WebSocket Loop 진입 - {utils._get_time_component()}")
 
-
         while True:
             # 중단 이벤트 또는 초기 Ticker 데이터 비어있음에 대한 대응
             if self.handler_instance.stop_event.is_set():
@@ -193,7 +191,7 @@ class DataControlManager:
                 # 빈 데이터 발생 시 루프 재시도를 위해 5초 대기
                 await utils._wait_time_sleep(time_unit="second", duration=5)
                 continue
-            
+
             try:
                 time_now = utils._get_time_component()
                 print(f"WebSocket 접속 시도 - {time_now}")
@@ -222,8 +220,6 @@ class DataControlManager:
         await utils._wait_until_exact_time(time_unit="minute")
         print(f"WebSocket Loop 진입 - {utils._get_time_component()}")
 
-
-
         while True:
             # 중단 이벤트 또는 초기 Ticker 데이터 비어있음에 대한 대응
             if self.handler_instance.stop_event.is_set():
@@ -237,9 +233,7 @@ class DataControlManager:
                 # 빈 데이터 발생 시 루프 재시도를 위해 5초 대기
                 await utils._wait_time_sleep(time_unit="second", duration=5)
                 continue
-            
-            
-            
+
             try:
                 time_now = utils._get_time_component()
                 print(f"WebSocket 접속 시도 - {time_now}")
@@ -442,125 +436,95 @@ class DataControlManager:
         # return self.kline_data
 
     # WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
-    async def _transform_websocket_kline(self, kline_data: dict) -> List[str]:
+    async def _transform_kline(
+        self, raw_kline_data: dict
+    ) -> List[Union[str, int, float]]:
         """
-        1. 기능 : WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
-        2. 매개변수
-            1) kline_Data : websocket kline 수신 데이터
-        """
-        kline_details = kline_data.get("k", {})
+        WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환합니다.
 
-        transformed_data = [
+        Args:
+            raw_kline_data (dict): WebSocket에서 수신된 원시 kline 데이터
+
+        Returns:
+            List[Union[str, int, float]]: 변환된 kline 데이터 리스트 (OHLCV 형식)
+        """
+        kline_details = raw_kline_data.get("k", {})
+
+        transformed_kline = [
             kline_details.get("t"),  # open_time
-            kline_details.get("o"),  # open_price
-            kline_details.get("h"),  # high_price
-            kline_details.get("l"),  # low_price
-            kline_details.get("c"),  # close_price
-            kline_details.get("v"),  # volume
+            float(kline_details.get("o", 0)),  # open_price
+            float(kline_details.get("h", 0)),  # high_price
+            float(kline_details.get("l", 0)),  # low_price
+            float(kline_details.get("c", 0)),  # close_price
+            float(kline_details.get("v", 0)),  # volume
             kline_details.get("T"),  # close_time
-            kline_details.get("q"),  # quote_asset_volume
+            float(kline_details.get("q", 0)),  # quote_asset_volume
             kline_details.get("n"),  # trade_count
-            kline_details.get("V"),  # taker_buy_base_volume
-            kline_details.get("Q"),  # taker_buy_quote_volume
+            float(kline_details.get("V", 0)),  # taker_buy_base_volume
+            float(kline_details.get("Q", 0)),  # taker_buy_quote_volume
             0,  # Placeholder (Optional)
         ]
-        return transformed_data
+        return transformed_kline
 
+    async def _merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
+        """
+        1. 기능 : websocket data와 kline data를 하나로 결합한다.
+        2. 매개변수
+            1) kline_message : websocket kline실시간 수신 데이터
+        """
+        # isinstance를 하나로 묶으면 mypy에서 error발생함.
+        if isinstance(kline_message, dict):
+            k_data = kline_message.get("k", {})
+            if isinstance(k_data, dict):
+                interval = k_data.get("i", {})
+                symbol = k_data.get("s")
+        if not isinstance(kline_message, dict):
+            raise ValueError(f"잘못된 값 입력됨")
 
-# 작성할 것.
+        # 웹소켓으로 수신된 데이터를 변환
+        transformed_kline = await self._transform_kline(kline_message)
 
-    async def _merge_kline_data(self, websocket_kline: Dict[str,Union[str, int]]):
-        incoming_data = await self.handler_instance.asyncio_queue.get()
-        interval = incoming_data.get("k", {}).get("i", {})
-        symbol = incoming_data.get("s")
+        # 심볼 및 주기에 해당하는 데이터가 존재하는지 확인
+        if isinstance(symbol, str) and isinstance(interval, str):
+            if symbol in self.kline_data and interval in self.kline_data[symbol]:
+                last_kline = self.kline_data[symbol][interval][-1]
 
-        
+                # 오픈 및 클로즈 타임스탬프 일치 여부 확인
+                is_open_timestamp_match = int(transformed_kline[0]) == int(last_kline[0])
+                is_close_timestamp_match = transformed_kline[6] == last_kline[6]
 
-
+                # 조건에 따라 마지막 Kline 업데이트 또는 새로운 Kline 추가
+                if is_open_timestamp_match and is_close_timestamp_match:
+                    self.kline_data[symbol][interval][-1] = transformed_kline
+                else:
+                    self.kline_data[symbol][interval].append(transformed_kline)
+            else:
+                # 새로운 심볼 및 주기 데이터 초기화
+                self.kline_data[symbol][interval].append(transformed_kline)
 
     async def process_kline_data_loop(self):
-        await utils._wait_time_sleep(time_unit='minute', duration=2)
+        """
+        Kline 데이터를 반복적으로 처리하는 루프입니다.
+        WebSocket 수신 데이터를 가져와 kline 데이터로 병합합니다.
+        """
+        await utils._wait_time_sleep(time_unit="minute", duration=2)
         while True:
             while not self.handler_instance.asyncio_queue.empty():
-                incoming_data = await self.handler_instance.asyncio_queue.get()
-                interval = incoming_data.get("k", {}).get("i", {})
-                symbol = incoming_data.get("s")
-                
-                last_data = await self._transform_websocket_kline(incoming_data)
-                try:
-                    get_data = self.kline_data.get(symbol).get(interval)
-                    if get_data:
-                        open_matching = get_data[0] == last_data[0]
-                        close_mathcing = get_data[6] == last_data[6]
-                        
-                        if open_matching and close_mathcing:
-                            self.kline_data[symbol][interval][-1] = last_data
-                        else:
-                            self.kline_data[symbol][interval].append(last_data)
-                except:
-                    raise
-    # # WebSocket에서 수신한 kline 데이터와 기존 수집된 kline 데이터를 결합
-    # async def _merge_kline_data(self, websocket_kline: dict, historical_kline: List[List[str]]):
-    #     """
-    #     1. 기능 : WebSocket에서 수신한 kline 데이터와 기존 수집된 kline 데이터를 결합
-    #     2. 매개변수
-    #         1) websocket_kline : WebSocket에서 수신한 변환된 kline 데이터.
-    #         2) historical_kline : 기존 수집된 kline 데이터.
-    #     """
-    #     # if isinstance(websocket_kline, list):
-    #     #     print(type(websocket_kline))
-    #     #     return
-    #     transformed_kline = await self._transform_websocket_kline(websocket_kline)
-        
-    #     last_historical_entry = historical_kline[-1].copy()
-           
-    #     # 최신 데이터를 덮어씌우거나 새로 추가
-    #     if (
-    #         historical_kline[-1][0] == transformed_kline[0]
-    #         and historical_kline[-1][6] == transformed_kline[6]
-    #     ):
-    #         historical_kline[-1] = transformed_kline
-    #     else:
-    #         historical_kline.append(transformed_kline)
-
-    #     return historical_kline
-
-    # # websocket 수신데이터와 kline데이터를 실시간 결합
-    # async def process_kline_data_loop(self):
-    #     """
-    #     1. 기능 : 비동기적으로 kline 데이터를 큐에서 가져와 변환 및 병합하여 처리
-    #     2. 매개변수 : 해당없음.
-    #     """
-    #     await utils._wait_time_sleep(time_unit='minute', duration=2)
-    #     while True:
-    #         while not self.handler_instance.asyncio_queue.empty():
-    #             incoming_data = await self.handler_instance.asyncio_queue.get()
-    #             interval = incoming_data.get("k", {}).get("i", {})
-    #             symbol = incoming_data.get("s")
-                
-    #             try:
-    #                 data_merge = await self._merge_kline_data(
-    #                     websocket_kline=incoming_data,
-    #                     historical_kline=self.kline_data[symbol][interval],
-    #                 )
-    #                 print(ticker))
-    #             except:
-    #                 print(symbol)
-    #                 print(interval)
-    #                 raise
-                    
-            # 주기적으로 제어권을 다른 작업에 양보
-            # await asyncio.sleep(0)
+                kline_data = await self.handler_instance.asyncio_queue.get()
+                await self._merge_kline_data(kline_message=kline_data)
 
     # TEST DEGUB ZONE
     async def debug_status_loop(self):
-        # await utils._wait_until_exact_time(time_unit='minute')
-        # await utils._wait_time_sleep(60)
+        await utils._wait_until_exact_time(time_unit="minute")
+        await utils._wait_time_sleep(time_unit='minute', duration=1)
         while True:
-            if self.kline_data.get('BTCUSDT') and self.kline_data.get('BTCUSDT').get('3m'):
-                await utils._wait_time_sleep(time_unit='second', duration=2)
-                # print(self.kline_data.get('BTCUSDT').get('3m')[-1][4])
-            await utils._wait_time_sleep(time_unit='second', duration=5)
+            if self.kline_data.get("BTCUSDT") and self.kline_data.get("BTCUSDT").get(
+                "3m"
+            ):
+                await utils._wait_time_sleep(time_unit="second", duration=2)
+                print(self.kline_data.get("BTCUSDT").get("5m")[-1][4])
+            await utils._wait_time_sleep(time_unit="second", duration=5)
+
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
@@ -580,20 +544,19 @@ class FuturesDataControl(DataControlManager):
 
 
 if __name__ == "__main__":
-    
+
     async def main_run():
         obj = FuturesDataControl()
-        
-        intervals=['kline_3m', 'kline_5m', 'kline_15m']
-        
+
+        intervals = ["kline_3m", "kline_5m", "kline_15m"]
+
         task_tickers = asyncio.create_task(obj.ticker_update_loop())
-        task_connect = asyncio.create_task(obj.connect_kline_loop(ws_intervals=intervals))
+        task_connect = asyncio.create_task(
+            obj.connect_kline_loop(ws_intervals=intervals)
+        )
         task_merge = asyncio.create_task(obj.process_kline_data_loop())
         task_debug = asyncio.create_task(obj.debug_status_loop())
-        
-        await asyncio.gather(task_tickers,
-                             task_connect,
-                             task_merge,
-                             task_debug)
-    
+
+        await asyncio.gather(task_tickers, task_connect, task_merge, task_debug)
+
     asyncio.run(main_run())

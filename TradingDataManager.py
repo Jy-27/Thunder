@@ -26,16 +26,16 @@ class DataControlManager:
             # "3m",
             "5m",
             "15m",
-            # "30m",
-            # "1h",
-            # "2h",
+            "30m",
+            "1h",
+            "2h",
             "4h",
-            # "6h",
+            "6h",
             "8h",
             "12h",
             "1d",
             # "3d",
-            "1w",
+            # "1w",
             # "1M",
         ]
         self.kline_data: defaultdict[str, defaultdict[str, List[Union[str, int]]]] = defaultdict(lambda: defaultdict(list))
@@ -64,7 +64,7 @@ class DataControlManager:
         """
         comparison = "above"  # above : 이상, below : 이하
         absolute = True  # True : 비율 절대값, False : 비율 실제값
-        value = 250_000_000  # 거래대금 : 단위 USD
+        value = 350_000_000  # 거래대금 : 단위 USD
         target_percent = 5  # 변동 비율폭 : 단위 %이며, 음수 가능
         quote_type = "usdt"  # 쌍거래 거래화폐
 
@@ -118,6 +118,7 @@ class DataControlManager:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
                 print("tickers 업데이트 완료")
+                print(self.active_tickers)
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
@@ -321,6 +322,23 @@ class DataControlManager:
         # 결과 반환
         return {"day": max_days, "limit": max_limit}
 
+    # kline 매개변수에 들어가는 limit을 day기준으로 개수를 계산한다.
+    def _get_kline_limit_by_days(self, interval: str, days: int) -> int:
+        """
+        1. 기능 : kline 매개변수에 들어갈 day 기간 만큼 interval의 limit값을 구한다.
+        2. 매개변수
+            1) interval : KLINE_INTERVALS 속성 참조
+            2) day : 기간을 정한다.
+        """
+        interval_data = self._get_valid_kline_limit(interval=interval)
+        max_klines_per_day = interval_data['limit'] / interval_data['day'] * days
+        
+        if max_klines_per_day > 1_000:
+            print(f"The calculated limit exceeds the maximum allowed value: {max_klines_per_day}. Limiting to 1,000.")
+            return 1_000
+        
+        return int(max_klines_per_day)
+
     # kline minute 또는 hour의 장시간 대량 데이터 수집
     async def fetch_historical_kline_hour_min(
         self,
@@ -368,7 +386,8 @@ class DataControlManager:
 
             return historicla_kline_data
 
-    async def update_all_klines(self, max_records: int = 1_000):
+    # kline전체를 days기준 범위로 업데이트한다.
+    async def update_all_klines(self, days: int=1):
         """
         1. 기능 : 현재 선택된 ticker에 대한 모든 interval kline을 수신한다.
         2. 매개변수
@@ -383,12 +402,16 @@ class DataControlManager:
         # 모든 활성화된 티커에 대해 데이터를 수집 및 업데이트
         for ticker in self.active_tickers:
             for interval in self.KLINE_INTERVALS:
+                if interval.endswith("d"):
+                    limit_ = 30
+                else:
+                    limit_ = self._get_kline_limit_by_days(interval=interval, days=days)
                 # Kline 데이터를 수집하고 self.kline_data에 업데이트
                 self.kline_data[ticker][interval] = (
                     await self.market_instance.fetch_klines_limit(
                         symbol=ticker,
                         interval=interval,
-                        limit=max_records,
+                        limit=limit_,
                     )
                 )
         print(f"Kline 전체 update완료")
@@ -398,7 +421,8 @@ class DataControlManager:
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
-        KLINE_LMIT: Final[int] = 1_000
+        KLINE_LMIT: Final[int] = 300
+        day = 1
 
         while True:
             await utils._wait_until_exact_time(time_unit="minute")
@@ -416,21 +440,23 @@ class DataControlManager:
                         ):
                             for ticker in self.active_tickers:
                                 for interval in intervals:
+                                    limit_ = self._get_kline_limit_by_days(interval=interval, days=day)
                                     self.kline_data[ticker][interval] = (
                                         await self.market_instance.fetch_klines_limit(
                                             symbol=ticker,
                                             interval=interval,
-                                            limit=KLINE_LMIT,
+                                            limit=limit_,
                                         )
                                     )
                         if time_unit == time_units[1] and current_time_minute == times:
                             for ticker in self.active_tickers:
                                 for interval in intervals:
+                                    limit_ = self._get_kline_limit_by_days(interval=interval, days=day)
                                     self.kline_data[ticker][interval] = (
                                         await self.market_instance.fetch_klines_limit(
                                             symbol=ticker,
                                             interval=interval,
-                                            limit=KLINE_LMIT,
+                                            limit=limit_,
                                         )
                                     )
         # return self.kline_data
@@ -519,7 +545,7 @@ class DataControlManager:
         await utils._wait_time_sleep(time_unit='minute', duration=1)
         while True:
             if self.kline_data.get("BTCUSDT") and self.kline_data.get("BTCUSDT").get(
-                "3m"
+                "5m"
             ):
                 await utils._wait_time_sleep(time_unit="second", duration=2)
                 print(self.kline_data.get("BTCUSDT").get("5m")[-1][4])

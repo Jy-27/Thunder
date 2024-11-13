@@ -1,6 +1,6 @@
 from TickerDataFetcher import SpotTickers, FuturesTickers
 from DataHandler import SpotHandler, FuturesHandler
-from typing import Dict, List, Optional, Union, Tuple, Final, cast, Any
+from typing import Dict, List, Optional, Union, Tuple, Final, cast, Any, DefaultDict
 from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotAPI, FuturesAPI
@@ -25,7 +25,7 @@ class DataControlManager:
         self.KLINE_INTERVALS: Final[List] = [
             # "3m",
             "5m",
-            "15m",
+            # "15m",
             "30m",
             "1h",
             "2h",
@@ -34,12 +34,14 @@ class DataControlManager:
             "8h",
             "12h",
             "1d",
-            # "3d",
+            "3d",
             # "1w",
             # "1M",
         ]
-        self.kline_data: defaultdict[str, defaultdict[str, List[Union[str, int]]]] = defaultdict(lambda: defaultdict(list))
-        
+        self.kline_data: defaultdict[str, defaultdict[str, List[Union[str, int]]]] = (
+            defaultdict(lambda: defaultdict(list))
+        )
+
         # anlysis 함수 현재 데이터 유형 확인
         self.websocket_type: dict = {}
 
@@ -55,6 +57,11 @@ class DataControlManager:
         self.account_balance_raw: Dict = {}
         self.account_balance_summary: Dict = {}
         self.account_active_symbols: List = []
+
+        # websocket 수신데이터의 가장 마지막값을 저장한다. (kline과 결합을 위함.)
+        self.final_message_received: DefaultDict[str, DefaultDict[str, List[List[Any]]]] = (
+            defaultdict(lambda: defaultdict())
+        )
 
     # Ticker 수집에 필요한 정보를 수신
     async def _collect_filtered_ticker_data(self) -> Tuple:
@@ -251,6 +258,19 @@ class DataControlManager:
                 # 오류 발생 시 안전하게 대기 후 재시도
                 await utils._wait_time_sleep(time_unit="second", duration=5)
 
+    # websocket 수신 데이터를 속성값에 저장한다.
+    async def update_received_data_loop(self) -> Dict[str, Dict[str, Union[str, int]]]:
+        while True:
+            while not self.handler_instance.asyncio_queue.empty():
+                received_massage = await self.handler_instance.asyncio_queue.get()
+                if isinstance(received_massage, dict) and received_massage:
+                    k_data = received_massage.get("k")  # 중간 변수로 저장
+                    if isinstance(k_data, dict) and k_data:
+                        symbol = received_massage.get("s")
+                        interval = k_data.get("i")
+                self.final_message_received[symbol][interval]: Dict = received_massage
+            await utils._wait_time_sleep(time_unit="second", duration=1)
+
     # hour 또는 minute별 수신해야할 interval을 리스트화 정렬
     def _generate_time_intervals(self):
         time_intervals: Dict[str, Dict] = {
@@ -331,12 +351,14 @@ class DataControlManager:
             2) day : 기간을 정한다.
         """
         interval_data = self._get_valid_kline_limit(interval=interval)
-        max_klines_per_day = interval_data['limit'] / interval_data['day'] * days
-        
+        max_klines_per_day = interval_data["limit"] / interval_data["day"] * days
+
         if max_klines_per_day > 1_000:
-            print(f"The calculated limit exceeds the maximum allowed value: {max_klines_per_day}. Limiting to 1,000.")
+            print(
+                f"The calculated limit exceeds the maximum allowed value: {max_klines_per_day}. Limiting to 1,000."
+            )
             return 1_000
-        
+
         return int(max_klines_per_day)
 
     # kline minute 또는 hour의 장시간 대량 데이터 수집
@@ -387,7 +409,7 @@ class DataControlManager:
             return historicla_kline_data
 
     # kline전체를 days기준 범위로 업데이트한다.
-    async def update_all_klines(self, days: int=1):
+    async def update_all_klines(self, days: int = 1):
         """
         1. 기능 : 현재 선택된 ticker에 대한 모든 interval kline을 수신한다.
         2. 매개변수
@@ -417,12 +439,11 @@ class DataControlManager:
         print(f"Kline 전체 update완료")
 
     # kline 데이터 interval map별 수집
-    async def collect_kline_by_interval_loop(self):
+    async def collect_kline_by_interval_loop(self, days: int=2):
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 300
-        day = 1
 
         while True:
             await utils._wait_until_exact_time(time_unit="minute")
@@ -440,7 +461,9 @@ class DataControlManager:
                         ):
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self._get_kline_limit_by_days(interval=interval, days=day)
+                                    limit_ = self._get_kline_limit_by_days(
+                                        interval=interval, days=days
+                                    )
                                     self.kline_data[ticker][interval] = (
                                         await self.market_instance.fetch_klines_limit(
                                             symbol=ticker,
@@ -451,7 +474,9 @@ class DataControlManager:
                         if time_unit == time_units[1] and current_time_minute == times:
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self._get_kline_limit_by_days(interval=interval, days=day)
+                                    limit_ = self._get_kline_limit_by_days(
+                                        interval=interval, days=days
+                                    )
                                     self.kline_data[ticker][interval] = (
                                         await self.market_instance.fetch_klines_limit(
                                             symbol=ticker,
@@ -492,6 +517,7 @@ class DataControlManager:
         ]
         return transformed_kline
 
+    # weboskcet data와 kline데이터를 결합한다.
     async def _merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
         """
         1. 기능 : websocket data와 kline data를 하나로 결합한다.
@@ -516,7 +542,9 @@ class DataControlManager:
                 last_kline = self.kline_data[symbol][interval][-1]
 
                 # 오픈 및 클로즈 타임스탬프 일치 여부 확인
-                is_open_timestamp_match = int(transformed_kline[0]) == int(last_kline[0])
+                is_open_timestamp_match = int(transformed_kline[0]) == int(
+                    last_kline[0]
+                )
                 is_close_timestamp_match = transformed_kline[6] == last_kline[6]
 
                 # 조건에 따라 마지막 Kline 업데이트 또는 새로운 Kline 추가
@@ -528,29 +556,31 @@ class DataControlManager:
                 # 새로운 심볼 및 주기 데이터 초기화
                 self.kline_data[symbol][interval].append(transformed_kline)
 
-    async def process_kline_data_loop(self):
+    # websocket데이터와 kline데이터를 00초마다 병합함.
+    async def merge_websocket_kline_data_loop(self):
         """
-        Kline 데이터를 반복적으로 처리하는 루프입니다.
-        WebSocket 수신 데이터를 가져와 kline 데이터로 병합합니다.
+        1. 기능 : 실시간 Kline 데이터를 반복적으로 처리하는 함수
+        2. 매개변수 : 해당없음.
         """
         await utils._wait_time_sleep(time_unit="minute", duration=2)
-        while True:
-            while not self.handler_instance.asyncio_queue.empty():
-                kline_data = await self.handler_instance.asyncio_queue.get()
-                await self._merge_kline_data(kline_message=kline_data)
 
-    # TEST DEGUB ZONE
-    async def debug_status_loop(self):
-        await utils._wait_until_exact_time(time_unit="minute")
-        await utils._wait_time_sleep(time_unit='minute', duration=1)
         while True:
-            if self.kline_data.get("BTCUSDT") and self.kline_data.get("BTCUSDT").get(
-                "5m"
-            ):
-                await utils._wait_time_sleep(time_unit="second", duration=2)
-                print(self.kline_data.get("BTCUSDT").get("5m")[-1][4])
-            await utils._wait_time_sleep(time_unit="second", duration=5)
+            await utils._wait_until_exact_time(time_unit="second")
+            await asyncio.sleep(4)
+            print(datetime.datetime.now())
+            for ticker in self.active_tickers:
+                ticker_data = self.final_message_received.get(ticker)
 
+                # ticker_data가 유효한 dict인지 확인
+                if isinstance(ticker_data, dict):
+                    for interval in self.KLINE_INTERVALS:
+                        interval_data = ticker_data.get(interval)
+
+                        # interval_data가 존재할 때 병합 수행
+                        if interval_data:
+                            message = self.final_message_received[ticker][interval]
+                            print(f"{ticker}-{interval}병합")
+                            await self._merge_kline_data(message)
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
@@ -580,9 +610,8 @@ if __name__ == "__main__":
         task_connect = asyncio.create_task(
             obj.connect_kline_loop(ws_intervals=intervals)
         )
-        task_merge = asyncio.create_task(obj.process_kline_data_loop())
-        task_debug = asyncio.create_task(obj.debug_status_loop())
+        task_merge = asyncio.create_task(obj.merge_websocket_kline_data_loop())
 
-        await asyncio.gather(task_tickers, task_connect, task_merge, task_debug)
+        await asyncio.gather(task_tickers, task_connect, task_merge)
 
     asyncio.run(main_run())

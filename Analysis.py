@@ -193,10 +193,34 @@ class AnalysisManager:
             interval_data = kline_data_for_ticker.get(interval, {})
             
             # interval 데이터가 딕셔너리 형태이고 비어있지 않은지 검사
-            if not isinstance(interval_data, dict) or not interval_data:
+            if not isinstance(interval_data, list) or not interval_data:
                 return False
         return True
 
+    # candle의 길이를 구한다.
+    def _candle_lengths(self, kline_data_single: list):
+        """
+        1. 기능 : 개별 kline 데이터의 캔들스틱 길이 요소를 계산
+        2. 매개변수:
+            kline_data_single (list): 하나의 kline 데이터, [time, open, high, low, close, ...] 형식
+        
+        반환값:
+            Tuple[float, float, float, float]: 각각 윗꼬리 길이, 아랫꼬리 길이, 몸통 길이, 전체 길이
+        """
+        open_price = float(kline_data_single[1])
+        high_price = float(kline_data_single[2])
+        low_price = float(kline_data_single[3])
+        close_price = float(kline_data_single[4])
+        
+        # 캔들 길이 계산
+        upper_wick_length = abs(high_price - max(open_price, close_price))
+        lower_wick_length = abs(low_price - min(open_price, close_price))
+        body_length = abs(open_price - close_price)
+        total_length = abs(high_price - low_price)
+        
+        return (upper_wick_length, lower_wick_length, body_length, total_length)
+        
+        
     def case1_conditions(self, ticker: str) -> Tuple[int, bool, Optional[int]]:
         """
         1. 기능 : position 진입 시그널을 나타낸다. Spot시장일경우 position은 long만 진입할 것.
@@ -204,7 +228,11 @@ class AnalysisManager:
             1) ticker : 예) BTCUSDT
         """
         trend_check_interval = '1h'
+        trend_period = '3d'
         position_check_interval = '5m'
+        
+        if trend_check_interval not in self.intervals or position_check_interval not in self.intervals:
+            raise ValueError(f'유효하지 않은 interval 값이 있음.')
         
         # 데이터 유효성 점검
         if not self._validate_kline_data(ticker=ticker):
@@ -226,20 +254,27 @@ class AnalysisManager:
             position = 0  # NO POSITION
 
         # 연속성 여부 점검
-        is_continuous_trend = trend_data_for_position[-1][2] >= 3  # 연속성 여부 판단
+        score = trend_data_for_position[-1][2]
+        is_continuous_trend = score >= 3  # 연속성 여부 판단
+        
+        check_interval_data = self.kline_data.get(ticker).get(trend_check_interval)
 
         # 전고점 또는 전저점과의 시간 차이 계산
         time_difference = None
+        is_over_threshold = False
         if position == 1:
-            previous_high = self._get_previous_high(kline_data=trend_data_for_high_low[:-1])
-            high_index = self._get_row_indices_by_threshold(kline_data=trend_data_for_high_low,
+            previous_high = self._get_previous_high(kline_data=check_interval_data[:-1])
+            high_index = self._get_row_indices_by_threshold(kline_data=check_interval_data[:-1],
                                                             threshold=previous_high,
                                                             column_index=2)
+            is_over_threshold = previous_high < float(check_interval_data[-1][2])
+            time_difference = int(len(trend_data_for_high_low) - high_index) if high_index is not None else None
         elif position == 2:
-            previous_low = self._get_previous_low(kline_data=trend_data_for_high_low[:-1])
-            low_index = self._get_row_indices_by_threshold(kline_data=trend_data_for_high_low,
+            previous_low = self._get_previous_low(kline_data=check_interval_data[:-1])
+            low_index = self._get_row_indices_by_threshold(kline_data=check_interval_data[:-1],
                                                         threshold=previous_low,
                                                         column_index=3)
+            is_over_threshold = previous_low > float(check_interval_data[-1][2])
             time_difference = int(len(trend_data_for_high_low) - low_index) if low_index is not None else None
 
-        return (position, is_continuous_trend, time_difference)
+        return (position, score, is_continuous_trend, time_difference, is_over_threshold)

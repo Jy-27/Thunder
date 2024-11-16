@@ -7,11 +7,16 @@ from typing import List, Dict, Optional, Union, Any, Tuple
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self, kline_data, intervals, tickers):
-        self.kline_data = kline_data
-        self.intervals: List[str] = intervals
-        self.tickers: List[str] = tickers
+    def __init__(self):
+        self.kline_data = None
+        self.intervals: List[str] = None
+        self.tickers: List[str] = None
         # self.point: Optional[List[int]] = None
+
+    def update_data(self, kline_data:dict, intervals: list, tickers: list):
+        self.kline_data = kline_data
+        self.intervals = intervals
+        self.tickers = tickers
 
     # kline 데이터의 자료를 리터럴 변환
     def _convert_kline_data_to_literals(self) -> Dict[str, Dict[str, Union[Any]]]:
@@ -46,7 +51,7 @@ class AnalysisManager:
         """
         1. 기능 : kline_data 전체를 np.array형으로 변환
         2. 매개변수 : 해당없음.
-        
+
         """
         for ticker in self.tickers:
             # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
@@ -68,41 +73,73 @@ class AnalysisManager:
         return self.kline_data
 
     # interval별 연속 상승/하락에 대한 값을 연산 반환한다.
+
     def _compute_trend_scores(
         self, kline_data: List[List[Union[str, int]]]
     ) -> List[List[int]]:
         """
-        1. 기능 : ohlcv의 LONG, SHORT 연속성 데이터를 연산한다.
-        2. 매개변수
-            1) kline_data : kline의 각 interval값 입력(중첩 dict 최하단 데이터)
+        기능: OHLCV 데이터에서 LONG, SHORT 연속성 점수와 캔들 유효성을 계산한다.
+
+        매개변수:
+            - kline_data (List): kline 데이터 리스트.
+            [timestamp, open, high, low, close, volume] 형식의 데이터를 가정.
+
+        반환값:
+            - trend_data (List): [Long, Short, Continuity, Valid Candle Count] 형태의 점수 리스트.
         """
-        trend_data = []  # 각 캔들에 대한 트렌드 점수 [Long, Short, Continuity]
+        trend_data = []  # 결과 데이터를 저장
+        target_candle_shadow_ratio = (
+            0.3  # 위아래 꼬리의 합계가 몸통 대비 30% 이하여야 함.
+        )
 
         for index, data in enumerate(kline_data):
             if index == 0:
-                trend_data.append([0, 0, 0])  # 첫 번째 데이터 초기화
+                # 첫 번째 데이터 초기화
+                trend_data.append([0, 0, 0, 0])
                 continue
 
-            prev_index = index - 1
+            # 현재 데이터와 이전 트렌드 정보 가져오기
+            prev_data = trend_data[index - 1]
+            prev_continuity = prev_data[2]
+            prev_valid_candles = prev_data[3]
+
             current_open = float(data[1])
             current_close = float(data[4])
 
-            prev_trend = trend_data[prev_index]
-            prev_continuity = prev_trend[2]
+            # 캔들 길이 계산 (몸통, 위/아래 꼬리)
+            candle = self._candle_lengths(data)
+            shadow_ratio = (
+                (candle[0] + candle[1]) / candle[3] if candle[3] != 0 else 0
+            )  # 꼬리 비율 계산
 
+            # 상승(bullish), 하락(bearish) 여부 판단
             is_bullish = current_open < current_close
             is_bearish = current_open > current_close
 
+            # 연속성 계산 (Continuity)
             if is_bullish:
-                continuity_count = prev_continuity + 1 if prev_trend[0] else 1
+                continuity_count = prev_continuity + 1 if prev_data[0] else 1
             elif is_bearish:
-                continuity_count = prev_continuity + 1 if prev_trend[1] else 1
+                continuity_count = prev_continuity + 1 if prev_data[1] else 1
             else:
                 continuity_count = 0
 
-            long_score = 1 if is_bullish else 0
-            short_score = 1 if is_bearish else 0
-            trend_data.append([long_score, short_score, continuity_count])
+            # 유효 캔들 판단 및 유효 캔들 수 계산
+            is_valid_candle = shadow_ratio <= target_candle_shadow_ratio
+            valid_candle_count = (
+                prev_valid_candles + 1
+                if is_valid_candle and continuity_count > 1
+                else int(is_valid_candle)
+            )
+
+            # LONG/SHORT 점수 계산
+            long_score = int(is_bullish)
+            short_score = int(is_bearish)
+
+            # 결과 저장
+            trend_data.append(
+                [long_score, short_score, continuity_count, valid_candle_count]
+            )
 
         return trend_data
 
@@ -151,12 +188,12 @@ class AnalysisManager:
         return int(row_indices[0]) if row_indices.size > 0 else None
 
     def _get_row_indices_by_threshold_range(
-            self,
-            kline_data: List[List[Union[str, int]]],
-            threshold_min: float,
-            threshold_max: float,
-            column_index: int,
-        ) -> Optional[int]:
+        self,
+        kline_data: List[List[Union[str, int]]],
+        threshold_min: float,
+        threshold_max: float,
+        column_index: int,
+    ) -> Optional[int]:
         """
         1. 기능 : kline에서 특정 범위 내 값의 인덱스를 찾는다.
         2. 매개변수
@@ -169,8 +206,10 @@ class AnalysisManager:
         np_array = np.array(kline_data, dtype=float)
 
         # 주어진 열에서 범위 내에 있는 행의 인덱스 찾기
-        row_indices = np.where((np_array[:, column_index] >= threshold_min) & 
-                            (np_array[:, column_index] <= threshold_max))[0]
+        row_indices = np.where(
+            (np_array[:, column_index] >= threshold_min)
+            & (np_array[:, column_index] <= threshold_max)
+        )[0]
 
         # 조건을 만족하는 첫 번째 인덱스를 반환하거나, 없으면 None 반환
         return int(row_indices[0]) if row_indices.size > 0 else None
@@ -191,7 +230,7 @@ class AnalysisManager:
         # 각 interval의 데이터가 존재하고 올바른지 확인
         for interval in self.intervals:
             interval_data = kline_data_for_ticker.get(interval, {})
-            
+
             # interval 데이터가 딕셔너리 형태이고 비어있지 않은지 검사
             if not isinstance(interval_data, list) or not interval_data:
                 return False
@@ -203,7 +242,7 @@ class AnalysisManager:
         1. 기능 : 개별 kline 데이터의 캔들스틱 길이 요소를 계산
         2. 매개변수:
             kline_data_single (list): 하나의 kline 데이터, [time, open, high, low, close, ...] 형식
-        
+
         반환값:
             Tuple[float, float, float, float]: 각각 윗꼬리 길이, 아랫꼬리 길이, 몸통 길이, 전체 길이
         """
@@ -211,70 +250,98 @@ class AnalysisManager:
         high_price = float(kline_data_single[2])
         low_price = float(kline_data_single[3])
         close_price = float(kline_data_single[4])
-        
+
         # 캔들 길이 계산
         upper_wick_length = abs(high_price - max(open_price, close_price))
         lower_wick_length = abs(low_price - min(open_price, close_price))
         body_length = abs(open_price - close_price)
         total_length = abs(high_price - low_price)
-        
+
         return (upper_wick_length, lower_wick_length, body_length, total_length)
-        
-        
-    def case1_conditions(self, ticker: str) -> Tuple[int, bool, Optional[int]]:
+
+    def case1_conditions(
+        self, ticker: str
+    ) -> Tuple[int, int, bool, Optional[int], bool]:
         """
-        1. 기능 : position 진입 시그널을 나타낸다. Spot시장일경우 position은 long만 진입할 것.
-        2. 매개변수
-            1) ticker : 예) BTCUSDT
+        1. 기능: 포지션 진입 시그널을 계산한다. Spot 시장의 경우 LONG 포지션만 진입 가능.
+        2. 매개변수:
+            - ticker (str): 예) BTCUSDT
+        3. 반환값:
+            - position (int): 1 = LONG, 2 = SHORT, 0 = NO POSITION  -> 현재 포지션
+            - trend_score (int): 연속성 점수 -> candle 꼬리길이가 30%를 넘으면 안됨.
+            - is_continuous (bool): 연속된 트렌드 여부 -> trend_score를 기준으로 bool반영
+            - time_diff (Optional[int]): 전고점/전저점과의 시간 차이
+            - is_threshold_broken (bool): 현재 가격이 전고점/전저점 임계값을 넘었는지 여부
         """
-        trend_check_interval = '1h'
-        trend_period = '3d'
-        position_check_interval = '5m'
-        
-        if trend_check_interval not in self.intervals or position_check_interval not in self.intervals:
-            raise ValueError(f'유효하지 않은 interval 값이 있음.')
-        
-        # 데이터 유효성 점검
+        trend_check_interval = "1h"
+        trend_period = "3d"
+        position_check_interval = "5m"
+
+        # 유효성 검사: 인터벌 확인
+        if (
+            trend_check_interval not in self.intervals
+            or position_check_interval not in self.intervals
+        ):
+            raise ValueError(f"유효하지 않은 interval 값이 있음.")
+
+        # 데이터 유효성 검사
         if not self._validate_kline_data(ticker=ticker):
-            raise ValueError(f'{ticker} - kline 데이터가 유효하지 않음.')
+            raise ValueError(f"{ticker} - kline 데이터가 유효하지 않음.")
 
         ticker_data = self.kline_data.get(ticker, {})
-        trend_data_for_high_low = self._compute_trend_scores(ticker_data.get(trend_check_interval, {}))
-        trend_data_for_position = self._compute_trend_scores(ticker_data.get(position_check_interval, {}))
 
-        if not trend_data_for_high_low or not trend_data_for_position:
-            raise ValueError(f'{ticker}의 interval 데이터가 유효하지 않음.')
+        # 트렌드 점수 계산
+        trend_data_high_low = self._compute_trend_scores(
+            ticker_data.get(trend_check_interval, {})
+        )
+        trend_data_position = self._compute_trend_scores(
+            ticker_data.get(position_check_interval, {})
+        )
+
+        if not trend_data_high_low or not trend_data_position:
+            raise ValueError(f"{ticker}의 interval 데이터가 유효하지 않음.")
 
         # 포지션 결정
-        if trend_data_for_position[-1][0]:
-            position = 1  # LONG
-        elif trend_data_for_position[-1][1]:
-            position = 2  # SHORT
-        else:
-            position = 0  # NO POSITION
+        last_trend_position = trend_data_position[-1]
+        position = 1 if last_trend_position[0] else (2 if last_trend_position[1] else 0)
 
-        # 연속성 여부 점검
-        score = trend_data_for_position[-1][2]
-        is_continuous_trend = score >= 3  # 연속성 여부 판단
-        
-        check_interval_data = self.kline_data.get(ticker).get(trend_check_interval)
+        # 연속성 점수 및 유효 캔들 점수 계산
+        continuity_score = last_trend_position[2]
+        valid_candle_score = last_trend_position[3]
+        trend_score = min(continuity_score, valid_candle_score)
+        is_continuous = trend_score >= 3
 
-        # 전고점 또는 전저점과의 시간 차이 계산
-        time_difference = None
-        is_over_threshold = False
-        if position == 1:
-            previous_high = self._get_previous_high(kline_data=check_interval_data[:-1])
-            high_index = self._get_row_indices_by_threshold(kline_data=check_interval_data[:-1],
-                                                            threshold=previous_high,
-                                                            column_index=2)
-            is_over_threshold = previous_high < float(check_interval_data[-1][2])
-            time_difference = int(len(trend_data_for_high_low) - high_index) if high_index is not None else None
-        elif position == 2:
-            previous_low = self._get_previous_low(kline_data=check_interval_data[:-1])
-            low_index = self._get_row_indices_by_threshold(kline_data=check_interval_data[:-1],
-                                                        threshold=previous_low,
-                                                        column_index=3)
-            is_over_threshold = previous_low > float(check_interval_data[-1][2])
-            time_difference = int(len(trend_data_for_high_low) - low_index) if low_index is not None else None
+        # 데이터 준비
+        trend_interval_data = ticker_data.get(trend_check_interval)
 
-        return (position, score, is_continuous_trend, time_difference, is_over_threshold)
+        # 전고점/전저점 및 시간 차이 계산
+        time_diff = None
+        is_threshold_broken = False
+
+        if position == 1:  # LONG
+            previous_high = self._get_previous_high(kline_data=trend_interval_data[:-1])
+            high_index = self._get_row_indices_by_threshold(
+                kline_data=trend_interval_data[:-1],
+                threshold=previous_high,
+                column_index=2,
+            )
+            is_threshold_broken = previous_high < float(trend_interval_data[-1][2])
+            time_diff = (
+                len(trend_data_high_low) - high_index
+                if high_index is not None
+                else None
+            )
+
+        elif position == 2:  # SHORT
+            previous_low = self._get_previous_low(kline_data=trend_interval_data[:-1])
+            low_index = self._get_row_indices_by_threshold(
+                kline_data=trend_interval_data[:-1],
+                threshold=previous_low,
+                column_index=3,
+            )
+            is_threshold_broken = previous_low > float(trend_interval_data[-1][2])
+            time_diff = (
+                len(trend_data_high_low) - low_index if low_index is not None else None
+            )
+
+        return position, trend_score, is_continuous, time_diff, is_threshold_broken

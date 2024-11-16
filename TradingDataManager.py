@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union, Tuple, Final, cast, Any, Default
 from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotAPI, FuturesAPI
+from Analysis import AnalysisManager
 
 import BinanceTradeClient as my_client
 import asyncio
@@ -13,7 +14,12 @@ import datetime
 
 class DataControlManager:
     def __init__(
-        self, ticker_instance, handler_instance, client_instance, market_instance
+        self,
+        ticker_instance,
+        handler_instance,
+        client_instance,
+        market_instance,
+        analysis_instance,
     ):
         self.tickers_data = None
 
@@ -50,6 +56,7 @@ class DataControlManager:
         self.handler_instance = handler_instance  # asyncio._queue << 속성 여기에 있음.
         self.client_instance = client_instance
         self.market_instance = market_instance
+        self.analysis_instance = analysis_instance
 
         # ticker 정보 저장 및 공유
         self.active_tickers: List = []
@@ -59,9 +66,9 @@ class DataControlManager:
         self.account_active_symbols: List = []
 
         # websocket 수신데이터의 가장 마지막값을 저장한다. (kline과 결합을 위함.)
-        self.final_message_received: DefaultDict[str, DefaultDict[str, List[List[Any]]]] = (
-            defaultdict(lambda: defaultdict())
-        )
+        self.final_message_received: DefaultDict[
+            str, DefaultDict[str, List[List[Any]]]
+        ] = defaultdict(lambda: defaultdict())
 
     # Ticker 수집에 필요한 정보를 수신
     async def _collect_filtered_ticker_data(self) -> Tuple:
@@ -71,8 +78,8 @@ class DataControlManager:
         """
         comparison = "above"  # above : 이상, below : 이하
         absolute = True  # True : 비율 절대값, False : 비율 실제값
-        value = 350_000_000  # 거래대금 : 단위 USD
-        target_percent = 5  # 변동 비율폭 : 단위 %이며, 음수 가능
+        value = 150_000_000  # 거래대금 : 단위 USD
+        target_percent = 3  # 변동 비율폭 : 단위 %이며, 음수 가능
         quote_type = "usdt"  # 쌍거래 거래화폐
 
         above_value_tickers = await self.ticker_instance.fetch_tickers_above_value(
@@ -135,7 +142,7 @@ class DataControlManager:
                 # 예외 발생 시 로깅 및 오류 메시지 출력
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
-            await utils._wait_until_next_interval(time_unit="minute", interval=30)
+            await utils._wait_until_next_interval(time_unit="minute", interval=5)
 
     # 계좌정보 업데이트
     async def fetch_active_positions(self):
@@ -439,7 +446,7 @@ class DataControlManager:
         print(f"Kline 전체 update완료")
 
     # kline 데이터 interval map별 수집
-    async def collect_kline_by_interval_loop(self, days: int=2):
+    async def collect_kline_by_interval_loop(self, days: int = 2):
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
@@ -582,10 +589,34 @@ class DataControlManager:
                             print(f"{ticker}-{interval}병합")
                             await self._merge_kline_data(message)
 
+    # 검토대상 체크한다.
+    async def analysis_loop(self):
+        target_interval = "5m"
+        while True:
+            self.analysis_instance.update_data(
+                kline_data=self.kline_data,
+                intervals=self.KLINE_INTERVALS,
+                tickers=self.active_tickers,
+            )
+            for ticker in self.active_tickers:
+                is_kline_data = self.analysis_instance._validate_kline_data(ticker)
+                if not is_kline_data:
+                    continue
+                case_1 = self.analysis_instance.case1_conditions(ticker)
+                print(f'{ticker} - {case_1}')
+                if case_1[2] and case_1[4]:
+                    print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
+            await utils._wait_time_sleep(time_unit="second", duration=5)
+
+
 class SpotDataControl(DataControlManager):
     def __init__(self):
         super().__init__(
-            SpotTickers(), SpotHandler(), my_client.SpotOrderManager(), SpotAPI()
+            SpotTickers(),
+            SpotHandler(),
+            my_client.SpotOrderManager(),
+            SpotAPI(),
+            AnalysisManager(),
         )
 
 
@@ -596,6 +627,7 @@ class FuturesDataControl(DataControlManager):
             FuturesHandler(),
             my_client.FuturesOrderManager(),
             FuturesAPI(),
+            AnalysisManager(),
         )
 
 
@@ -604,14 +636,15 @@ if __name__ == "__main__":
     async def main_run():
         obj = FuturesDataControl()
 
-        intervals = ["kline_3m", "kline_5m", "kline_15m"]
+        intervals = ["kline_" + interval for interval in obj.KLINE_INTERVALS]
 
         task_tickers = asyncio.create_task(obj.ticker_update_loop())
         task_connect = asyncio.create_task(
             obj.connect_kline_loop(ws_intervals=intervals)
         )
         task_merge = asyncio.create_task(obj.merge_websocket_kline_data_loop())
+        task_analy = asyncio.create_task(obj.analysis_loop())
 
-        await asyncio.gather(task_tickers, task_connect, task_merge)
+        await asyncio.gather(task_tickers, task_connect, task_merge, task_analy)
 
     asyncio.run(main_run())

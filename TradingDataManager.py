@@ -131,8 +131,7 @@ class DataControlManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
-                print("tickers 업데이트 완료")
-                print(self.active_tickers)
+                # print(self.active_tickers)
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
@@ -443,7 +442,7 @@ class DataControlManager:
                         limit=limit_,
                     )
                 )
-        print(f"Kline 전체 update완료")
+        print(f"Kline 전체 update완료 - {datetime.datetime.now()}")
 
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
@@ -574,7 +573,7 @@ class DataControlManager:
         while True:
             await utils._wait_until_exact_time(time_unit="second")
             await asyncio.sleep(4)
-            print(datetime.datetime.now())
+            # print(datetime.datetime.now())
             for ticker in self.active_tickers:
                 ticker_data = self.final_message_received.get(ticker)
 
@@ -632,6 +631,9 @@ class FuturesDataControl(DataControlManager):
 
 if __name__ == "__main__":
 
+    import os
+    os.system('clear')
+    
     async def main_run():
         obj = FuturesDataControl()
 

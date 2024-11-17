@@ -1,22 +1,22 @@
 import asyncio
 import numpy as np
 import utils
+import copy
 from collections import defaultdict
 from typing import List, Dict, Optional, Union, Any, Tuple
-
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
     def __init__(self):
         self.kline_data = None
-        self.intervals: List[str] = None
-        self.tickers: List[str] = None
+        self.intervals: Optional[List[str]] = None
+        self.tickers: Optional[List[str]] = None
         # self.point: Optional[List[int]] = None
 
     def update_data(self, kline_data:dict, intervals: list, tickers: list):
-        self.kline_data = kline_data
+        self.kline_data = copy.deepcopy(kline_data)
         self.intervals = intervals
-        self.tickers = tickers
+        self.tickers = copy.deepcopy(tickers)
 
     # kline 데이터의 자료를 리터럴 변환
     def _convert_kline_data_to_literals(self) -> Dict[str, Dict[str, Union[Any]]]:
@@ -24,25 +24,26 @@ class AnalysisManager:
         1. 기능 : kline_data를 리터럴 처리
         2. 매개변수 : 해당없음
         """
-        for ticker in self.tickers:
-            # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
-            if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
-                continue
-
-            ticker_data = self.kline_data[ticker]
-
-            for interval in self.intervals:
-                # ticker 데이터가 딕셔너리이며 해당 interval 데이터가 있는지 확인
-                if not isinstance(ticker_data, dict) or interval not in ticker_data:
+        if self.tickers and self.intervals:
+            for ticker in self.tickers:
+                # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
+                if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
                     continue
 
-                interval_data = ticker_data[interval]
+                ticker_data = self.kline_data[ticker]
 
-                # 중첩된 리스트를 리터럴 형태로 변환
-                literals_converted_data = utils._convert_nested_list_to_literals(
-                    interval_data
-                )
-                self.kline_data[ticker][interval] = literals_converted_data
+                for interval in self.intervals:
+                    # ticker 데이터가 딕셔너리이며 해당 interval 데이터가 있는지 확인
+                    if not isinstance(ticker_data, dict) or interval not in ticker_data:
+                        continue
+
+                    interval_data = ticker_data[interval]
+
+                    # 중첩된 리스트를 리터럴 형태로 변환
+                    literals_converted_data = utils._convert_nested_list_to_literals(
+                        interval_data
+                    )
+                    self.kline_data[ticker][interval] = literals_converted_data
 
         return self.kline_data
 
@@ -53,23 +54,24 @@ class AnalysisManager:
         2. 매개변수 : 해당없음.
 
         """
-        for ticker in self.tickers:
-            # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
-            if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
-                continue
-
-            ticker_data = self.kline_data[ticker]
-
-            for interval in self.intervals:
-                # ticker 데이터가 딕셔너리이며 해당 interval 데이터가 있는지 확인
-                if not isinstance(ticker_data, dict) or interval not in ticker_data:
+        if self.tickers and self.intervals:
+            for ticker in self.tickers:
+                # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
+                if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
                     continue
 
-                interval_data = ticker_data[interval]
+                ticker_data = self.kline_data[ticker]
 
-                # 중첩된 리스트를 리터럴 형태로 변환
-                numpy_array = np.array(object=interval_data, dtype=float)
-                self.kline_data[ticker][interval] = numpy_array
+                for interval in self.intervals:
+                    # ticker 데이터가 딕셔너리이며 해당 interval 데이터가 있는지 확인
+                    if not isinstance(ticker_data, dict) or interval not in ticker_data:
+                        continue
+
+                    interval_data = ticker_data[interval]
+
+                    # 중첩된 리스트를 리터럴 형태로 변환
+                    numpy_array = np.array(object=interval_data, dtype=float)
+                    self.kline_data[ticker][interval] = numpy_array
         return self.kline_data
 
     # interval별 연속 상승/하락에 대한 값을 연산 반환한다.

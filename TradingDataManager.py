@@ -135,8 +135,7 @@ class DataControlManager:
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
-                # self.kline_data.clear()
-                # self.final_message_received.clear()
+                self.kline_data.clear()
                 await self.update_all_klines()
 
             except Exception as e:
@@ -599,14 +598,14 @@ class DataControlManager:
                 intervals=self.KLINE_INTERVALS,
                 tickers=self.active_tickers,
             )
-            for ticker in self.active_tickers:
+            for ticker in self.analysis_instance.tickers:
                 is_kline_data = self.analysis_instance._validate_kline_data(ticker)
                 if not is_kline_data:
                     continue
                 case_1 = self.analysis_instance.case1_conditions(ticker)
                 if case_1[2] and case_1[4]:
                     print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
-            await utils._wait_time_sleep(time_unit="second", duration=20)
+            await utils._wait_time_sleep(time_unit="minute", duration=1)
 
 class SpotDataControl(DataControlManager):
     def __init__(self):

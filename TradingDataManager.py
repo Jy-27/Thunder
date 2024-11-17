@@ -603,7 +603,7 @@ class DataControlManager:
                 if not is_kline_data:
                     continue
                 case_1 = self.analysis_instance.case1_conditions(ticker)
-                if case_1[2] and case_1[4]:
+                if case_1 and case_1[2] and case_1[4]:
                     print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
             await utils._wait_time_sleep(time_unit="minute", duration=1)
 

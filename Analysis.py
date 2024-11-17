@@ -288,7 +288,7 @@ class AnalysisManager:
 
         # 데이터 유효성 검사
         if not self._validate_kline_data(ticker=ticker):
-            return f"{ticker} - kline 데이터가 유효하지 않음."
+            return None
 
         ticker_data = self.kline_data.get(ticker, {})
 
@@ -301,7 +301,7 @@ class AnalysisManager:
         )
 
         if not trend_data_high_low or not trend_data_position:
-            raise ValueError(f"{ticker}의 interval 데이터가 유효하지 않음.")
+            return None
 
         # 포지션 결정
         last_trend_position = trend_data_position[-1]
@@ -347,8 +347,6 @@ class AnalysisManager:
                     len(trend_data_high_low) - low_index if low_index is not None else None
                 )
         except:
-            print(ticker)
-            print(trend_interval_data[:-1])
-            raise ExceptionType('ERROR')
+            return None
         
         return position, trend_score, is_continuous, time_diff, is_threshold_broken

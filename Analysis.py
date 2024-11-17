@@ -151,6 +151,7 @@ class AnalysisManager:
             1) kline_data : get(interval)값을 입력
         """
         np_array = np.array(object=kline_data, dtype=float)
+        print(np_array[-1])
         return np.max(np_array[:, 2])
 
     # kline데이터의 'low'값의 min값을 반환한다. (전저점))
@@ -160,6 +161,7 @@ class AnalysisManager:
         2. 매개변수
             1) kline_data : get(interval)값을 입력
         """
+        print(np_array[-1])
         np_array = np.array(object=kline_data, dtype=float)
         return np.min(np_array[:, 3])
 
@@ -286,7 +288,7 @@ class AnalysisManager:
 
         # 데이터 유효성 검사
         if not self._validate_kline_data(ticker=ticker):
-            raise ValueError(f"{ticker} - kline 데이터가 유효하지 않음.")
+            return f"{ticker} - kline 데이터가 유효하지 않음."
 
         ticker_data = self.kline_data.get(ticker, {})
 

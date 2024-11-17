@@ -97,7 +97,7 @@ class BinanceHandler:
         print("WebSocket connection closed.")
 
     # websocket break 신고 발생기
-    async def pause_and_resume_loop(self, sleep_duration: int = 1):
+    async def pause_and_resume(self, sleep_duration: int = 1):
         """
         1. 기능 : tickers 업데이트 stop 신호 발생 또는 진행 신호 발생
         2. 매개변수

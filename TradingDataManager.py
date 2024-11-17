@@ -127,7 +127,7 @@ class DataControlManager:
         2. 매개변수 : 해당없음.
         """
         while True:
-            await self.handler_instance.pause_and_resume_loop()
+            await self.handler_instance.pause_and_resume()
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
@@ -135,6 +135,8 @@ class DataControlManager:
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
+                self.kline_data.clear()
+                self.final_message_received.clear()
                 await self.update_all_klines()
 
             except Exception as e:
@@ -639,13 +641,13 @@ if __name__ == "__main__":
 
         intervals = ["kline_" + interval for interval in obj.KLINE_INTERVALS]
 
-        task_tickers = asyncio.create_task(obj.ticker_update_loop())
-        task_connect = asyncio.create_task(
-            obj.connect_kline_loop(ws_intervals=intervals)
-        )
-        task_merge = asyncio.create_task(obj.merge_websocket_kline_data_loop())
-        task_analy = asyncio.create_task(obj.analysis_loop())
+        tasks = [
+            asyncio.create_task(obj.ticker_update_loop()),
+            asyncio.create_task(obj.connect_kline_loop(ws_intervals=intervals)),
+            asyncio.create_task(obj.merge_websocket_kline_data_loop()),
+            asyncio.create_task(obj.analysis_loop())
+        ]
 
-        await asyncio.gather(task_tickers, task_connect, task_merge, task_analy)
+        await asyncio.gather(*tasks)
 
     asyncio.run(main_run())

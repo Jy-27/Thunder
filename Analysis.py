@@ -151,7 +151,6 @@ class AnalysisManager:
             1) kline_data : get(interval)값을 입력
         """
         np_array = np.array(object=kline_data, dtype=float)
-        print(np_array[-1])
         return np.max(np_array[:, 2])
 
     # kline데이터의 'low'값의 min값을 반환한다. (전저점))
@@ -161,7 +160,6 @@ class AnalysisManager:
         2. 매개변수
             1) kline_data : get(interval)값을 입력
         """
-        print(np_array[-1])
         np_array = np.array(object=kline_data, dtype=float)
         return np.min(np_array[:, 3])
 
@@ -320,30 +318,35 @@ class AnalysisManager:
         time_diff = None
         is_threshold_broken = False
 
-        if position == 1:  # LONG
-            previous_high = self._get_previous_high(kline_data=trend_interval_data[:-1])
-            high_index = self._get_row_indices_by_threshold(
-                kline_data=trend_interval_data[:-1],
-                threshold=previous_high,
-                column_index=2,
-            )
-            is_threshold_broken = previous_high < float(trend_interval_data[-1][2])
-            time_diff = (
-                len(trend_data_high_low) - high_index
-                if high_index is not None
-                else None
-            )
+        try:
+            if position == 1:  # LONG
+                previous_high = self._get_previous_high(kline_data=trend_interval_data[:-1])
+                high_index = self._get_row_indices_by_threshold(
+                    kline_data=trend_interval_data[:-1],
+                    threshold=previous_high,
+                    column_index=2,
+                )
+                is_threshold_broken = previous_high < float(trend_interval_data[-1][2])
+                time_diff = (
+                    len(trend_data_high_low) - high_index
+                    if high_index is not None
+                    else None
+                )
 
-        elif position == 2:  # SHORT
-            previous_low = self._get_previous_low(kline_data=trend_interval_data[:-1])
-            low_index = self._get_row_indices_by_threshold(
-                kline_data=trend_interval_data[:-1],
-                threshold=previous_low,
-                column_index=3,
-            )
-            is_threshold_broken = previous_low > float(trend_interval_data[-1][2])
-            time_diff = (
-                len(trend_data_high_low) - low_index if low_index is not None else None
-            )
-
+            elif position == 2:  # SHORT
+                previous_low = self._get_previous_low(kline_data=trend_interval_data[:-1])
+                low_index = self._get_row_indices_by_threshold(
+                    kline_data=trend_interval_data[:-1],
+                    threshold=previous_low,
+                    column_index=3,
+                )
+                is_threshold_broken = previous_low > float(trend_interval_data[-1][2])
+                time_diff = (
+                    len(trend_data_high_low) - low_index if low_index is not None else None
+                )
+        except:
+            print(ticker)
+            print(trend_interval_data[:-1])
+            raise ExceptionType('ERROR')
+        
         return position, trend_score, is_continuous, time_diff, is_threshold_broken

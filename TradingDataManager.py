@@ -131,11 +131,12 @@ class DataControlManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
+                print(f'tickers - {len(self.active_tickers)}종 update! {datetime.datetime.now()}')
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
-                self.kline_data.clear()
-                self.final_message_received.clear()
+                # self.kline_data.clear()
+                # self.final_message_received.clear()
                 await self.update_all_klines()
 
             except Exception as e:
@@ -257,7 +258,7 @@ class DataControlManager:
                     symbols=self.active_tickers, intervals=ws_intervals
                 )
 
-                print(f"tickers update complete - {utils._get_time_component()}")
+                # print(f"tickers update complete - {utils._get_time_component()}")
                 # 시스템 안정성을 위한 5초 대기
                 await utils._wait_time_sleep(time_unit="second", duration=5)
             except Exception as e:
@@ -268,7 +269,7 @@ class DataControlManager:
     # websocket 수신 데이터를 속성값에 저장한다.
     async def update_received_data_loop(self) -> Dict[str, Dict[str, Union[str, int]]]:
         while True:
-            print(f'queue size - {self.handler_instance.asyncio_queue.qsize()}')
+            # print(f'queue size - {self.handler_instance.asyncio_queue.qsize()}')
             while not self.handler_instance.asyncio_queue.empty():
                 received_massage = await self.handler_instance.asyncio_queue.get()
                 if isinstance(received_massage, dict) and received_massage:
@@ -444,7 +445,7 @@ class DataControlManager:
                         limit=limit_,
                     )
                 )
-        print(f"Kline 전체 update완료 - {datetime.datetime.now()}")
+        # print(f"Kline 전체 update완료 - {datetime.datetime.now()}")
 
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
@@ -575,7 +576,6 @@ class DataControlManager:
         while True:
             await utils._wait_until_exact_time(time_unit="second")
             await asyncio.sleep(4)
-            # print(datetime.datetime.now())
             for ticker in self.active_tickers:
                 ticker_data = self.final_message_received.get(ticker)
 
@@ -587,7 +587,7 @@ class DataControlManager:
                         # interval_data가 존재할 때 병합 수행
                         if interval_data:
                             message = self.final_message_received[ticker][interval]
-                            print(f"{ticker}-{interval}병합")
+                            # print(f"{ticker}-{interval}병합")
                             await self._merge_kline_data(message)
 
     # 검토대상 체크한다.
@@ -606,7 +606,7 @@ class DataControlManager:
                 case_1 = self.analysis_instance.case1_conditions(ticker)
                 if case_1[2] and case_1[4]:
                     print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
-            await utils._wait_time_sleep(time_unit="second", duration=5)
+            await utils._wait_time_sleep(time_unit="second", duration=20)
 
 class SpotDataControl(DataControlManager):
     def __init__(self):

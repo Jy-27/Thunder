@@ -10,6 +10,7 @@ import BinanceTradeClient as my_client
 import asyncio
 import utils
 import datetime
+import gc
 
 
 class DataControlManager:
@@ -129,8 +130,10 @@ class DataControlManager:
         while True:
             await self.handler_instance.pause_and_resume()
             try:
+                gc.collect()
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
+                # print(self.active_tickers)
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
@@ -268,7 +271,6 @@ class DataControlManager:
     # websocket 수신 데이터를 속성값에 저장한다.
     async def update_received_data_loop(self) -> Dict[str, Dict[str, Union[str, int]]]:
         while True:
-            print(f'queue size - {self.handler_instance.asyncio_queue.qsize()}')
             while not self.handler_instance.asyncio_queue.empty():
                 received_massage = await self.handler_instance.asyncio_queue.get()
                 if isinstance(received_massage, dict) and received_massage:
@@ -608,6 +610,7 @@ class DataControlManager:
                     print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
             await utils._wait_time_sleep(time_unit="second", duration=5)
 
+
 class SpotDataControl(DataControlManager):
     def __init__(self):
         super().__init__(
@@ -644,10 +647,51 @@ if __name__ == "__main__":
             asyncio.create_task(obj.ticker_update_loop()),
             asyncio.create_task(obj.connect_kline_loop(ws_intervals=intervals)),
             asyncio.create_task(obj.merge_websocket_kline_data_loop()),
-            asyncio.create_task(obj.analysis_loop()),
-            asyncio.create_task(obj.update_received_data_loop())
+            asyncio.create_task(obj.analysis_loop())
         ]
 
         await asyncio.gather(*tasks)
 
     asyncio.run(main_run())
+
+
+
+import gc
+import time
+import psutil
+from collections import defaultdict
+
+def monitor_memory_usage(interval=5):
+    """Monitor and print memory usage of objects periodically in an infinite loop.
+
+    Args:
+        interval (int): Time interval (in seconds) between logs.
+    """
+    print("Time (s) | Total Memory (MB) | Object Type | Count")
+    print("-" * 50)
+    
+    start_time = time.time()
+    while True:
+        # Get total memory usage
+        process = psutil.Process(os.getpid())
+        total_memory = process.memory_info().rss / 1024 ** 2  # Convert to MB
+        
+        # Count object types
+        object_counts = defaultdict(int)
+        for obj in gc.get_objects():
+            obj_type = type(obj).__name__
+            object_counts[obj_type] += 1
+        
+        # Print memory usage
+        timestamp = round(time.time() - start_time, 2)
+        for obj_type, count in object_counts.items():
+            print(f"{timestamp:>8} | {total_memory:>16.2f} | {obj_type:>12} | {count:>6}")
+        
+        print("-" * 50)
+        
+        # Wait for the next interval
+        time.sleep(interval)
+
+
+if __name__ == '__main__':
+    monitor_memory_usage(interval=5)

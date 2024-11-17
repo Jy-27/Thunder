@@ -14,9 +14,9 @@ class AnalysisManager:
         # self.point: Optional[List[int]] = None
 
     def update_data(self, kline_data:dict, intervals: list, tickers: list):
-        self.kline_data = copy.deepcopy(kline_data)
+        self.kline_data = kline_data
         self.intervals = intervals
-        self.tickers = copy.deepcopy(tickers)
+        self.tickers = tickers
 
     # kline 데이터의 자료를 리터럴 변환
     def _convert_kline_data_to_literals(self) -> Dict[str, Dict[str, Union[Any]]]:
@@ -315,6 +315,11 @@ class AnalysisManager:
 
         # 데이터 준비
         trend_interval_data = ticker_data.get(trend_check_interval)
+        
+        # kline_data.clear()실행시 False로 반환처리 한다.
+        # tickers update시 잔존하는 queue값 잔존시 kline_data가 생성되므로 이에 대한 False로 반환
+        if len(trend_interval_data) == 1:
+            return 0, 0, False, 0, False
 
         # 전고점/전저점 및 시간 차이 계산
         time_diff = None
@@ -347,6 +352,8 @@ class AnalysisManager:
                     len(trend_data_high_low) - low_index if low_index is not None else None
                 )
         except:
-            return None
+            print(trend_interval_data)
+            print(ticker)
+            raise ValueError('ERROR')
         
         return position, trend_score, is_continuous, time_diff, is_threshold_broken

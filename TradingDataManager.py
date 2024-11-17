@@ -10,6 +10,7 @@ import BinanceTradeClient as my_client
 import asyncio
 import utils
 import datetime
+import gc
 
 
 class DataControlManager:
@@ -129,6 +130,7 @@ class DataControlManager:
         while True:
             await self.handler_instance.pause_and_resume()
             try:
+                gc.collect()
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
                 # print(self.active_tickers)

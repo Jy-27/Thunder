@@ -10,7 +10,7 @@ import BinanceTradeClient as my_client
 import asyncio
 import utils
 import datetime
-
+import json
 
 class DataControlManager:
     def __init__(
@@ -133,9 +133,9 @@ class DataControlManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
-                print(
-                    f"tickers - {len(self.active_tickers)}종 update! {datetime.datetime.now()}"
-                )
+                # print(
+                #     f"tickers - {len(self.active_tickers)}종 update! {datetime.datetime.now()}"
+                # )
                 # 간격 대기 함수 호출 (예: 4시간 간격)
 
                 # ticker update완료시 신규 kline데이터 갱신함.
@@ -196,6 +196,7 @@ class DataControlManager:
         """
         self.websocket_type["stream"] = ws_type
         await utils._wait_until_exact_time(time_unit="minute")
+        await utils._wait_time_sleep(time_unit='minute', duration=1)
         print(f"WebSocket Loop 진입 - {utils._get_time_component()}")
 
         while True:
@@ -273,7 +274,7 @@ class DataControlManager:
     # websocket 수신 데이터를 속성값에 저장한다.
     async def update_received_data_loop(self) -> Dict[str, Dict[str, Union[str, int]]]:
         while True:
-            print(f"queue size - {self.handler_instance.asyncio_queue.qsize()}")
+            # print(f"queue size - {self.handler_instance.asyncio_queue.qsize()}")
             while not self.handler_instance.asyncio_queue.empty():
                 received_massage = await self.handler_instance.asyncio_queue.get()
                 if isinstance(received_massage, dict) and received_massage:
@@ -449,7 +450,7 @@ class DataControlManager:
                         limit=limit_,
                     )
                 )
-        print(f"Kline 전체 update완료 - {datetime.datetime.now()}")
+        # print(f"Kline 전체 update완료 - {datetime.datetime.now()}")
 
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
@@ -591,12 +592,15 @@ class DataControlManager:
                         # interval_data가 존재할 때 병합 수행
                         if interval_data:
                             message = self.final_message_received[ticker][interval]
-                            print(f"{ticker}-{interval}병합")
+                            # print(f"{ticker}-{interval}병합")
                             await self._merge_kline_data(message)
 
     # 검토대상 체크한다.
     async def analysis_loop(self):
         target_interval = "5m"
+        directory = '/Users/cjupit/Library/Mobile Documents/com~apple~CloudDocs/SystemTradingData/'
+        file_data = 'signal.json'
+        path = os.path.join(directory, file_data)
         while True:
             async with self.lock:
                 self.analysis_instance.update_data(
@@ -610,9 +614,37 @@ class DataControlManager:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
                     if case_1 and case_1[2] and case_1[4]:
-                        print(f"{ticker} // {case_1} // {datetime.datetime.now()}")
+                        result = {'ticker':ticker,
+                                  'analysis':case_1,
+                                  'time':datetime.datetime.now()}
+                        self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="minute", duration=1)
 
+    def save_to_json(self, file_path, new_data):
+        """
+        JSON 파일에 새로운 데이터를 누적 저장합니다.
+        
+        :param file_path: JSON 파일 경로
+        :param new_data: 추가할 데이터 (딕셔너리 형식)
+        """
+        # 기존 파일이 있으면 로드, 없으면 빈 리스트 생성
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as file:
+                try:
+                    data = json.load(file)
+                    if not isinstance(data, list):
+                        raise ValueError("JSON 파일의 데이터가 리스트가 아닙니다.")
+                except (json.JSONDecodeError, ValueError):
+                    data = []
+        else:
+            data = []
+        
+        # 새로운 데이터 추가
+        data.append(new_data)
+        
+        # JSON 파일에 저장
+        with open(file_path, 'w', encoding='utf-8') as file:
+            json.dump(data, file, ensure_ascii=False, indent=4)
 
 class SpotDataControl(DataControlManager):
     def __init__(self):

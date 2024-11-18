@@ -5,6 +5,7 @@ import copy
 from collections import defaultdict
 from typing import List, Dict, Optional, Union, Any, Tuple
 
+
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
     def __init__(self):
@@ -13,7 +14,7 @@ class AnalysisManager:
         self.tickers: Optional[List[str]] = None
         # self.point: Optional[List[int]] = None
 
-    def update_data(self, kline_data:dict, intervals: list, tickers: list):
+    def update_data(self, kline_data: dict, intervals: list, tickers: list):
         self.kline_data = kline_data
         self.intervals = intervals
         self.tickers = tickers
@@ -24,10 +25,16 @@ class AnalysisManager:
         1. 기능 : kline_data를 리터럴 처리
         2. 매개변수 : 해당없음
         """
+        if not isinstance(self.kline_data, dict):
+            return {}
+
         if self.tickers and self.intervals:
             for ticker in self.tickers:
                 # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
-                if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
+                if (
+                    not isinstance(self.kline_data, dict)
+                    or ticker not in self.kline_data
+                ):
                     continue
 
                 ticker_data = self.kline_data[ticker]
@@ -48,7 +55,9 @@ class AnalysisManager:
         return self.kline_data
 
     # kline 데이터 자료형을 np.array형으로 변환
-    def _convert_kline_data_to_array(self) -> Dict[str, Dict[str, np.ndarray]]:
+    def _convert_kline_data_to_array(
+        self,
+    ) -> Optional[Dict[str, Dict[str, np.ndarray]]]:
         """
         1. 기능 : kline_data 전체를 np.array형으로 변환
         2. 매개변수 : 해당없음.
@@ -57,7 +66,10 @@ class AnalysisManager:
         if self.tickers and self.intervals:
             for ticker in self.tickers:
                 # 거래 데이터가 딕셔너리이며 해당 ticker 데이터가 존재하는지 확인
-                if not isinstance(self.kline_data, dict) or ticker not in self.kline_data:
+                if (
+                    not isinstance(self.kline_data, dict)
+                    or ticker not in self.kline_data
+                ):
                     continue
 
                 ticker_data = self.kline_data[ticker]
@@ -223,6 +235,8 @@ class AnalysisManager:
         2. 매개변수
             1) ticker : 예)BTCUSDT
         """
+        if not isinstance(self.kline_data, dict):
+            return False
         kline_data_for_ticker = self.kline_data.get(ticker, {})
 
         # 티커의 kline 데이터가 존재하고 딕셔너리인지 확인
@@ -230,6 +244,9 @@ class AnalysisManager:
             return False
 
         # 각 interval의 데이터가 존재하고 올바른지 확인
+        if not isinstance(self.intervals, list):
+            return False
+
         for interval in self.intervals:
             interval_data = kline_data_for_ticker.get(interval, {})
 
@@ -278,7 +295,12 @@ class AnalysisManager:
         trend_check_interval = "1h"
         trend_period = "3d"
         position_check_interval = "5m"
+        fail_data = (0, 0, False, 0, False)
 
+        if not isinstance(self.intervals, list) or not isinstance(
+            self.kline_data, dict
+        ):
+            return fail_data
         # 유효성 검사: 인터벌 확인
         if (
             trend_check_interval not in self.intervals
@@ -288,7 +310,7 @@ class AnalysisManager:
 
         # 데이터 유효성 검사
         if not self._validate_kline_data(ticker=ticker):
-            return None
+            return fail_data
 
         ticker_data = self.kline_data.get(ticker, {})
 
@@ -301,7 +323,7 @@ class AnalysisManager:
         )
 
         if not trend_data_high_low or not trend_data_position:
-            return None
+            return fail_data
 
         # 포지션 결정
         last_trend_position = trend_data_position[-1]
@@ -315,11 +337,11 @@ class AnalysisManager:
 
         # 데이터 준비
         trend_interval_data = ticker_data.get(trend_check_interval)
-        
+
         # kline_data.clear()실행시 False로 반환처리 한다.
         # tickers update시 잔존하는 queue값 잔존시 kline_data가 생성되므로 이에 대한 False로 반환
         if len(trend_interval_data) == 1:
-            return 0, 0, False, 0, False
+            return fail_data
 
         # 전고점/전저점 및 시간 차이 계산
         time_diff = None
@@ -327,7 +349,9 @@ class AnalysisManager:
 
         try:
             if position == 1:  # LONG
-                previous_high = self._get_previous_high(kline_data=trend_interval_data[:-1])
+                previous_high = self._get_previous_high(
+                    kline_data=trend_interval_data[:-1]
+                )
                 high_index = self._get_row_indices_by_threshold(
                     kline_data=trend_interval_data[:-1],
                     threshold=previous_high,
@@ -341,7 +365,9 @@ class AnalysisManager:
                 )
 
             elif position == 2:  # SHORT
-                previous_low = self._get_previous_low(kline_data=trend_interval_data[:-1])
+                previous_low = self._get_previous_low(
+                    kline_data=trend_interval_data[:-1]
+                )
                 low_index = self._get_row_indices_by_threshold(
                     kline_data=trend_interval_data[:-1],
                     threshold=previous_low,
@@ -349,11 +375,13 @@ class AnalysisManager:
                 )
                 is_threshold_broken = previous_low > float(trend_interval_data[-1][2])
                 time_diff = (
-                    len(trend_data_high_low) - low_index if low_index is not None else None
+                    len(trend_data_high_low) - low_index
+                    if low_index is not None
+                    else None
                 )
         except:
             print(trend_interval_data)
             print(ticker)
-            raise ValueError('ERROR')
-        
+            raise ValueError("ERROR")
+
         return position, trend_score, is_continuous, time_diff, is_threshold_broken

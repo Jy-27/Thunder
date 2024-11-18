@@ -1,6 +1,17 @@
 from TickerDataFetcher import SpotTickers, FuturesTickers
 from DataHandler import SpotHandler, FuturesHandler
-from typing import Dict, List, Optional, Union, Tuple, Final, cast, Any, DefaultDict
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Union,
+    Tuple,
+    Final,
+    cast,
+    Any,
+    DefaultDict,
+    cast,
+)
 from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotAPI, FuturesAPI
@@ -74,6 +85,12 @@ class DataControlManager:
         self.final_message_received: DefaultDict[
             str, DefaultDict[str, List[List[Any]]]
         ] = defaultdict(lambda: defaultdict())
+
+    # 오버라이딩
+    async def close_position(self, symbol: str, market_price: float): ...
+    async def submit_open_order_signal(
+        self, symbol: str, position: int, leverage: int
+    ): ...
 
     # Ticker 수집에 필요한 정보를 수신
     async def _collect_filtered_ticker_data(self) -> Tuple:
@@ -283,14 +300,21 @@ class DataControlManager:
                 if isinstance(received_massage, dict) and received_massage:
                     k_data = received_massage.get("k")  # 중간 변수로 저장
                     if isinstance(k_data, dict) and k_data:
-                        symbol = received_massage.get("s")
-                        price = float(k_data.get("c"))
-                        interval = k_data.get("i")
+                        symbol = received_massage.get("s", None)
+                        price = k_data.get("c", None)
+                        interval = k_data.get("i", None)
 
-                        # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
-                        await self.close_position(symbol=symbol, market_price=price)
-
-                self.final_message_received[symbol][interval]: Dict = received_massage
+                        if (
+                            symbol is not None
+                            or price is not None
+                            or interval is not None
+                        ):
+                            price = float(price)
+                            # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
+                            await self.close_position(symbol=symbol, market_price=price)
+                            self.final_message_received[symbol][
+                                interval
+                            ] = received_massage
             await utils._wait_time_sleep(time_unit="second", duration=1)
 
     # hour 또는 minute별 수신해야할 interval을 리스트화 정렬
@@ -606,9 +630,6 @@ class DataControlManager:
     # TEST ZONE = 검토대상 체크한다.
     async def analysis_loop(self):
         target_interval = "5m"
-        directory = "/Users/cjupit/Library/Mobile Documents/com~apple~CloudDocs/SystemTradingData/"
-        file_data = "signal.json"
-        path = os.path.join(directory, file_data)
         while True:
             async with self.lock:
                 self.analysis_instance.update_data(
@@ -625,7 +646,7 @@ class DataControlManager:
 
                         order_position = case_1[-1][0]
                         order_leverage = case_1[-1][3]
-                        if order_leverage is None:
+                        if order_leverage is None or order_leverage < 5:
                             order_leverage = 5
 
                         await self.submit_open_order_signal(
@@ -687,27 +708,31 @@ class FuturesDataControl(DataControlManager):
 
     # TEST ZONE
     async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
-        balance_data = self.account_balance_summary.get(ticker, None)
+        balance_data = self.account_balance_summary.get(symbol, None)
 
         # 계좌 보유시 추가 매수 금지
         if balance_data:
             return
         max_leverage = await self.client_instance.get_max_leverage(symbol)
         target_leverage = min(max_leverage, leverage)
-        quantity = await self.client_instance.get_min_trade_quantity(symbol) * 2
+        order_quantity = (
+            await self.client_instance.get_min_trade_quantity(symbol) * leverage
+        )
         await self.client_instance.set_leverage(symbol=symbol, leverage=target_leverage)
         await self.client_instance.set_margin_type(
             symbol=symbol, margin_type="ISOLATED"
         )
 
-        order_side = "BUY" if position_amount > 0 else "SELL"
-        await self.submit_order(symbol=symbol, side=order_side, order_side="MARKET")
+        order_side = "BUY" if position > 0 else "SELL"
+        await self.client_instance.submit_order(
+            symbol=symbol, side=order_side, order_side="MARKET", quantity=order_quantity
+        )
         await self.fetch_active_positions()
 
     # position에 따라 last price MAX or MIN 값을 반환한다.
     async def _update_signal(
         self, ticker: str, current_price: float
-    ) -> Dict[str, Union[int, float]]:
+    ) -> Optional[Dict[str, Union[int, float]]]:
         """
         1. 기능 : Position에 따라 Last Price MAX or MIN 값을 유지 및 반환한다.
         2. 매개변수
@@ -737,7 +762,7 @@ class FuturesDataControl(DataControlManager):
                 else:
                     balance_data["referencePrice"] = min(target_price, current_price)
         else:
-            await self.fetch_active_positions
+            await self.fetch_active_positions()
             return None
 
         self.account_balance_summary[ticker] = balance_data

@@ -38,6 +38,7 @@ def _convert_to_literal(input_value) -> Union[str, int, float, bool]:
     except:
         return input_value
 
+
 # List 안의 자료를 리터럴 값으로 파싱
 def _convert_nested_list_to_literals(nested_list) -> List[Any]:
     """
@@ -52,9 +53,8 @@ def _convert_nested_list_to_literals(nested_list) -> List[Any]:
         for item in inner_list:
             converted_list.append(_convert_to_literal(item))
         converted_result.append(converted_list)
-    
-    return converted_result
 
+    return converted_result
 
 
 # 반환된 데이터를 리터럴값 반영
@@ -240,10 +240,7 @@ def _convert_to_timestamp_ms(date: Union[str, datetime]) -> int:
     if isinstance(date, datetime):
         return int(date.timestamp() * MS_SECOND)
     else:
-        return int(
-            datetime.strptime(date, "%Y-%m-%d %H:%M:%S").timestamp()
-            * MS_SECOND
-        )
+        return int(datetime.strptime(date, "%Y-%m-%d %H:%M:%S").timestamp() * MS_SECOND)
 
 
 # 문자열 시간을 datetime 형태로로 변환 및 반환.
@@ -263,8 +260,11 @@ def _convert_to_datetime(date: Union[str, datetime, int]) -> datetime:
     elif isinstance(date, str):
         return datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
 
+
 # 시작시간과 종료시간의 차이를 구하는 함수 (문자형, 타임스템프형, datetime형 자유롭기 입력)
-def _get_time_delta(start_time: Union[int, str, datetime], end_time: Union[int, str, datetime]) -> timedelta:
+def _get_time_delta(
+    start_time: Union[int, str, datetime], end_time: Union[int, str, datetime]
+) -> timedelta:
     """
     1. 기능 : 시작시간과 종료시간의 차이를 datetime형태로 반환한다.
     2. 매개변수
@@ -277,16 +277,17 @@ def _get_time_delta(start_time: Union[int, str, datetime], end_time: Union[int, 
         end_time = _convert_to_datetime(end_time)
     return end_time - start_time
 
+
 # json파일을 로드한다.
 def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
     """
     JSON 파일을 로드하여 Python 딕셔너리 또는 리스트로 반환합니다.
-    
+
     :param file_path: JSON 파일의 경로 (예: 'data.json')
     :return: JSON 데이터가 포함된 Python 딕셔너리 또는 리스트
     """
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             data = json.load(file)
         return data
     except FileNotFoundError:

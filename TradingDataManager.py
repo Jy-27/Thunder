@@ -182,7 +182,7 @@ class DataControlManager:
         # 활성 포지션 필터링 및 요약 생성
         for position in raw_data:
             converted_data = utils._collections_to_literal([position])[0]
-            print(converted_data)
+            # print(converted_data)
 
             # 포지션 수량이 0이 아닌 경우 활성 포지션으로 간주
             if abs(converted_data.get(amount_field_name, 0)) > 0:
@@ -288,7 +288,7 @@ class DataControlManager:
                         interval = k_data.get("i")
 
                         # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
-                        self.close_position(symbol=symbol, market_price=price)
+                        await self.close_position(symbol=symbol, market_price=price)
 
                 self.final_message_received[symbol][interval]: Dict = received_massage
             await utils._wait_time_sleep(time_unit="second", duration=1)
@@ -622,12 +622,18 @@ class DataControlManager:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
                     if case_1 and case_1[2] and case_1[4]:
-                        result = {
-                            "ticker": ticker,
-                            "analysis": case_1,
-                            "time": datetime.datetime.now(),
-                        }
-                        self.save_to_json(file_path=path, new_data=result)
+
+                        order_position = case_1[-1][0]
+                        order_leverage = case_1[-1][3]
+                        if order_leverage is None:
+                            order_leverage = 5
+
+                        await self.submit_open_order_signal(
+                            symbol=ticker,
+                            position=order_position,
+                            leverage=order_leverage,
+                        )
+                        # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="minute", duration=1)
 
     # TEST ZONE = 신호 발생시 json에 임시 저장한다.
@@ -679,8 +685,27 @@ class FuturesDataControl(DataControlManager):
             AnalysisManager(),
         )
 
+    # TEST ZONE
+    async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
+        balance_data = self.account_balance_summary.get(ticker, None)
+
+        # 계좌 보유시 추가 매수 금지
+        if balance_data:
+            return
+        max_leverage = await self.client_instance.get_max_leverage(symbol)
+        target_leverage = min(max_leverage, leverage)
+        quantity = await self.client_instance.get_min_trade_quantity(symbol) * 2
+        await self.client_instance.set_leverage(symbol=symbol, leverage=target_leverage)
+        await self.client_instance.set_margin_type(
+            symbol=symbol, margin_type="ISOLATED"
+        )
+
+        order_side = "BUY" if position_amount > 0 else "SELL"
+        await self.submit_order(symbol=symbol, side=order_side, order_side="MARKET")
+        await self.fetch_active_positions()
+
     # position에 따라 last price MAX or MIN 값을 반환한다.
-    def _update_signal(
+    async def _update_signal(
         self, ticker: str, current_price: float
     ) -> Dict[str, Union[int, float]]:
         """
@@ -712,6 +737,7 @@ class FuturesDataControl(DataControlManager):
                 else:
                     balance_data["referencePrice"] = min(target_price, current_price)
         else:
+            await self.fetch_active_positions
             return None
 
         self.account_balance_summary[ticker] = balance_data
@@ -728,6 +754,7 @@ class FuturesDataControl(DataControlManager):
 
         position_data = self.account_balance_summary.get(symbol, None)
         if not position_data:
+            await self.fetch_active_positions()
             return
         if isinstance(position_data, dict) or position_data:
             position_amount = position_data.get("positionAmt", None)
@@ -771,6 +798,7 @@ class FuturesDataControl(DataControlManager):
         benchmark_price = position_data.get("referencePrice", None)
 
         if position_amount is None or entry_price is None or benchmark_price is None:
+            await self.fetch_active_positions()
             return None
 
         if position_amount > 0:  # Long position
@@ -778,6 +806,7 @@ class FuturesDataControl(DataControlManager):
             threshold_price = base_price + (
                 (benchmark_price - base_price) * safety_margin
             )
+            print(threshold_price)
             return threshold_price > market_price
         else:  # Short position
             base_price = entry_price * (1 + entry_margin)
@@ -794,9 +823,11 @@ class FuturesDataControl(DataControlManager):
             1) symbol : 쌍거래 symbol 정보
             2) market_price : 마지막 거래 가격
         """
+
+        # websocket data를 지속 입력시키면서 속성에 저장된 계좌정보를 조회 후 빈 계좌시 return 처리하여 동작 없음 지정함.
         if not self.account_balance_summary.get(symbol, None):
             return
-        self._update_signal(ticker=symbol, current_price=market_price)
+        await self._update_signal(ticker=symbol, current_price=market_price)
 
         close_signal = await self._generate_close_signal(
             symbol=symbol, market_price=market_price
@@ -813,6 +844,7 @@ if __name__ == "__main__":
 
     async def main_run():
         obj = FuturesDataControl()
+        await obj.fetch_active_positions()
 
         intervals = ["kline_" + interval for interval in obj.KLINE_INTERVALS]
 

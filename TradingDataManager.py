@@ -12,6 +12,7 @@ import utils
 import datetime
 import json
 
+
 class DataControlManager:
     def __init__(
         self,
@@ -59,6 +60,8 @@ class DataControlManager:
         self.client_instance = client_instance
         self.market_instance = market_instance
         self.analysis_instance = analysis_instance
+
+        self.signal_data: Dict[str, Dict[str, Union[int, float]]] = {}
 
         # ticker 정보 저장 및 공유
         self.active_tickers: List = []
@@ -196,7 +199,7 @@ class DataControlManager:
         """
         self.websocket_type["stream"] = ws_type
         await utils._wait_until_exact_time(time_unit="minute")
-        await utils._wait_time_sleep(time_unit='minute', duration=1)
+        await utils._wait_time_sleep(time_unit="minute", duration=1)
         print(f"WebSocket Loop 진입 - {utils._get_time_component()}")
 
         while True:
@@ -281,7 +284,12 @@ class DataControlManager:
                     k_data = received_massage.get("k")  # 중간 변수로 저장
                     if isinstance(k_data, dict) and k_data:
                         symbol = received_massage.get("s")
+                        price = float(k_data.get("c"))
                         interval = k_data.get("i")
+
+                        # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
+                        self.close_position(symbol=symbol, market_price=price)
+
                 self.final_message_received[symbol][interval]: Dict = received_massage
             await utils._wait_time_sleep(time_unit="second", duration=1)
 
@@ -595,11 +603,11 @@ class DataControlManager:
                             # print(f"{ticker}-{interval}병합")
                             await self._merge_kline_data(message)
 
-    # 검토대상 체크한다.
+    # TEST ZONE = 검토대상 체크한다.
     async def analysis_loop(self):
         target_interval = "5m"
-        directory = '/Users/cjupit/Library/Mobile Documents/com~apple~CloudDocs/SystemTradingData/'
-        file_data = 'signal.json'
+        directory = "/Users/cjupit/Library/Mobile Documents/com~apple~CloudDocs/SystemTradingData/"
+        file_data = "signal.json"
         path = os.path.join(directory, file_data)
         while True:
             async with self.lock:
@@ -614,22 +622,25 @@ class DataControlManager:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
                     if case_1 and case_1[2] and case_1[4]:
-                        result = {'ticker':ticker,
-                                  'analysis':case_1,
-                                  'time':datetime.datetime.now()}
+                        result = {
+                            "ticker": ticker,
+                            "analysis": case_1,
+                            "time": datetime.datetime.now(),
+                        }
                         self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="minute", duration=1)
 
+    # TEST ZONE = 신호 발생시 json에 임시 저장한다.
     def save_to_json(self, file_path, new_data):
         """
         JSON 파일에 새로운 데이터를 누적 저장합니다.
-        
+
         :param file_path: JSON 파일 경로
         :param new_data: 추가할 데이터 (딕셔너리 형식)
         """
         # 기존 파일이 있으면 로드, 없으면 빈 리스트 생성
         if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 try:
                     data = json.load(file)
                     if not isinstance(data, list):
@@ -638,13 +649,14 @@ class DataControlManager:
                     data = []
         else:
             data = []
-        
+
         # 새로운 데이터 추가
         data.append(new_data)
-        
+
         # JSON 파일에 저장
-        with open(file_path, 'w', encoding='utf-8') as file:
+        with open(file_path, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
+
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
@@ -666,6 +678,131 @@ class FuturesDataControl(DataControlManager):
             FuturesAPI(),
             AnalysisManager(),
         )
+
+    # position에 따라 last price MAX or MIN 값을 반환한다.
+    def _update_signal(
+        self, ticker: str, current_price: float
+    ) -> Dict[str, Union[int, float]]:
+        """
+        1. 기능 : Position에 따라 Last Price MAX or MIN 값을 유지 및 반환한다.
+        2. 매개변수
+            1) ticker (str): 종목 코드
+            2) position (int): 1(long), 기타 값(short)
+            3) price (float): 현재 가격
+        """
+        balance_data = self.account_balance_summary.get(ticker, None)
+        if isinstance(balance_data, dict) and balance_data:
+            entry_price = balance_data.get("entryPrice", None)
+            position_amt = balance_data.get("positionAmt", None)
+
+            if not entry_price or not position_amt:
+                return None
+
+            current_position = 1 if position_amt > 0 else 0
+
+            target_price = balance_data.get("referencePrice", None)
+            if current_position == 1:
+                if not target_price:
+                    balance_data["referencePrice"] = max(entry_price, current_price)
+                else:
+                    balance_data["referencePrice"] = max(target_price, current_price)
+            else:
+                if not target_price:
+                    balance_data["referencePrice"] = min(entry_price, current_price)
+                else:
+                    balance_data["referencePrice"] = min(target_price, current_price)
+        else:
+            return None
+
+        self.account_balance_summary[ticker] = balance_data
+        return self.account_balance_summary
+
+    # TEST ZONE
+    # 포지션 종료 신호를 발송한다.
+    async def _submit_close_order_signal(self, symbol: str):
+        """
+        1. 기능 : 해당 symbol의 포지션을 종료한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol정보
+        """
+
+        position_data = self.account_balance_summary.get(symbol, None)
+        if not position_data:
+            return
+        if isinstance(position_data, dict) or position_data:
+            position_amount = position_data.get("positionAmt", None)
+            if not position_amount:
+                return
+            # 포지션 종료이므로 주문 방향을 반대로 처리 (SELL ↔ BUY)
+            order_side = "SELL" if position_amount > 0 else "BUY"
+
+            await self.client_instance.submit_order(
+                symbol=symbol,
+                side=order_side,
+                order_type="MARKET",
+                quantity=abs(position_amount),
+                reduce_only=True,
+            )
+            await self.fetch_active_positions()
+
+    # 현재가격을 계산 후 포지션 종료여부를 결정한다.
+    async def _generate_close_signal(
+        self,
+        symbol: str,
+        market_price: float,
+        safety_margin: float = 0.6,
+        entry_margin: float = 0.025,
+    ):
+        """
+        1. 기능 : 포지션 종려여부를 현자기 기준 계산한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol정보
+            2) market_price : 마지막 거래 가격
+            3) safety_margin : referencePrece와 start price사이 비율
+            4) entry_margin : 시작가격에 적용하는 오차
+        """
+
+        position_data = self.account_balance_summary.get(symbol, None)
+        if not position_data:
+            return None
+
+        position_amount = position_data.get("positionAmt", None)
+        entry_price = position_data.get("entryPrice", None)
+        benchmark_price = position_data.get("referencePrice", None)
+
+        if position_amount is None or entry_price is None or benchmark_price is None:
+            return None
+
+        if position_amount > 0:  # Long position
+            base_price = entry_price * (1 - entry_margin)
+            threshold_price = base_price + (
+                (benchmark_price - base_price) * safety_margin
+            )
+            return threshold_price > market_price
+        else:  # Short position
+            base_price = entry_price * (1 + entry_margin)
+            threshold_price = base_price - (
+                (base_price - benchmark_price) * safety_margin
+            )
+            return threshold_price < market_price
+
+    # StopLoss 또는 포지션 종료 조건 성립시 close신호 발생기
+    async def close_position(self, symbol: str, market_price: float):
+        """
+        1. 기능 : 포지션 종료 관련 함수 집합 계산하여 조건 성립시 포지션 종료 신호를 발생한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol 정보
+            2) market_price : 마지막 거래 가격
+        """
+        if not self.account_balance_summary.get(symbol, None):
+            return
+        self._update_signal(ticker=symbol, current_price=market_price)
+
+        close_signal = await self._generate_close_signal(
+            symbol=symbol, market_price=market_price
+        )
+        if close_signal:
+            await self._submit_close_order_signal(symbol=symbol)
 
 
 if __name__ == "__main__":

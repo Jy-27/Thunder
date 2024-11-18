@@ -642,7 +642,7 @@ class DataControlManager:
                     if not is_kline_data:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
-                    if case_1 and case_1[2] and case_1[4]:
+                    if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
 
                         order_position = case_1[-1][0]
                         order_leverage = case_1[-1][3]
@@ -715,9 +715,7 @@ class FuturesDataControl(DataControlManager):
             return
         max_leverage = await self.client_instance.get_max_leverage(symbol)
         target_leverage = min(max_leverage, leverage)
-        order_quantity = (
-            await self.client_instance.get_min_trade_quantity(symbol) * leverage
-        )
+        order_quantity = await self.client_instance.get_min_trade_quantity(symbol) * leverage
         await self.client_instance.set_leverage(symbol=symbol, leverage=target_leverage)
         await self.client_instance.set_margin_type(
             symbol=symbol, margin_type="ISOLATED"
@@ -725,7 +723,7 @@ class FuturesDataControl(DataControlManager):
 
         order_side = "BUY" if position > 0 else "SELL"
         await self.client_instance.submit_order(
-            symbol=symbol, side=order_side, order_side="MARKET", quantity=order_quantity
+            symbol=symbol, side=order_side, order_type="MARKET", quantity=order_quantity
         )
         await self.fetch_active_positions()
 
@@ -762,7 +760,6 @@ class FuturesDataControl(DataControlManager):
                 else:
                     balance_data["referencePrice"] = min(target_price, current_price)
         else:
-            await self.fetch_active_positions()
             return None
 
         self.account_balance_summary[ticker] = balance_data
@@ -779,7 +776,6 @@ class FuturesDataControl(DataControlManager):
 
         position_data = self.account_balance_summary.get(symbol, None)
         if not position_data:
-            await self.fetch_active_positions()
             return
         if isinstance(position_data, dict) or position_data:
             position_amount = position_data.get("positionAmt", None)

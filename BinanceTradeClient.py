@@ -10,7 +10,7 @@ import math
 import requests
 from MarketDataFetcher import SpotAPI, FuturesAPI
 from typing import Dict, Optional, List, Union, Any, cast
-from decimal import Decimal, ROUND_UP
+from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
 
 class BinanceOrderManager:
@@ -509,102 +509,173 @@ class FuturesOrderManager(BinanceOrderManager):
         return await self._send_request("POST", endpoint, params)
 
     # 선물 시장의 symbol별 최소 거래 수량을 계산한다.
-    async def get_min_trade_quantity(self, symbol: str) -> float:
+    # async def get_min_trade_quantity(self, symbol: str) -> float:
+    #     symbol = symbol.upper()
+    #     exchange_info = await self.futures_api.fetch_exchange_info()
+
+    #     # 심볼 정보 필터링
+    #     # 기본값 []로 symbols 데이터 처리
+    #     symbols = exchange_info.get("symbols", [])
+    #     symbol_info = next(
+    #         (item for item in symbols if item.get("symbol") == symbol),
+    #         None,  # 기본값 None을 설정하여 찾지 못했을 때 대비
+    #     )
+
+    #     # symbol_info가 None이 아닌지 확인 후 filters 처리
+    #     filters = symbol_info.get("filters", []) if symbol_info else []
+
+    #     # 필터에서 필요한 정보 추출
+    #     min_qty, step_size, notional = None, None, None
+
+    #     # filters가 None이 아닌지 확인 후 반복
+    #     if filters:
+    #         for filter_item in filters:
+    #             if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
+    #                 min_qty = float(filter_item.get("minQty", 0))  # 기본값 0
+    #                 step_size = (
+    #                     filter_item.get("stepSize") or "1"
+    #                 )  # None일 경우 문자열 "1" 기본값
+    #             elif filter_item.get("filterType") == "MIN_NOTIONAL":
+    #                 notional = float(filter_item.get("notional", 0))  # 기본값 0
+
+    #     # 현재 가격 가져오기
+    #     # 기본값 0을 설정하여 current_price_data가 None일 경우 대비
+    #     current_price_data = (
+    #         await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
+    #     )
+    #     current_price = float(
+    #         current_price_data.get("price", 0)
+    #     )  # None일 경우 기본값 0
+
+    #     # notional이 None일 경우 기본값 0.0으로 설정하여 연산 오류 방지
+    #     required_quantity: float = (notional or 0.0) / current_price
+    #     min_trade_quantity = float(
+    #         Decimal(required_quantity).quantize(
+    #             Decimal(step_size or 1), rounding=ROUND_UP
+    #         )
+    #     )
+
+    #     return min_trade_quantity
+
+
+    async def _get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
+        """
+        Fetch and extract filters for a given symbol from the exchange information.
+
+        Args:
+            symbol (str): The symbol to fetch filters for (e.g., "BTCUSDT").
+
+        Returns:
+            dict: A dictionary containing minQty, stepSize, and notional filters.
+                Returns default values if filters are not found.
+        """
         symbol = symbol.upper()
         exchange_info = await self.futures_api.fetch_exchange_info()
 
         # 심볼 정보 필터링
-        # 기본값 []로 symbols 데이터 처리
         symbols = exchange_info.get("symbols", [])
         symbol_info = next(
-            (item for item in symbols if item.get("symbol") == symbol),
-            None,  # 기본값 None을 설정하여 찾지 못했을 때 대비
+            (item for item in symbols if item.get("symbol") == symbol), None
         )
 
-        # symbol_info가 None이 아닌지 확인 후 filters 처리
+        # 필터 처리
         filters = symbol_info.get("filters", []) if symbol_info else []
-
-        # 필터에서 필요한 정보 추출
         min_qty, step_size, notional = None, None, None
 
-        # filters가 None이 아닌지 확인 후 반복
         if filters:
             for filter_item in filters:
                 if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
-                    min_qty = float(filter_item.get("minQty", 0))  # 기본값 0
-                    step_size = (
-                        filter_item.get("stepSize") or "1"
-                    )  # None일 경우 문자열 "1" 기본값
+                    min_qty = float(filter_item.get("minQty", 0))
+                    step_size = filter_item.get("stepSize") or "1"
                 elif filter_item.get("filterType") == "MIN_NOTIONAL":
-                    notional = float(filter_item.get("notional", 0))  # 기본값 0
+                    notional = float(filter_item.get("notional", 0))
+
+        return {
+            "minQty": min_qty or 0.0,
+            "stepSize": step_size or "1",
+            "notional": notional or 0.0,
+        }
+
+
+    # 최소 주문 수량을 계산한다.
+    async def get_min_trade_quantity(self, symbol: str) -> float:
+        """
+        1. 기능 : 계좌 정보와 상관없이 최소주문 가능 수량을 계산한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+        """
+        # 심볼 필터 데이터 가져오기
+        filters = await self._get_symbol_filters(symbol)
+
+        # 필터에서 필요한 값 추출
+        min_qty = filters["minQty"]
+        step_size = filters["stepSize"]
+        notional = filters["notional"]
 
         # 현재 가격 가져오기
-        # 기본값 0을 설정하여 current_price_data가 None일 경우 대비
-        current_price_data = (
-            await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
-        )
-        current_price = float(
-            current_price_data.get("price", 0)
-        )  # None일 경우 기본값 0
+        current_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
+        current_price = float(current_price_data.get("price", 0))
 
-        # notional이 None일 경우 기본값 0.0으로 설정하여 연산 오류 방지
+        # 최소 거래 수량 계산
         required_quantity: float = (notional or 0.0) / current_price
-        min_trade_quantity = float(
-            Decimal(required_quantity).quantize(
-                Decimal(step_size or 1), rounding=ROUND_UP
-            )
-        )
+        min_trade_quantity = utils._round_up(value=required_quantity, step=step_size)
 
-        return min_trade_quantity
+        return max(min_trade_quantity, min_qty)
 
-    # # 포지션 종료 order신고 발생
-    async def submit_close_position(
-        self,
-        symbol: str,
-        order_type: str,
-        quantity: Optional[float] = None,
-        price: Optional[float] = None,
-        time_in_force: str = "GTC",
-    ) -> Optional[Dict]:
-        # account_balance 가져오고, dict인지 확인
-        account_balance = await self.get_account_balance()
-        print(account_balance)
-        # account_balance가 dict인지 확인하고 아니라면 None 반환
-        if not isinstance(account_balance, dict):
+    # 계좌 정보를 수신 후 거래가능한 USDT잔액을 반환한다.
+    async def _get_available_balance(self) -> Optional[float]:
+        """
+        1. 기능 : 계좌 정보를 수신 후 거래가능한 USDT잔액값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        account_data = await self.fetch_account_balance()
+        if not isinstance(account_data, dict) or not account_data:
             return None
-
-        # 포지션 데이터 가져오기
-        position_data: Optional[Dict[str, Any]] = account_balance.get(symbol.upper())
-
-        if not position_data:
+        available_balance = account_data.get('availableBalance')
+        if available_balance is None:
             return None
+        return float(available_balance)
 
-        # 포지션 양 가져오기
-        position_amount = position_data.get("positionAmt")
-        if position_amount is None or position_amount == 0:
-            return None  # 닫을 포지션이 없음
-
-        # 포지션 방향에 따라 주문 방향 설정
-        side = "BUY" if position_amount < 0 else "SELL"
-
-        # 수량이 주어지지 않은 경우 포지션 양의 절대값 사용
-        if quantity is None:
-            quantity = abs(position_amount)
-
-        # TEST ZONE
-        print(symbol, side, order_type, quantity, price)
-
-        # reduce_only 플래그를 사용하여 포지션 청산 주문 제출
-        return await self.submit_order(
-            symbol=symbol,
-            side=side,
-            order_type=order_type,
-            quantity=quantity,
-            price=price,
-            time_in_force=time_in_force,
-            reduce_only=True,
-        )
-
+    # 계좌 정보를 수신 후 지갑전체 USDT가치를 반환한다.
+    async def _get_total_wallet_balance(self) -> Optional[float]:
+        """
+        1. 기능 : 계좌 정보를 수신 후 총액(거래중 포함)값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        account_data = await self.fetch_account_balance()
+        if not isinstance(account_data, dict) or not account_data:
+            return None
+        total_wallet_balance = account_data.get('totalWalletBalance')
+        if total_wallet_balance is None:
+            return None
+        return float(total_wallet_balance)
+    
+    # 계좌정보, leverage을 반영하여 관련하여 최대 거래가능 수량을 계산한다.
+    async def get_max_trade_quantity(self, symbol:str, leverage:int) -> float:
+        """
+        1. 기능 : 계좌정보, leverage을 반영하여 관련하여 최대 거래가능 수량을 계산한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+            2) leverage : 레버리지 값(max leverage값 초과금지)
+        """
+        available_balance = await self._get_available_balance()
+        ticker_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol)
+        symbol_filters = await self._get_symbol_filters(symbol=symbol)
+        if available_balance is None or ticker_price_data is None or not isinstance(symbol_filters, dict):
+            return 0
+        price = ticker_price_data.get('price')
+        if not isinstance(price, dict) or price is None:
+            return 0
+        
+        if isinstance(min_qty, dict):
+            step_size = symbol_filters.get('stepSize')
+            if min_qty is None:
+                return 0
+        round_number = len(step_size.split['.'][1])
+        
+        required_quantity = (available_balance * leverage) / ticker_price_data
+        max_trade_quantity = utils._round_down(value=required_quantity, step=step_size)
+        return max_trade_quantity
 
 if __name__ == "__main__":
     spot_obj = SpotOrderManager()

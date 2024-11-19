@@ -3,6 +3,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
+from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
 T = TypeVar("T")
 
@@ -296,3 +297,59 @@ def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
     except json.JSONDecodeError:
         print("JSON 파일을 파싱하는 데 실패했습니다.")
         return None
+
+# # 올림함수
+# def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
+#     """
+#     1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 올림 처리하는 함수.
+#     2. 매개변수
+#         1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
+#         2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
+#     """
+#     # 입력값을 Decimal로 변환 (타입 검증 및 변환 과정)
+#     try:
+#         value = Decimal(value)  # value를 Decimal로 변환
+#         step = Decimal(step)    # step을 Decimal로 변환
+#     except (ValueError, TypeError):
+#         raise ValueError("value와 step은 문자열(str) 또는 실수(float)로 변환 가능한 값이어야 합니다.")
+
+#     # Decimal의 quantize 메서드를 사용해 올림 처리
+#     return float(value.quantize(step, rounding=ROUND_UP))
+
+
+# 올림 함수
+def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
+    """
+    1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 올림 처리하는 함수.
+    2. 매개변수
+        1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
+        2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
+    """
+    if isinstance(value, str):
+        value = float(value)
+    if isinstance(step, float):
+        step = str(step)
+    if isinstance(value, int) or isinstance(step, int):
+        raise ValueError(f'type은 str 또는 float 입력해야 함.')
+    
+    return float(
+        Decimal(value).quantize(Decimal(step), rounding=ROUND_UP))
+
+# 내림함수
+def _round_down(value: Union[str, float], step: Union[str, float]) -> float:
+    """
+    1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 내림 처리하는 함수.
+    2. 매개변수
+        1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
+        2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
+    """
+    # 입력값을 Decimal로 변환 (타입 검증 및 변환 과정)
+    if isinstance(value, str):
+        value = float(value)
+    if isinstance(step, float):
+        step = str(step)
+    if isinstance(value, int) or isinstance(step, int):
+        raise ValueError(f'type은 str 또는 float 입력해야 함.')
+    
+    return float(
+        Decimal(value).quantize(Decimal(step), rounding=ROUND_DOWN))

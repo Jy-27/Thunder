@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -298,6 +299,7 @@ def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
         print("JSON 파일을 파싱하는 데 실패했습니다.")
         return None
 
+
 # # 올림함수
 # def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
 #     """
@@ -330,10 +332,10 @@ def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
     if isinstance(step, float):
         step = str(step)
     if isinstance(value, int) or isinstance(step, int):
-        raise ValueError(f'type은 str 또는 float 입력해야 함.')
-    
-    return float(
-        Decimal(value).quantize(Decimal(step), rounding=ROUND_UP))
+        raise ValueError(f"type은 str 또는 float 입력해야 함.")
+
+    return float(Decimal(value).quantize(Decimal(step), rounding=ROUND_UP))
+
 
 # 내림함수
 def _round_down(value: Union[str, float], step: Union[str, float]) -> float:
@@ -349,7 +351,45 @@ def _round_down(value: Union[str, float], step: Union[str, float]) -> float:
     if isinstance(step, float):
         step = str(step)
     if isinstance(value, int) or isinstance(step, int):
-        raise ValueError(f'type은 str 또는 float 입력해야 함.')
-    
-    return float(
-        Decimal(value).quantize(Decimal(step), rounding=ROUND_DOWN))
+        raise ValueError(f"type은 str 또는 float 입력해야 함.")
+
+    return float(Decimal(value).quantize(Decimal(step), rounding=ROUND_DOWN))
+
+
+# json타입으로 데이터를 저장한다.
+def _save_to_json(file_path: str, new_data: Any, overwrite: bool = False):
+    """
+    1. 기능 : 데이터를 json으로 덮어쓰거나, 추가 누적해서 저장한다.
+    2. 매개변수
+        1) file_path : 파일 저장 위치
+        2) new_data : 저장하고자 하는 데이터
+        3) overwrite : 덮어쓰기 여부
+    """
+    # 덮어쓰기 여부에 따라 동작
+    if overwrite:
+        # 덮어쓰는 경우: 기존 데이터를 무시하고 새 데이터로 파일 작성
+        data_to_save = [new_data] if not isinstance(new_data, list) else new_data
+    else:
+        # 누적 저장의 경우: 기존 데이터를 로드하거나 빈 리스트 초기화
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as file:
+                try:
+                    existing_data = json.load(file)
+                    if not isinstance(existing_data, list):
+                        raise ValueError("JSON 파일의 데이터가 리스트가 아닙니다.")
+                except (json.JSONDecodeError, ValueError):
+                    existing_data = []
+        else:
+            existing_data = []
+
+        # 기존 데이터에 새 데이터를 추가
+        if isinstance(new_data, list):
+            existing_data.extend(new_data)
+        else:
+            existing_data.append(new_data)
+
+        data_to_save = existing_data
+
+    # JSON 파일에 저장
+    with open(file_path, "w", encoding="utf-8") as file:
+        json.dump(data_to_save, file, ensure_ascii=False, indent=4)

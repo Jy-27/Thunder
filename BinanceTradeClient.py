@@ -557,7 +557,6 @@ class FuturesOrderManager(BinanceOrderManager):
 
     #     return min_trade_quantity
 
-
     async def _get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
         """
         Fetch and extract filters for a given symbol from the exchange information.
@@ -596,7 +595,6 @@ class FuturesOrderManager(BinanceOrderManager):
             "notional": notional or 0.0,
         }
 
-
     # 최소 주문 수량을 계산한다.
     async def get_min_trade_quantity(self, symbol: str) -> float:
         """
@@ -608,16 +606,32 @@ class FuturesOrderManager(BinanceOrderManager):
         filters = await self._get_symbol_filters(symbol)
 
         # 필터에서 필요한 값 추출
-        min_qty = filters["minQty"]
-        step_size = filters["stepSize"]
-        notional = filters["notional"]
+        min_qty_data = filters.get("minQty")
+        step_size_data = filters.get("stepSize")
+        notional_data = filters.get("notional")
+
+        if min_qty_data is None or step_size_data is None or notional_data is None:
+            return 0
+
+        min_qty = float(min_qty_data)
+        step_size = float(step_size_data)
+        notional = float(notional_data)
 
         # 현재 가격 가져오기
-        current_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
-        current_price = float(current_price_data.get("price", 0))
+        fetch_ticker_price_data = await self.futures_api.fetch_ticker_price(
+            symbol=symbol
+        )
+        if not isinstance(fetch_ticker_price_data, dict):
+            return 0
 
+        current_price_data = fetch_ticker_price_data.get("price")
+        if current_price_data is None:
+            return 0
+
+        current_price: float = float(current_price_data)
         # 최소 거래 수량 계산
-        required_quantity: float = (notional or 0.0) / current_price
+        required_quantity = notional / current_price
+
         min_trade_quantity = utils._round_up(value=required_quantity, step=step_size)
 
         return max(min_trade_quantity, min_qty)
@@ -631,7 +645,7 @@ class FuturesOrderManager(BinanceOrderManager):
         account_data = await self.fetch_account_balance()
         if not isinstance(account_data, dict) or not account_data:
             return None
-        available_balance = account_data.get('availableBalance')
+        available_balance = account_data.get("availableBalance")
         if available_balance is None:
             return None
         return float(available_balance)
@@ -645,37 +659,46 @@ class FuturesOrderManager(BinanceOrderManager):
         account_data = await self.fetch_account_balance()
         if not isinstance(account_data, dict) or not account_data:
             return None
-        total_wallet_balance = account_data.get('totalWalletBalance')
+        total_wallet_balance = account_data.get("totalWalletBalance")
         if total_wallet_balance is None:
             return None
         return float(total_wallet_balance)
-    
+
     # 계좌정보, leverage을 반영하여 관련하여 최대 거래가능 수량을 계산한다.
-    async def get_max_trade_quantity(self, symbol:str, leverage:int) -> float:
+    async def get_max_trade_quantity(
+        self, symbol: str, leverage: int, balance: Optional[Union[int, float]] = None
+    ) -> float:
         """
         1. 기능 : 계좌정보, leverage을 반영하여 관련하여 최대 거래가능 수량을 계산한다.
         2. 매개변수
             1) symbol : 쌍거래 symbol
             2) leverage : 레버리지 값(max leverage값 초과금지)
         """
-        available_balance = await self._get_available_balance()
+        if balance is None:
+            available_balance = await self._get_available_balance()
+        elif isinstance(balance, (int, float)):
+            available_balance = balance
+
         ticker_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol)
         symbol_filters = await self._get_symbol_filters(symbol=symbol)
-        if available_balance is None or ticker_price_data is None or not isinstance(symbol_filters, dict):
+        if (
+            available_balance is None
+            or ticker_price_data is None
+            or not isinstance(symbol_filters, dict)
+        ):
             return 0
-        price = ticker_price_data.get('price')
-        if not isinstance(price, dict) or price is None:
+        price_data = ticker_price_data.get("price")
+        if not isinstance(price_data, str) or price_data is None:
             return 0
-        
-        if isinstance(min_qty, dict):
-            step_size = symbol_filters.get('stepSize')
-            if min_qty is None:
-                return 0
-        round_number = len(step_size.split['.'][1])
-        
-        required_quantity = (available_balance * leverage) / ticker_price_data
+        step_size = symbol_filters.get("stepSize")
+        if not isinstance(step_size, str):
+            return 0
+
+        price = float(price_data)
+        required_quantity = (available_balance * leverage) / float(price)
         max_trade_quantity = utils._round_down(value=required_quantity, step=step_size)
         return max_trade_quantity
+
 
 if __name__ == "__main__":
     spot_obj = SpotOrderManager()

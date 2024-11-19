@@ -206,6 +206,7 @@ class DataControlManager:
                 symbol = converted_data.get(symbol_field_name)
                 self.account_active_symbols.append(symbol)
                 self.account_balance_summary[symbol] = converted_data
+        return self.account_balance_summary
 
     # stream websocket 연결
     async def connect_stream_loop(self, ws_type: str):
@@ -591,7 +592,9 @@ class DataControlManager:
                 is_open_timestamp_match = int(transformed_kline[0]) == int(
                     last_kline[0]
                 )
-                is_close_timestamp_match = transformed_kline[6] == last_kline[6]
+                is_close_timestamp_match = int(transformed_kline[6]) == int(
+                    last_kline[6]
+                )
 
                 # 조건에 따라 마지막 Kline 업데이트 또는 새로운 Kline 추가
                 if is_open_timestamp_match and is_close_timestamp_match:
@@ -627,6 +630,45 @@ class DataControlManager:
                             # print(f"{ticker}-{interval}병합")
                             await self._merge_kline_data(message)
 
+    # 주문 가능 잔고와 order 보유 횟수를 계산한다.
+    def account_limits(
+        self, balance: float, multiplier: int = 2, safety_ratio: float = 0.32
+    ) -> Dict[str, float]:
+        """
+        1. 기능 : 계좌 총액에 근거하여 주문가능한 예산 및 동시 보유 order 수량을 지정한다.
+        2. 매개변수
+            1) balance : 현재 보유 총액
+            2) multiplier : total_order_amount x 배
+            3) safety_ratio : 안전 예산 금액
+        """
+        # 초기 설정값
+        base_threshold = 5  # 초기 기준 금액
+        min_safe_balance = 10  # 최소 안전 잔고 금액
+        min_symbol_count = 1  # 최소 보유 가능한 심볼 개수
+        symbol_count = 0
+        # 계좌 잔액이 최소 안전 잔고 금액보다 적을 때
+        if balance < min_safe_balance:
+            safe_balance = min_safe_balance * safety_ratio
+            return {
+                "total_order_amount": min_safe_balance,
+                "max_symbol_count": min_symbol_count,
+                "safe_balance": safe_balance,
+            }
+
+        # 계좌 잔액이 최소 안전 잔고 이상일 때 계산
+        threshold = base_threshold  # 기준 금액 초기화
+        while True:
+            threshold *= multiplier
+            safe_balance = threshold * safety_ratio
+
+            symbol_count += 1  # 총 보유 가능한 심볼 개수 계산
+            if balance < threshold:
+                return {
+                    "total_order_amount": threshold,
+                    "max_symbol_count": symbol_count,
+                    "safe_balance": safe_balance,
+                }
+
     # TEST ZONE = 검토대상 체크한다.
     async def analysis_loop(self):
         target_interval = "5m"
@@ -657,33 +699,6 @@ class DataControlManager:
                         # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="minute", duration=1)
 
-    # TEST ZONE = 신호 발생시 json에 임시 저장한다.
-    def save_to_json(self, file_path, new_data):
-        """
-        JSON 파일에 새로운 데이터를 누적 저장합니다.
-
-        :param file_path: JSON 파일 경로
-        :param new_data: 추가할 데이터 (딕셔너리 형식)
-        """
-        # 기존 파일이 있으면 로드, 없으면 빈 리스트 생성
-        if os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as file:
-                try:
-                    data = json.load(file)
-                    if not isinstance(data, list):
-                        raise ValueError("JSON 파일의 데이터가 리스트가 아닙니다.")
-                except (json.JSONDecodeError, ValueError):
-                    data = []
-        else:
-            data = []
-
-        # 새로운 데이터 추가
-        data.append(new_data)
-
-        # JSON 파일에 저장
-        with open(file_path, "w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
-
 
 class SpotDataControl(DataControlManager):
     def __init__(self):
@@ -709,13 +724,21 @@ class FuturesDataControl(DataControlManager):
     # TEST ZONE
     async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
         balance_data = self.account_balance_summary.get(symbol, None)
-
+        available_funds = self.get_available_funds()
         # 계좌 보유시 추가 매수 금지
-        if balance_data:
+        if balance_data or available_funds == 0:
             return
+
+        min_trade_quantity = self.client_instance.get_min_trade_quantity(symbol)
+        max_trade_quantity = self.client_instance.get_max_trade_quantity(
+            symbol=symbol, leverage=leverage, balance=available_funds
+        )
+        if min_trade_quantity > max_trade_quantity:
+            return
+
         max_leverage = await self.client_instance.get_max_leverage(symbol)
         target_leverage = min(max_leverage, leverage)
-        order_quantity = await self.client_instance.get_min_trade_quantity(symbol) * leverage
+
         await self.client_instance.set_leverage(symbol=symbol, leverage=target_leverage)
         await self.client_instance.set_margin_type(
             symbol=symbol, margin_type="ISOLATED"
@@ -723,7 +746,10 @@ class FuturesDataControl(DataControlManager):
 
         order_side = "BUY" if position > 0 else "SELL"
         await self.client_instance.submit_order(
-            symbol=symbol, side=order_side, order_type="MARKET", quantity=order_quantity
+            symbol=symbol,
+            side=order_side,
+            order_type="MARKET",
+            quantity=max_trade_quantity,
         )
         await self.fetch_active_positions()
 
@@ -855,6 +881,41 @@ class FuturesDataControl(DataControlManager):
         )
         if close_signal:
             await self._submit_close_order_signal(symbol=symbol)
+
+    # 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
+    async def get_available_funds(self):
+        """
+        1. 기능 : 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        # 계좌 잔액 및 활성 심볼 업데이트
+        await self.fetch_active_positions()
+        active_symbols_count = len(self.account_active_symbols)
+
+        # 총 평가 잔액 및 사용 가능한 잔액 조회
+        total_balance = await self.client_instance._get_total_wallet_balance()
+        available_balance = await self.client_instance._get_available_balance()
+
+        # 평가 잔액 기준 거래 가능 금액 및 제한 계산
+        limits = self.account_limits(total_balance)
+        if not isinstance(limits, dict) or not limits:
+            return 0
+
+        # 안전 잔고 및 활성 잔고 계산
+        safety_margin = limits.get("safe_balance", 0)
+        max_active_symbols = limits.get("max_symbol_count", 0)
+        active_funds = available_balance - safety_margin
+
+        # 조건: 활성 자금이 0 이상이고 보유 가능한 심볼 수 제한 내에 있는지 확인
+        has_sufficient_funds = active_funds > 0
+        can_add_symbols = (max_active_symbols - active_symbols_count) > 0
+
+        # 조건을 충족하면 활성 자금 반환
+        if has_sufficient_funds and can_add_symbols:
+            return active_funds
+
+        # 조건을 충족하지 않으면 0 반환
+        return 0
 
 
 if __name__ == "__main__":

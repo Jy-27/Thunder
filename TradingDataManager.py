@@ -167,7 +167,7 @@ class DataControlManager:
                 # 예외 발생 시 로깅 및 오류 메시지 출력
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
-            await utils._wait_until_next_interval(time_unit="minute", interval=5)
+            await utils._wait_until_next_interval(time_unit="minute", interval=10)
 
     # 계좌정보 업데이트
     async def fetch_active_positions(self):
@@ -684,10 +684,12 @@ class DataControlManager:
                     if not is_kline_data:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
+                    # DEBUG
+                    print(f'{ticker} - {case_1}')
                     if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
 
-                        order_position = case_1[-1][0]
-                        order_leverage = case_1[-1][3]
+                        order_position = case_1[0]
+                        order_leverage = case_1[3]
                         if order_leverage is None or order_leverage < 5:
                             order_leverage = 5
 

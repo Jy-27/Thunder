@@ -201,6 +201,7 @@ class AnalysisManager:
         # 조건을 만족하는 첫 번째 인덱스를 반환하거나, 없으면 None 반환
         return int(row_indices[0]) if row_indices.size > 0 else None
 
+
     def _get_row_indices_by_threshold_range(
         self,
         kline_data: List[List[Union[str, int]]],
@@ -377,7 +378,7 @@ class AnalysisManager:
                 time_diff = (
                     len(trend_data_high_low) - low_index
                     if low_index is not None
-                    else None
+                    else 0
                 )
         except:
             print(trend_interval_data)

@@ -103,7 +103,7 @@ class AnalysisManager:
         """
         trend_data = []  # 결과 데이터를 저장
         target_candle_shadow_ratio = (
-            0.3  # 위아래 꼬리의 합계가 몸통 대비 30% 이하여야 함.
+            0.4  # 위아래 꼬리의 합계가 몸통 대비 40% 이하여야 함.
         )
 
         for index, data in enumerate(kline_data):

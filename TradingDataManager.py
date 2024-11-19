@@ -685,8 +685,8 @@ class DataControlManager:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
                     # DEBUG
-                    print(f'{ticker} - {case_1}')
                     if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
+                        print(f'{ticker} - {case_1}')
 
                         order_position = case_1[0]
                         order_leverage = case_1[3]
@@ -726,13 +726,13 @@ class FuturesDataControl(DataControlManager):
     # TEST ZONE
     async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
         balance_data = self.account_balance_summary.get(symbol, None)
-        available_funds = self.get_available_funds()
+        available_funds = await self.get_available_funds()
         # 계좌 보유시 추가 매수 금지
         if balance_data or available_funds == 0 or symbol in self.account_active_symbols:
             return
 
-        min_trade_quantity = self.client_instance.get_min_trade_quantity(symbol)
-        max_trade_quantity = self.client_instance.get_max_trade_quantity(
+        min_trade_quantity = await self.client_instance.get_min_trade_quantity(symbol)
+        max_trade_quantity = await self.client_instance.get_max_trade_quantity(
             symbol=symbol, leverage=leverage, balance=available_funds
         )
         if min_trade_quantity > max_trade_quantity:

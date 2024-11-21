@@ -167,7 +167,7 @@ class DataControlManager:
                 # 예외 발생 시 로깅 및 오류 메시지 출력
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
-            await utils._wait_until_next_interval(time_unit="minute", interval=5)
+            await utils._wait_until_next_interval(time_unit="minute", interval=10)
 
     # 계좌정보 업데이트
     async def fetch_active_positions(self):
@@ -684,10 +684,12 @@ class DataControlManager:
                     if not is_kline_data:
                         continue
                     case_1 = self.analysis_instance.case1_conditions(ticker)
+                    # DEBUG
                     if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
+                        print(f'{ticker} - {case_1}')
 
-                        order_position = case_1[-1][0]
-                        order_leverage = case_1[-1][3]
+                        order_position = case_1[0]
+                        order_leverage = case_1[3]
                         if order_leverage is None or order_leverage < 5:
                             order_leverage = 5
 
@@ -697,7 +699,7 @@ class DataControlManager:
                             leverage=order_leverage,
                         )
                         # self.save_to_json(file_path=path, new_data=result)
-            await utils._wait_time_sleep(time_unit="minute", duration=1)
+            await utils._wait_time_sleep(time_unit="second", duration=20)
 
 
 class SpotDataControl(DataControlManager):
@@ -724,13 +726,13 @@ class FuturesDataControl(DataControlManager):
     # TEST ZONE
     async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
         balance_data = self.account_balance_summary.get(symbol, None)
-        available_funds = self.get_available_funds()
+        available_funds = await self.get_available_funds()
         # 계좌 보유시 추가 매수 금지
-        if balance_data or available_funds == 0:
+        if balance_data or available_funds == 0 or symbol in self.account_active_symbols:
             return
 
-        min_trade_quantity = self.client_instance.get_min_trade_quantity(symbol)
-        max_trade_quantity = self.client_instance.get_max_trade_quantity(
+        min_trade_quantity = await self.client_instance.get_min_trade_quantity(symbol)
+        max_trade_quantity = await self.client_instance.get_max_trade_quantity(
             symbol=symbol, leverage=leverage, balance=available_funds
         )
         if min_trade_quantity > max_trade_quantity:
@@ -902,17 +904,24 @@ class FuturesDataControl(DataControlManager):
             return 0
 
         # 안전 잔고 및 활성 잔고 계산
-        safety_margin = limits.get("safe_balance", 0)
-        max_active_symbols = limits.get("max_symbol_count", 0)
-        active_funds = available_balance - safety_margin
+        total_amount = limits.get('total_order_amount')
+        safety_margin = limits.get("safe_balance")
+        max_active_symbols = limits.get("max_symbol_count")
+        
+        if total_amount is None or safety_margin is None or max_active_symbols is None:
+            return 0
+        
+        order_limit_amount = (total_amount - safety_margin) / max_active_symbols
+
+        active_amount = available_balance - safety_margin
 
         # 조건: 활성 자금이 0 이상이고 보유 가능한 심볼 수 제한 내에 있는지 확인
-        has_sufficient_funds = active_funds > 0
+        has_sufficient_funds = active_amount > 0
         can_add_symbols = (max_active_symbols - active_symbols_count) > 0
 
         # 조건을 충족하면 활성 자금 반환
         if has_sufficient_funds and can_add_symbols:
-            return active_funds
+            return min(active_amount, order_limit_amount)
 
         # 조건을 충족하지 않으면 0 반환
         return 0

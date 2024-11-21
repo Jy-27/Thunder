@@ -1,119 +1,52 @@
-import json
-import pandas as pd
+from typing import Tuple, List
+from functools import lru_cache
 
 
-# JSON 파일에서 '5m' 데이터를 로드하고 전처리하는 함수
-def load_and_preprocess_5m_data(file_path):
-    """
-    JSON 파일에서 '5m' 데이터를 로드하고 백테스트에 맞게 전처리합니다.
+class FunctionGroup:
+    # KLINE DATA에서 OpenTimestamp, CloseTimestamp값을 추출 및 반환한다.
+    def _get_timestamps(self, kline_data: List) -> Tuple[int, int]:
+        """
+        1. 기능 : KLINE DATA값에서 OpenTimestamp, CloseTimestamp값을 추출 및 반환한다.
+        2. 매개변수
+            1) kline_data (List): KLINE DATA의 최하위 List값
+        3. 오류발생시
+            1) ValueError
+                - Params kline_data 타입이 List가 아닐때
+                - Rarams Kline_data의 길이가 12개가 아닐때
+                - index값 타입이 int가 아닐때
+        4. 반환값 (Tuple)
+            1) open_timestamp : OpenTimestamp (마이크로 타임스템프)
 
-    :param file_path: JSON 파일 경로
-    :return: 5분봉 데이터가 포함된 데이터프레임
-    """
-    with open(file_path, "r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    df = pd.DataFrame(
-        data["5m"],
-        columns=[
-            "open_time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "close_time",
-            "quote_asset_volume",
-            "num_trades",
-            "taker_buy_base_asset_volume",
-            "taker_buy_quote_asset_volume",
-            "ignore",
-        ],
-    )
-
-    # 데이터 타입을 float으로 변환
-    df["open"] = df["open"].astype(float)
-    df["high"] = df["high"].astype(float)
-    df["low"] = df["low"].astype(float)
-    df["close"] = df["close"].astype(float)
-    df["volume"] = df["volume"].astype(float)
-
-    # 시간 인덱스로 설정
-    df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-    df.set_index("open_time", inplace=True)
-
-    # 시간 기준 정렬
-    df.sort_index(inplace=True)
-
-    return df
+        Returns:
+            Tuple[int, int]: _description_
+        """
+        if not isinstance(kline_data, list) or len(kline_data) != 12:
+            raise ValueError(f"Params 타입 오류 - {type(kline_data)}")
+        oepn_timestamp = kline_data[0]
+        close_timestamp = kline_data[6]
+        if not isinstance(oepn_timestamp, int) or not isinstance(close_timestamp, int):
+            raise ValueError(f"kline data 오류")
+        return (oepn_timestamp, close_timestamp)
 
 
-# 백테스트 함수: 3회 연속 상승 시 매수 진입 후 일정 보유 기간 후 청산
-def backtest_long_strategy(df, hold_period=10):
-    """
-    3회 연속 상승 시 매수하고 보유 기간 후 청산하는 백테스트 전략.
-
-    :param df: 5분봉 데이터프레임
-    :param hold_period: 매수 후 보유할 캔들 수 (기본: 10)
-    :return: 백테스트 결과 딕셔너리
-    """
-    initial_cash = 100000  # 초기 자금
-    cash = initial_cash
-    position = 0  # 보유 자산 수량
-    trades = []  # 거래 내역 저장
-
-    # 연속 상승 감지 열 추가
-    df["is_up"] = df["close"] > df["close"].shift(1)
-    df["up_streak"] = df["is_up"].rolling(window=3).apply(lambda x: x.all(), raw=True)
-
-    for i in range(len(df) - hold_period):
-        # 3회 연속 상승 시 매수 진입
-        if df["up_streak"].iloc[i] == 1 and position == 0:
-            buy_price = df["close"].iloc[i]
-            position = cash / buy_price
-            cash = 0
-            trades.append({"type": "buy", "price": buy_price, "time": df.index[i]})
-
-            # 보유 기간 동안 포지션 청산
-            sell_price = df["close"].iloc[i + hold_period]
-            cash = position * sell_price
-            position = 0
-            trades.append(
-                {"type": "sell", "price": sell_price, "time": df.index[i + hold_period]}
-            )
-
-    # 최종 수익률 계산
-    final_balance = cash if position == 0 else cash + position * df["close"].iloc[-1]
-    profit = final_balance - initial_cash
-    profit_pct = (profit / initial_cash) * 100
-
-    results = {
-        "initial_cash": initial_cash,
-        "final_balance": final_balance,
-        "profit": profit,
-        "profit_pct": profit_pct,
-        "trades": trades,
-    }
-
-    return results
+# class main(FunctionGroup):
 
 
-# 전체 실행
-if __name__ == "__main__":
-    # JSON 파일 경로 지정
-    file_path = "/Users/nnn/Desktop/DataStore/KlineData/btcusdt.json"
+# @lru_cache
+# def calculate_stop_loss(entry_price: float, target_price: float, start_margin_ratio: float = 0.015, profit_take_ratio: float = 0.6):
+#     """
+#     Stop-loss 가격을 계산하는 함수.
 
-    # 5분봉 데이터 로드 및 전처리
-    df_5m = load_and_preprocess_5m_data(file_path)
+#     Parameters:
+#     - entry_price (float): 진입 가격.
+#     - target_price (float): 목표 가격.
+#     - start_margin_ratio (float): 시작 마진 비율, 기본값 0.015 (1.5%).
+#     - profit_take_ratio (float): 목표 이익에서 취할 비율, 기본값 0.6 (60%).
 
-    # 백테스트 실행
-    results = backtest_long_strategy(df_5m, hold_period=10)
-
-    # 백테스트 결과 출력
-    print("Initial Cash:", results["initial_cash"])
-    print("Final Balance:", results["final_balance"])
-    print("Total Profit:", results["profit"])
-    print("Total Profit (%):", results["profit_pct"])
-    print("Trades:")
-    for trade in results["trades"]:
-        print(trade)
+#     Returns:
+#     - float: 계산된 손절 가격 (stop-loss price).
+#     """
+#     adjusted_entry_price = entry_price - (entry_price * start_margin_ratio)
+#     profit_threshold = (target_price - adjusted_entry_price) * profit_take_ratio
+#     stop_loss_price = adjusted_entry_price + profit_threshold
+#     return stop_loss_price

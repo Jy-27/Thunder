@@ -2,6 +2,7 @@ import ast
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -393,3 +394,17 @@ def _save_to_json(file_path: str, new_data: Any, overwrite: bool = False):
     # JSON 파일에 저장
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(data_to_save, file, ensure_ascii=False, indent=4)
+
+# ANSI 코드를 사용하여 콘솔 줄 전체를 지운 후 상태를 출력한다.
+def _std_print(message: str):
+    """
+    1. 기능: ANSI 코드를 사용하여 콘솔 줄 전체를 지운 후 상태를 출력한다.
+    2. 매개변수:
+        1) message (str): 출력할 문자열 메시지.
+    3. 반환값: 없음.
+    4. 오류 검증 기능: 해당 없음.
+    """
+    # ANSI 코드로 줄 전체 지우기
+    sys.stdout.write("\033[K")  # 현재 줄의 내용을 지움
+    sys.stdout.write(f"\r{message}")  # 커서를 줄의 시작으로 이동 후 메시지 출력
+    sys.stdout.flush()

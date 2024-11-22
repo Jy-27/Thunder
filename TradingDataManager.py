@@ -16,6 +16,7 @@ from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotAPI, FuturesAPI
 from Analysis import AnalysisManager
+from DataProcess import TradeStopper
 
 import BinanceTradeClient as my_client
 import asyncio
@@ -32,6 +33,7 @@ class DataControlManager:
         client_instance,
         market_instance,
         analysis_instance,
+        process_instance
     ):
         self.tickers_data = None
 
@@ -71,6 +73,7 @@ class DataControlManager:
         self.client_instance = client_instance
         self.market_instance = market_instance
         self.analysis_instance = analysis_instance
+        self.process_instance = process_instance
 
         self.signal_data: Dict[str, Dict[str, Union[int, float]]] = {}
 
@@ -91,9 +94,11 @@ class DataControlManager:
     async def submit_open_order_signal(
         self, symbol: str, position: int, leverage: int
     ): ...
+    async def submit_close_order_signal(self, symbol: str): ...
+    
 
     # Ticker 수집에 필요한 정보를 수신
-    async def _collect_filtered_ticker_data(self) -> Tuple:
+    async def __collect_filtered_ticker_data(self) -> Tuple:
         """
         1. 기능 : 기준값에 충족하는 ticker정보를 수신.
         2. 매개변수 : 해당없음.
@@ -127,7 +132,7 @@ class DataControlManager:
         2. 매개변수 : 해당없음.
         """
         mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
-        filtered_ticker_data = await self._collect_filtered_ticker_data()
+        filtered_ticker_data = await self.__collect_filtered_ticker_data()
         # 공통 필터링된 티커 요소를 리스트로 반환받음
         common_filtered_tickers = utils._find_common_elements(*filtered_ticker_data)
 
@@ -149,7 +154,7 @@ class DataControlManager:
         2. 매개변수 : 해당없음.
         """
         while True:
-            await self.handler_instance.pause_and_resume()
+            await self.handler_instance.generator_control_signal()
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
@@ -312,14 +317,20 @@ class DataControlManager:
                         ):
                             price = float(price)
                             # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
-                            await self.close_position(symbol=symbol, market_price=price)
+                        
+                            if symbol in self.process_instance.trading_data.keys():
+                                is_close_signal = self.process_instance.get_trading_stop_signal(symbol=symbol,
+                                                                                                current_price=price)
+                                if is_close_signal:
+                                    await self.submit_close_order_signal(symbol=symbol)
+                                    self.process_instance.remove_trading_data(symbol=symbol)
                             self.final_message_received[symbol][
                                 interval
                             ] = received_massage
             await utils._wait_time_sleep(time_unit="second", duration=1)
 
     # hour 또는 minute별 수신해야할 interval을 리스트화 정렬
-    def _generate_time_intervals(self):
+    def __generate_time_intervals(self):
         time_intervals: Dict[str, Dict] = {
             "minutes": {},  # 분 단위 타임라인
             "hours": {},  # 시간 단위 타임라인
@@ -363,7 +374,7 @@ class DataControlManager:
         return time_intervals
 
     # klline 매개변수에 들어갈 유효 limit
-    def _get_valid_kline_limit(self, interval: str) -> Dict:
+    def __get_valid_kline_limit(self, interval: str) -> Dict:
         # 상수 설정
         VALID_INTERVAL_UNITS = ["m", "h"]
         MINUTES_PER_DAY = 1_440
@@ -390,14 +401,14 @@ class DataControlManager:
         return {"day": max_days, "limit": max_limit}
 
     # kline 매개변수에 들어가는 limit을 day기준으로 개수를 계산한다.
-    def _get_kline_limit_by_days(self, interval: str, days: int) -> int:
+    def __get_kline_limit_by_days(self, interval: str, days: int) -> int:
         """
         1. 기능 : kline 매개변수에 들어갈 day 기간 만큼 interval의 limit값을 구한다.
         2. 매개변수
             1) interval : KLINE_INTERVALS 속성 참조
             2) day : 기간을 정한다.
         """
-        interval_data = self._get_valid_kline_limit(interval=interval)
+        interval_data = self.__get_valid_kline_limit(interval=interval)
         max_klines_per_day = interval_data["limit"] / interval_data["day"] * days
 
         if max_klines_per_day > 1_000:
@@ -424,7 +435,7 @@ class DataControlManager:
             3) start_date : '2024-01-01' 또는 datetime.datetime형태 자료
             3) end_data : '2024-01-01' 또는 datetime.datetime형태 자료
         """
-        active_limit_info = self._get_valid_kline_limit(interval=interval)
+        active_limit_info = self.__get_valid_kline_limit(interval=interval)
         if not start_date and end_date:
             return await self.market_instance.fetch_klines_limit(
                 symbol=symbol, interval=interval
@@ -474,7 +485,7 @@ class DataControlManager:
                 if interval.endswith("d"):
                     limit_ = 30
                 else:
-                    limit_ = self._get_kline_limit_by_days(interval=interval, days=days)
+                    limit_ = self.__get_kline_limit_by_days(interval=interval, days=days)
                 # Kline 데이터를 수집하고 self.kline_data에 업데이트
                 self.kline_data[ticker][interval] = (
                     await self.market_instance.fetch_klines_limit(
@@ -488,7 +499,7 @@ class DataControlManager:
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
 
-        interval_map = self._generate_time_intervals()
+        interval_map = self.__generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 300
 
@@ -508,7 +519,7 @@ class DataControlManager:
                         ):
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self._get_kline_limit_by_days(
+                                    limit_ = self.__get_kline_limit_by_days(
                                         interval=interval, days=days
                                     )
                                     self.kline_data[ticker][interval] = (
@@ -521,7 +532,7 @@ class DataControlManager:
                         if time_unit == time_units[1] and current_time_minute == times:
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self._get_kline_limit_by_days(
+                                    limit_ = self.__get_kline_limit_by_days(
                                         interval=interval, days=days
                                     )
                                     self.kline_data[ticker][interval] = (
@@ -534,7 +545,7 @@ class DataControlManager:
         # return self.kline_data
 
     # WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
-    async def _transform_kline(
+    async def __transform_kline(
         self, raw_kline_data: dict
     ) -> List[Union[str, int, float]]:
         """
@@ -565,7 +576,7 @@ class DataControlManager:
         return transformed_kline
 
     # weboskcet data와 kline데이터를 결합한다.
-    async def _merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
+    async def __merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
         """
         1. 기능 : websocket data와 kline data를 하나로 결합한다.
         2. 매개변수
@@ -581,7 +592,7 @@ class DataControlManager:
             raise ValueError(f"잘못된 값 입력됨")
 
         # 웹소켓으로 수신된 데이터를 변환
-        transformed_kline = await self._transform_kline(kline_message)
+        transformed_kline = await self.__transform_kline(kline_message)
 
         # 심볼 및 주기에 해당하는 데이터가 존재하는지 확인
         if isinstance(symbol, str) and isinstance(interval, str):
@@ -628,7 +639,7 @@ class DataControlManager:
                         if interval_data:
                             message = self.final_message_received[ticker][interval]
                             # print(f"{ticker}-{interval}병합")
-                            await self._merge_kline_data(message)
+                            await self.__merge_kline_data(message)
 
     # 주문 가능 잔고와 order 보유 횟수를 계산한다.
     def account_limits(
@@ -710,6 +721,7 @@ class SpotDataControl(DataControlManager):
             my_client.SpotOrderManager(),
             SpotAPI(),
             AnalysisManager(),
+            TradeStopper()
         )
 
 
@@ -721,12 +733,25 @@ class FuturesDataControl(DataControlManager):
             my_client.FuturesOrderManager(),
             FuturesAPI(),
             AnalysisManager(),
+            TradeStopper()
         )
 
     # TEST ZONE
+    # Position OPEN 신호를 보낸다. 신호가 정상적이라면 positon open 된다.
     async def submit_open_order_signal(self, symbol: str, position: int, leverage: int):
+        """
+        1. 기능 : Position open 주문 신호를 생성한다. 그에 따른 필요한 값들을 연산도 함께 처리한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+            2) position : SELL or LONG
+            3) leverage : 레버리지 값
+        
+        """
+        
+        # 계좌정보에서 해당 symbol 보유내역 확인
         balance_data = self.account_balance_summary.get(symbol, None)
         available_funds = await self.get_available_funds()
+        
         # 계좌 보유시 추가 매수 금지
         if balance_data or available_funds == 0 or symbol in self.account_active_symbols:
             return
@@ -741,7 +766,9 @@ class FuturesDataControl(DataControlManager):
         max_leverage = await self.client_instance.get_max_leverage(symbol)
         target_leverage = min(max_leverage, leverage)
 
+        # 레버리지 설정
         await self.client_instance.set_leverage(symbol=symbol, leverage=target_leverage)
+        # 마진 타입 설정
         await self.client_instance.set_margin_type(
             symbol=symbol, margin_type="ISOLATED"
         )
@@ -753,49 +780,21 @@ class FuturesDataControl(DataControlManager):
             order_type="MARKET",
             quantity=max_trade_quantity,
         )
+        
+        # 매도가격 연산 함수 초기값 실행
+        # self.process_instance.initialize_trading_data(symbol = symbol,
+        #                                               position = order_side,
+        #                                               )
+        entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
+        # 게좌정보 업데이트
         await self.fetch_active_positions()
-
-    # position에 따라 last price MAX or MIN 값을 반환한다.
-    async def _update_signal(
-        self, ticker: str, current_price: float
-    ) -> Optional[Dict[str, Union[int, float]]]:
-        """
-        1. 기능 : Position에 따라 Last Price MAX or MIN 값을 유지 및 반환한다.
-        2. 매개변수
-            1) ticker (str): 종목 코드
-            2) position (int): 1(long), 기타 값(short)
-            3) price (float): 현재 가격
-        """
-        balance_data = self.account_balance_summary.get(ticker, None)
-        if isinstance(balance_data, dict) and balance_data:
-            entry_price = balance_data.get("entryPrice", None)
-            position_amt = balance_data.get("positionAmt", None)
-
-            if not entry_price or not position_amt:
-                return None
-
-            current_position = 1 if position_amt > 0 else 0
-
-            target_price = balance_data.get("referencePrice", None)
-            if current_position == 1:
-                if not target_price:
-                    balance_data["referencePrice"] = max(entry_price, current_price)
-                else:
-                    balance_data["referencePrice"] = max(target_price, current_price)
-            else:
-                if not target_price:
-                    balance_data["referencePrice"] = min(entry_price, current_price)
-                else:
-                    balance_data["referencePrice"] = min(target_price, current_price)
-        else:
-            return None
-
-        self.account_balance_summary[ticker] = balance_data
-        return self.account_balance_summary
+        self.process_instance.initialize_trading_data(symbol = symbol,
+                                                      position = order_side,
+                                                      entry_price=entry_price)
 
     # TEST ZONE
     # 포지션 종료 신호를 발송한다.
-    async def _submit_close_order_signal(self, symbol: str):
+    async def submit_close_order_signal(self, symbol: str):
         """
         1. 기능 : 해당 symbol의 포지션을 종료한다.
         2. 매개변수
@@ -821,50 +820,7 @@ class FuturesDataControl(DataControlManager):
             )
             await self.fetch_active_positions()
 
-    # 현재가격을 계산 후 포지션 종료여부를 결정한다.
-    async def _generate_close_signal(
-        self,
-        symbol: str,
-        market_price: float,
-        safety_margin: float = 0.8,
-        entry_margin: float = 0.025,
-    ):
-        """
-        1. 기능 : 포지션 종려여부를 현자기 기준 계산한다.
-        2. 매개변수
-            1) symbol : 쌍거래 symbol정보
-            2) market_price : 마지막 거래 가격
-            3) safety_margin : referencePrece와 start price사이 비율
-            4) entry_margin : 시작가격에 적용하는 오차
-        """
 
-        position_data = self.account_balance_summary.get(symbol, None)
-        if not position_data:
-            return None
-
-        position_amount = position_data.get("positionAmt", None)
-        entry_price = position_data.get("entryPrice", None)
-        benchmark_price = position_data.get("referencePrice", None)
-
-        if position_amount is None or entry_price is None or benchmark_price is None:
-            await self.fetch_active_positions()
-            return None
-
-        if position_amount > 0:  # Long position
-            base_price = entry_price * (1 - entry_margin)
-            threshold_price = base_price + (
-                (benchmark_price - base_price) * safety_margin
-            )
-            print(threshold_price)
-            return threshold_price > market_price
-        else:  # Short position
-            base_price = entry_price * (1 + entry_margin)
-            threshold_price = base_price - (
-                (base_price - benchmark_price) * safety_margin
-            )
-            return threshold_price < market_price
-
-    # StopLoss 또는 포지션 종료 조건 성립시 close신호 발생기
     async def close_position(self, symbol: str, market_price: float):
         """
         1. 기능 : 포지션 종료 관련 함수 집합 계산하여 조건 성립시 포지션 종료 신호를 발생한다.
@@ -882,7 +838,7 @@ class FuturesDataControl(DataControlManager):
             symbol=symbol, market_price=market_price
         )
         if close_signal:
-            await self._submit_close_order_signal(symbol=symbol)
+            await self.submit_close_order_signal(symbol=symbol)
 
     # 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
     async def get_available_funds(self):
@@ -937,6 +893,14 @@ if __name__ == "__main__":
         obj = FuturesDataControl()
         await obj.fetch_active_positions()
 
+        for key, data in obj.account_balance_summary.items():
+            symbol = key
+            position = 'LONG' if data.get('positionAmt') > 0 else 'SHORT'
+            entry_price = data.get('entryPrice')
+            obj.process_instance.initialize_trading_data(symbol=symbol,
+                                                         position=position,
+                                                         entry_price=entry_price)
+        print(obj.process_instance.trading_data)
         intervals = ["kline_" + interval for interval in obj.KLINE_INTERVALS]
 
         tasks = [

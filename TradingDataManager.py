@@ -109,13 +109,13 @@ class DataControlManager:
         target_percent = 3  # 변동 비율폭 : 단위 %이며, 음수 가능
         quote_type = "usdt"  # 쌍거래 거래화폐
 
-        above_value_tickers = await self.ticker_instance.fetch_tickers_above_value(
+        above_value_tickers = await self.ticker_instance.get_tickers_above_value(
             target_value=value, comparison=comparison
         )
-        above_percent_tickers = await self.ticker_instance.fetch_tickers_above_change(
+        above_percent_tickers = await self.ticker_instance.get_tickers_above_change(
             target_percent=target_percent, comparison=comparison, absolute=absolute
         )
-        quote_usdt_tickers = await self.ticker_instance.fetch_asset_tickers(
+        quote_usdt_tickers = await self.ticker_instance.get_asset_tickers(
             quote=quote_type
         )
 
@@ -751,14 +751,24 @@ class FuturesDataControl(DataControlManager):
         # 계좌정보에서 해당 symbol 보유내역 확인
         balance_data = self.account_balance_summary.get(symbol, None)
         available_funds = await self.get_available_funds()
+        total_funds = await self.client_instance.get_total_wallet_balance()
+        
+        calc_fund = self.process_instance.calc_fund(total_funds)
+        
+        count = calc_fund.get('count')
+        trade_value = min(calc_fund.get('trade_value'), available_funds)
+        
+        
+        is_active_symbols = symbol in self.account_active_symbols
+        is_count_over = count <= len(self.account_active_symbols)
         
         # 계좌 보유시 추가 매수 금지
-        if balance_data or available_funds == 0 or symbol in self.account_active_symbols:
+        if balance_data or trade_value == 0 or is_active_symbols or is_count_over:
             return
 
         min_trade_quantity = await self.client_instance.get_min_trade_quantity(symbol)
         max_trade_quantity = await self.client_instance.get_max_trade_quantity(
-            symbol=symbol, leverage=leverage, balance=available_funds
+            symbol=symbol, leverage=leverage, balance=trade_value
         )
         if min_trade_quantity > max_trade_quantity:
             return
@@ -785,9 +795,9 @@ class FuturesDataControl(DataControlManager):
         # self.process_instance.initialize_trading_data(symbol = symbol,
         #                                               position = order_side,
         #                                               )
-        entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
         # 게좌정보 업데이트
         await self.fetch_active_positions()
+        entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
         self.process_instance.initialize_trading_data(symbol = symbol,
                                                       position = order_side,
                                                       entry_price=entry_price)
@@ -821,24 +831,24 @@ class FuturesDataControl(DataControlManager):
             await self.fetch_active_positions()
 
 
-    async def close_position(self, symbol: str, market_price: float):
-        """
-        1. 기능 : 포지션 종료 관련 함수 집합 계산하여 조건 성립시 포지션 종료 신호를 발생한다.
-        2. 매개변수
-            1) symbol : 쌍거래 symbol 정보
-            2) market_price : 마지막 거래 가격
-        """
+    # async def close_position(self, symbol: str, market_price: float):
+    #     """
+    #     1. 기능 : 포지션 종료 관련 함수 집합 계산하여 조건 성립시 포지션 종료 신호를 발생한다.
+    #     2. 매개변수
+    #         1) symbol : 쌍거래 symbol 정보
+    #         2) market_price : 마지막 거래 가격
+    #     """
 
-        # websocket data를 지속 입력시키면서 속성에 저장된 계좌정보를 조회 후 빈 계좌시 return 처리하여 동작 없음 지정함.
-        if not self.account_balance_summary.get(symbol, None):
-            return
-        await self._update_signal(ticker=symbol, current_price=market_price)
+    #     # websocket data를 지속 입력시키면서 속성에 저장된 계좌정보를 조회 후 빈 계좌시 return 처리하여 동작 없음 지정함.
+    #     if not self.account_balance_summary.get(symbol, None):
+    #         return
+    #     await self._update_signal(ticker=symbol, current_price=market_price)
 
-        close_signal = await self._generate_close_signal(
-            symbol=symbol, market_price=market_price
-        )
-        if close_signal:
-            await self.submit_close_order_signal(symbol=symbol)
+    #     close_signal = await self._generate_close_signal(
+    #         symbol=symbol, market_price=market_price
+    #     )
+    #     if close_signal:
+    #         await self.submit_close_order_signal(symbol=symbol)
 
     # 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
     async def get_available_funds(self):
@@ -851,8 +861,8 @@ class FuturesDataControl(DataControlManager):
         active_symbols_count = len(self.account_active_symbols)
 
         # 총 평가 잔액 및 사용 가능한 잔액 조회
-        total_balance = await self.client_instance._get_total_wallet_balance()
-        available_balance = await self.client_instance._get_available_balance()
+        total_balance = await self.client_instance.get_total_wallet_balance()
+        available_balance = await self.client_instance.get_available_balance()
 
         # 평가 잔액 기준 거래 가능 금액 및 제한 계산
         limits = self.account_limits(total_balance)
@@ -900,7 +910,7 @@ if __name__ == "__main__":
             obj.process_instance.initialize_trading_data(symbol=symbol,
                                                          position=position,
                                                          entry_price=entry_price)
-        print(obj.process_instance.trading_data)
+        # print(obj.process_instance.trading_data)
         intervals = ["kline_" + interval for interval in obj.KLINE_INTERVALS]
 
         tasks = [

@@ -318,7 +318,7 @@ class FuturesOrderManager(BinanceOrderManager):
         self.futures_api = FuturesAPI()
 
     # Ticker의 leverage 정보 수신 및 반환
-    async def _get_leverage_brackets(self, symbol: str) -> Dict:
+    async def __get_leverage_brackets(self, symbol: str) -> Dict:
         """
         1. 기능 : 선물거래 레버리지 설정값 정보 수신
         2. 매개변수
@@ -330,28 +330,39 @@ class FuturesOrderManager(BinanceOrderManager):
         params = {"symbol": symbol.upper(), "timestamp": int(time.time() * 1000)}
         return await self._send_request("GET", endpoint, params)
 
-    # Ticker의 MAX leverage값 반환
-    async def get_max_leverage(self, symbol: str) -> int:
+    # minQty, stepSize, notional 값을 수신 및 반환한다.
+    async def __get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
         """
-        1. 기능 : 선물거래 ticker에 대한 MAX leverage값 반환
+        1. 기능 : 각종 연산에 필요한 symbol별 minQty, setpSize, notional값을 수신 및 반환한다.
         2. 매개변수
-            1) symbol : BTCUSDT (symbols 타입 입력안됨.)
+            1) symbol : 쌍거래 symbol
         """
-        brackets_data = await self._get_leverage_brackets(symbol=symbol)
+        symbol = symbol.upper()
+        exchange_info = await self.futures_api.fetch_exchange_info()
 
-        # brackets_data와 필드 검증
-        if (
-            brackets_data
-            and "brackets" in brackets_data[0]
-            and isinstance(brackets_data[0]["brackets"], list)
-        ):
-            max_leverage = brackets_data[0]["brackets"][0].get(
-                "initialLeverage", 1
-            )  # 기본값 1 설정
-            if isinstance(max_leverage, (int, float)):
-                return int(max_leverage)
+        # 심볼 정보 필터링
+        symbols = exchange_info.get("symbols", [])
+        symbol_info = next(
+            (item for item in symbols if item.get("symbol") == symbol), None
+        )
 
-        raise ValueError(f"{symbol}에 대한 유효한 레버리지 정보를 찾을 수 없습니다.")
+        # 필터 처리
+        filters = symbol_info.get("filters", []) if symbol_info else []
+        min_qty, step_size, notional = None, None, None
+
+        if filters:
+            for filter_item in filters:
+                if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
+                    min_qty = float(filter_item.get("minQty", 0))
+                    step_size = filter_item.get("stepSize") or "1"
+                elif filter_item.get("filterType") == "MIN_NOTIONAL":
+                    notional = float(filter_item.get("notional", 0))
+
+        return {
+            "minQty": min_qty or 0.0,
+            "stepSize": step_size or "1",
+            "notional": notional or 0.0,
+        }
 
     # Ticker의 leverage값 설정
     async def set_leverage(self, symbol: str, leverage: int) -> dict:
@@ -422,31 +433,6 @@ class FuturesOrderManager(BinanceOrderManager):
         }
         return await self._send_request("POST", endpoint, params)
 
-    # Futures 전체 잔고 수신 후 보유 내역값만 반환
-    async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:
-        """
-        1. 기능 : Futures 전체 잔고 수신 후 보유내역만 후처리 하여 반환
-        2. 매개변수 : 해당없음.
-        """
-        balance_result: Dict = {}
-        response = await self.fetch_account_balance()
-        account_balances = response.get("positions")
-
-        if account_balances is None:
-            return f"fetch_account_balance함수 수신정보 없음."
-
-        for position_data in account_balances:
-            parsed_balances = utils._collections_to_literal([position_data])[0]
-            if parsed_balances.get("positionAmt") != 0:
-                symbol = parsed_balances.get("symbol")
-                balance_result[symbol] = {}
-                for key, nested_data in parsed_balances.items():
-                    if key == "symbol":
-                        ...
-                    else:
-                        balance_result[symbol][key] = nested_data
-        return balance_result
-
     # Futures 시장의 주문(long/short)신호를 보낸다.
     async def submit_order(
         self,
@@ -508,92 +494,53 @@ class FuturesOrderManager(BinanceOrderManager):
 
         return await self._send_request("POST", endpoint, params)
 
-    # 선물 시장의 symbol별 최소 거래 수량을 계산한다.
-    # async def get_min_trade_quantity(self, symbol: str) -> float:
-    #     symbol = symbol.upper()
-    #     exchange_info = await self.futures_api.fetch_exchange_info()
-
-    #     # 심볼 정보 필터링
-    #     # 기본값 []로 symbols 데이터 처리
-    #     symbols = exchange_info.get("symbols", [])
-    #     symbol_info = next(
-    #         (item for item in symbols if item.get("symbol") == symbol),
-    #         None,  # 기본값 None을 설정하여 찾지 못했을 때 대비
-    #     )
-
-    #     # symbol_info가 None이 아닌지 확인 후 filters 처리
-    #     filters = symbol_info.get("filters", []) if symbol_info else []
-
-    #     # 필터에서 필요한 정보 추출
-    #     min_qty, step_size, notional = None, None, None
-
-    #     # filters가 None이 아닌지 확인 후 반복
-    #     if filters:
-    #         for filter_item in filters:
-    #             if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
-    #                 min_qty = float(filter_item.get("minQty", 0))  # 기본값 0
-    #                 step_size = (
-    #                     filter_item.get("stepSize") or "1"
-    #                 )  # None일 경우 문자열 "1" 기본값
-    #             elif filter_item.get("filterType") == "MIN_NOTIONAL":
-    #                 notional = float(filter_item.get("notional", 0))  # 기본값 0
-
-    #     # 현재 가격 가져오기
-    #     # 기본값 0을 설정하여 current_price_data가 None일 경우 대비
-    #     current_price_data = (
-    #         await self.futures_api.fetch_ticker_price(symbol=symbol) or {}
-    #     )
-    #     current_price = float(
-    #         current_price_data.get("price", 0)
-    #     )  # None일 경우 기본값 0
-
-    #     # notional이 None일 경우 기본값 0.0으로 설정하여 연산 오류 방지
-    #     required_quantity: float = (notional or 0.0) / current_price
-    #     min_trade_quantity = float(
-    #         Decimal(required_quantity).quantize(
-    #             Decimal(step_size or 1), rounding=ROUND_UP
-    #         )
-    #     )
-
-    #     return min_trade_quantity
-
-    async def _get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
+    # Futures 전체 잔고 수신 후 보유 내역값만 반환
+    async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:
         """
-        Fetch and extract filters for a given symbol from the exchange information.
-
-        Args:
-            symbol (str): The symbol to fetch filters for (e.g., "BTCUSDT").
-
-        Returns:
-            dict: A dictionary containing minQty, stepSize, and notional filters.
-                Returns default values if filters are not found.
+        1. 기능 : Futures 전체 잔고 수신 후 보유내역만 후처리 하여 반환
+        2. 매개변수 : 해당없음.
         """
-        symbol = symbol.upper()
-        exchange_info = await self.futures_api.fetch_exchange_info()
+        balance_result: Dict = {}
+        response = await self.fetch_account_balance()
+        account_balances = response.get("positions")
 
-        # 심볼 정보 필터링
-        symbols = exchange_info.get("symbols", [])
-        symbol_info = next(
-            (item for item in symbols if item.get("symbol") == symbol), None
-        )
+        if account_balances is None:
+            return f"fetch_account_balance함수 수신정보 없음."
 
-        # 필터 처리
-        filters = symbol_info.get("filters", []) if symbol_info else []
-        min_qty, step_size, notional = None, None, None
+        for position_data in account_balances:
+            parsed_balances = utils._collections_to_literal([position_data])[0]
+            if parsed_balances.get("positionAmt") != 0:
+                symbol = parsed_balances.get("symbol")
+                balance_result[symbol] = {}
+                for key, nested_data in parsed_balances.items():
+                    if key == "symbol":
+                        ...
+                    else:
+                        balance_result[symbol][key] = nested_data
+        return balance_result
 
-        if filters:
-            for filter_item in filters:
-                if filter_item.get("filterType") in ["LOT_SIZE", "MARKET_LOT_SIZE"]:
-                    min_qty = float(filter_item.get("minQty", 0))
-                    step_size = filter_item.get("stepSize") or "1"
-                elif filter_item.get("filterType") == "MIN_NOTIONAL":
-                    notional = float(filter_item.get("notional", 0))
+    # Ticker의 MAX leverage값 반환
+    async def get_max_leverage(self, symbol: str) -> int:
+        """
+        1. 기능 : 선물거래 ticker에 대한 MAX leverage값 반환
+        2. 매개변수
+            1) symbol : BTCUSDT (symbols 타입 입력안됨.)
+        """
+        brackets_data = await self.__get_leverage_brackets(symbol=symbol)
 
-        return {
-            "minQty": min_qty or 0.0,
-            "stepSize": step_size or "1",
-            "notional": notional or 0.0,
-        }
+        # brackets_data와 필드 검증
+        if (
+            brackets_data
+            and "brackets" in brackets_data[0]
+            and isinstance(brackets_data[0]["brackets"], list)
+        ):
+            max_leverage = brackets_data[0]["brackets"][0].get(
+                "initialLeverage", 1
+            )  # 기본값 1 설정
+            if isinstance(max_leverage, (int, float)):
+                return int(max_leverage)
+
+        raise ValueError(f"{symbol}에 대한 유효한 레버리지 정보를 찾을 수 없습니다.")
 
     # 최소 주문 수량을 계산한다.
     async def get_min_trade_quantity(self, symbol: str) -> float:
@@ -603,7 +550,7 @@ class FuturesOrderManager(BinanceOrderManager):
             1) symbol : 쌍거래 symbol
         """
         # 심볼 필터 데이터 가져오기
-        filters = await self._get_symbol_filters(symbol)
+        filters = await self.__get_symbol_filters(symbol)
 
         # 필터에서 필요한 값 추출
         min_qty_data = filters.get("minQty")
@@ -636,34 +583,6 @@ class FuturesOrderManager(BinanceOrderManager):
 
         return max(min_trade_quantity, min_qty)
 
-    # 계좌 정보를 수신 후 거래가능한 USDT잔액을 반환한다.
-    async def _get_available_balance(self) -> Optional[float]:
-        """
-        1. 기능 : 계좌 정보를 수신 후 거래가능한 USDT잔액값을 반환한다.
-        2. 매개변수 : 해당없음.
-        """
-        account_data = await self.fetch_account_balance()
-        if not isinstance(account_data, dict) or not account_data:
-            return None
-        available_balance = account_data.get("availableBalance")
-        if available_balance is None:
-            return None
-        return float(available_balance)
-
-    # 계좌 정보를 수신 후 지갑전체 USDT가치를 반환한다.
-    async def _get_total_wallet_balance(self) -> Optional[float]:
-        """
-        1. 기능 : 계좌 정보를 수신 후 총액(거래중 포함)값을 반환한다.
-        2. 매개변수 : 해당없음.
-        """
-        account_data = await self.fetch_account_balance()
-        if not isinstance(account_data, dict) or not account_data:
-            return None
-        total_wallet_balance = account_data.get("totalWalletBalance")
-        if total_wallet_balance is None:
-            return None
-        return float(total_wallet_balance)
-
     # 계좌정보, leverage을 반영하여 관련하여 최대 거래가능 수량을 계산한다.
     async def get_max_trade_quantity(
         self, symbol: str, leverage: int, balance: Optional[Union[int, float]] = None
@@ -675,12 +594,12 @@ class FuturesOrderManager(BinanceOrderManager):
             2) leverage : 레버리지 값(max leverage값 초과금지)
         """
         if balance is None:
-            available_balance = await self._get_available_balance()
+            available_balance = await self.get_available_balance()
         elif isinstance(balance, (int, float)):
             available_balance = balance
 
         ticker_price_data = await self.futures_api.fetch_ticker_price(symbol=symbol)
-        symbol_filters = await self._get_symbol_filters(symbol=symbol)
+        symbol_filters = await self.__get_symbol_filters(symbol=symbol)
         if (
             available_balance is None
             or ticker_price_data is None
@@ -698,6 +617,37 @@ class FuturesOrderManager(BinanceOrderManager):
         required_quantity = (available_balance * leverage) / float(price)
         max_trade_quantity = utils._round_down(value=required_quantity, step=step_size)
         return max_trade_quantity
+
+    # 계좌 정보를 수신 후 거래가능한 USDT잔액을 반환한다.
+    async def get_available_balance(self) -> Optional[float]:
+        """
+        1. 기능 : 계좌 정보를 수신 후 거래가능한 USDT잔액값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        account_data = await self.fetch_account_balance()
+        if not isinstance(account_data, dict) or not account_data:
+            return None
+        available_balance = account_data.get("availableBalance")
+        if available_balance is None:
+            return None
+        return float(available_balance)
+
+    # 계좌 정보를 수신 후 지갑전체 USDT가치를 반환한다.
+    async def get_total_wallet_balance(self) -> Optional[float]:
+        """
+        1. 기능 : 계좌 정보를 수신 후 총액(거래중 포함)값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        account_data = await self.fetch_account_balance()
+        if not isinstance(account_data, dict) or not account_data:
+            return None
+        total_wallet_balance = account_data.get("totalWalletBalance")
+        if total_wallet_balance is None:
+            return None
+        return float(total_wallet_balance)
+
+
+
 
 
 if __name__ == "__main__":

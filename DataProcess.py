@@ -20,7 +20,7 @@ class TradeStopper:
     Spot 마켓 또는 Futures 마켓에서 주문에 의한 매입(포지션 open) 시
     매각(포지션 off)가격을 현재 가격을 반영하여 실시간으로 지정해준다.
     """
-    def __init__(self, profit_ratio: float=0.015, risk_ratio: float=0.75):
+    def __init__(self, profit_ratio: float=0.015, risk_ratio: float=0.8):
         self.profit_ratio = profit_ratio
         self.risk_ratio = risk_ratio
         self.trading_data: Dict[str, Dict[str, Union[str, float]]] = {}
@@ -123,20 +123,83 @@ class OrderConstraint:
     """ 주문시 제약사항을 생성한다. """
     
     def __init__ (self):
+        self.target_count_min = 1
+        self.target_count_max = 10
         
-    # 거래가능횟수를 제한한다. 필요한가?
-    def get_transaction_capacity(self)
+        self.account_amp_min = 10
+        self.account_step = 5
+        
+        self.safety_account_ratio = 0.32
     
     
-    # 현재 보유금액에 다른 계산식을 만든다.
-    def calc_holding_limit(self)
+    # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
+    def calc_fund(self, funds: float, ratio: float = 0.35) -> dict:
+        """
+        총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
+
+        Args:
+            funds (float): 사용 가능한 총 자금.
+            ratio (float): 안전 비율. 기본값은 0.35.
+
+        Returns:
+            dict: 계산 결과를 담은 딕셔너리.
+        """
+        # 자금이 10 미만일 경우 초기값 반환
+        if funds < 10:
+            return {
+                "count": 0,            # 보유 가능량
+                "target_value": 0,     # 다음 기준 금액
+                "safety_value": 0,     # 안전 금액
+                "usable_value": 0,     # 유효 금액
+                "trade_value": 0       # 회당 거래대금
+            }
+
+        steps = [2, 3]  # 증가 단계
+        target = 5      # 초기 목표 금액
+        count = 0       # 보유 가능량
+        last_valid_target = 0  # 초과 이전의 유효한 목표 금액
+
+        # 증가율 순환
+        for step in steps:
+            while target <= funds:
+                last_valid_target = target  # 초과 전 단계 값 저장
+                target *= step
+                count += 1
+                if target > funds:
+                    break
+
+        # 안전 금액 및 유효 금액 계산
+        safety_value = last_valid_target * ratio
+        usable_value = last_valid_target - safety_value
+        trade_value = usable_value / count if count > 0 else 0
+
+        # 결과 반환
+        return {
+            "count": count,                  # 보유 가능량
+            "target_value": last_valid_target,  # 다음 기준 금액
+            "safety_value": safety_value,    # 안전 금액
+            "usable_value": usable_value,    # 유효 금액
+            "trade_value": trade_value       # 회당 거래대금
+        }
     
     
-    # 회당 주문금액 계산
-    def calc_max_trade_amount(self)
     
     
     
+    # # 거래가능횟수를 제한한다. 필요한가?
+    # def get_transaction_capacity(self)
+    
+    
+    # # 현재 보유금액에 다른 계산식을 만든다.
+    # def calc_holding_limit(self)
+    
+    
+    # # 회당 주문금액 계산
+    # def calc_max_trade_amount(self)
+    
+    
+    # total_balance_ =
+    # available_balance_ = 
     
     
     

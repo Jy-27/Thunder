@@ -8,7 +8,7 @@ import os
 import utils
 import math
 import requests
-from MarketDataFetcher import SpotAPI, FuturesAPI
+from MarketDataFetcher import SpotFetcher, FuturesFetcher
 from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
@@ -220,9 +220,9 @@ class BinanceOrderManager:
 class SpotOrderManager(BinanceOrderManager):
     BASE_URL = "https://api.binance.com"
 
-    def __init__(self, spot_api: Optional[SpotAPI] = None):
+    def __init__(self, spot_api: Optional[SpotFetcher] = None):
         super().__init__()
-        self.spot_api = SpotAPI()
+        self.spot_api = SpotFetcher()
 
     async def get_min_trade_quantity(self, symbol: str) -> Union[int, float]:
         exchange_info_data = await self.spot_api.fetch_exchange_info(symbol=symbol)
@@ -266,7 +266,7 @@ class SpotOrderManager(BinanceOrderManager):
         return balance_result if balance_result else None
 
     # Spot 시장의 주문(매수/매도)신호를 보낸다.
-    async def submit_spot_order(
+    async def submit_order(
         self,
         symbol: str,
         side: str,
@@ -313,9 +313,9 @@ class SpotOrderManager(BinanceOrderManager):
 class FuturesOrderManager(BinanceOrderManager):
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self, futures_api: Optional[FuturesAPI] = None):
+    def __init__(self, futures_api: Optional[FuturesFetcher] = None):
         super().__init__()
-        self.futures_api = FuturesAPI()
+        self.futures_api = FuturesFetcher()
 
     # Ticker의 leverage 정보 수신 및 반환
     async def __get_leverage_brackets(self, symbol: str) -> Dict:

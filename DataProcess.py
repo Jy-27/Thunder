@@ -20,7 +20,7 @@ class TradeStopper:
     Spot 마켓 또는 Futures 마켓에서 주문에 의한 매입(포지션 open) 시
     매각(포지션 off)가격을 현재 가격을 반영하여 실시간으로 지정해준다.
     """
-    def __init__(self, profit_ratio: float=0.015, risk_ratio: float=0.8):
+    def __init__(self, profit_ratio: float=0.015, risk_ratio: float=0.85):
         self.profit_ratio = profit_ratio
         self.risk_ratio = risk_ratio
         self.trading_data: Dict[str, Dict[str, Union[str, float]]] = {}
@@ -122,14 +122,14 @@ class TradeStopper:
 class OrderConstraint:
     """ 주문시 제약사항을 생성한다. """
     
-    def __init__ (self):
-        self.target_count_min = 1
-        self.target_count_max = 10
+    # def __init__ (self):
+    #     self.target_count_min = 1
+    #     self.target_count_max = 10
         
-        self.account_amp_min = 10
-        self.account_step = 5
+    #     self.account_amp_min = 10
+    #     self.account_step = 5
         
-        self.safety_account_ratio = 0.32
+    #     self.safety_account_ratio = 0.32
     
     
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.

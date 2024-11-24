@@ -1,7 +1,7 @@
 import asyncio
 import utils
 from typing import Optional, List
-from MarketDataFetcher import SpotAPI, FuturesAPI
+from MarketDataFetcher import SpotFetcher, FuturesFetcher
 
 
 class BinanceTicker:
@@ -151,12 +151,12 @@ class BinanceTicker:
 
 class SpotTickers(BinanceTicker):
     def __init__(self):
-        super().__init__(SpotAPI())
+        super().__init__(SpotFetcher())
 
 
 class FuturesTickers(BinanceTicker):
     def __init__(self):
-        super().__init__(FuturesAPI())
+        super().__init__(FuturesFetcher())
 
 
 if __name__ == "__main__":

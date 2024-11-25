@@ -9,15 +9,6 @@ from typing import List, Dict, Optional, Union, Any, Tuple
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
     def __init__(self):
-        self.kline_data = None
-        self.intervals: Optional[List[str]] = None
-        self.tickers: Optional[List[str]] = None
-        # self.point: Optional[List[int]] = None
-
-    def update_data(self, kline_data: dict, intervals: list, tickers: list):
-        self.kline_data = kline_data
-        self.intervals = intervals
-        self.tickers = tickers
 
     # kline 데이터의 자료를 리터럴 변환
     def _convert_kline_data_to_literals(self) -> Dict[str, Dict[str, Union[Any]]]:
@@ -87,7 +78,6 @@ class AnalysisManager:
         return self.kline_data
 
     # interval별 연속 상승/하락에 대한 값을 연산 반환한다.
-
     def _compute_trend_scores(
         self, kline_data: List[List[Union[str, int]]]
     ) -> List[List[int]]:
@@ -386,3 +376,33 @@ class AnalysisManager:
             raise ValueError("ERROR")
 
         return position, trend_score, is_continuous, time_diff, is_threshold_broken
+
+    def case2_conditions(
+        self, kline_data
+    ) -> Tuple[int, int, bool, Optional[int], bool]:
+        """
+        1. 기능: 포지션 진입 시그널을 계산한다. Spot 시장의 경우 LONG 포지션만 진입 가능.
+        2. 매개변수:
+            - ticker (str): 예) BTCUSDT
+        3. 반환값:
+            - position (int): 1 = LONG, 2 = SHORT, 0 = NO POSITION  -> 현재 포지션
+            - trend_score (int): 연속성 점수 -> candle 꼬리길이가 30%를 넘으면 안됨.
+            - is_continuous (bool): 연속된 트렌드 여부 -> trend_score를 기준으로 bool반영
+            - time_diff (Optional[int]): 전고점/전저점과의 시간 차이
+            - is_threshold_broken (bool): 현재 가격이 전고점/전저점 임계값을 넘었는지 여부
+        """
+        interval_5m = "5m"
+        interval_1h = "1h"
+        fail_data = (0, 0, False, 0, False)
+        
+
+
+
+    def validate_kline_data(self, intervals:list, kline_data:dict):
+        for interval in intervals:
+            if not kline_data.get(interval):
+                return False
+        return True
+    
+    
+        

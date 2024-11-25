@@ -7,12 +7,31 @@ import json
 from TradingDataManager import FuturesDataControl, SpotDataControl
 from typing import Final
 
-PARENT_DIR = "/Users/cjupit/Desktop"
+
+current_path = os.getcwd()
+PARENT_DIR = os.path.dirname(current_path)
+
+
+
+import os
+
+# 현재 파일의 경로
+current_path = os.path.abspath(__file__)  # 또는 os.getcwd()로 현재 작업 디렉토리
+
+# 상위 폴더 경로
+parent_path = os.path.dirname(current_path)
+
+print("현재 경로:", current_path)
+print("상위 폴더 경로:", parent_path)
+
+
+
 
 MAIN_FOLDER_NAME = "DataStore"
 NESTED_FOLDER_NAME = "KlineData"  # 오타 수정
 
-folder_path = os.path.join(PARENT_DIR, MAIN_FOLDER_NAME, NESTED_FOLDER_NAME)
+folder_path = os.path.join(PARENT_DIR, MAIN_FOLDER_NAME)
+print(f'저장위치 {folder_path}')
 OHLCV_INTERVALS: Final[list] = [
         "1m",
         "3m",
@@ -59,12 +78,12 @@ if __name__ == "__main__":
     obj_spot = SpotDataControl()
     # intervals = [interval for interval in obj.KLINE_INTERVALS[:9]]
     intervals = OHLCV_INTERVALS
-    tickers = ["btcusdt", "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "trxusdt"]
+    tickers = ["btcusdt"]#, "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "trxusdt"]
 
     directory = ['spot', 'futures']
 
     end_date = utils._convert_to_datetime("2024-11-23 12:00:00")
-    start_date = utils._convert_to_datetime("2024-1-1 00:00:00")
+    start_date = utils._convert_to_datetime("2024-11-1 00:00:00")
 
     for ticker in tickers:
         data = {}  # 각 티커마다 초기화

@@ -208,7 +208,7 @@ class TradeStopper:
 
         # self.reference_price = reference_price
 
-        utils._std_print(self.reference_price)
+        # utils._std_print(self.reference_price)
         # Target price 계산
         self.target_price = self.__calculate_target_price(
             entry_price=current_price,
@@ -282,6 +282,15 @@ class Wallet:
         self.__cals_available_value()
         self.__cals_profit_to_loss_ratio()
 
+    # 실시간 wallet의 lock을 업데이트 한다.
+    def realtime_wallet_update(self, curreutn_price:float, trade_history:dict):
+        last_trade_history = trade_history[-1]
+        leverage = last_trade_history.get('leverage')
+        quantity = last_trade_history.get('quantity')
+        return (current_price * quantity) / leverage
+        
+        
+        
     # 계좌정보 반환
     def get_account_balance(self):
         return {
@@ -323,24 +332,24 @@ if __name__ == "__main__":
         # 데이터 분석 tool
         analy_data = analy_obj.case2_conditions(ticker_data=get_data)
         open_signal = signal(analy_data=analy_data)
+        
+        # utils._std_print(analy_data)
         # 1분봉 마지막 데이터 (최신데이터 대체적용)
         nested_kline_data = get_data.get("1m")[-1]
-        # print(nested_kline_data)
-        # print('DEBUG 5')
-        # print(type(nested_kline_data))
-        # 현재가
-        current_price = float(nested_kline_data[4])
-
+        current_price = float(nested_kline_data[4])     # 이상 무
         # 시나리오 true면
         
-        
+        trade_history = signal_obj.get_trade_history()
+        if trade_history and trade_history[-1].get("tradeStatus"):
+            wallet_obj.realtime_wallet_update(curreutn_price=nested_kline_data[4],
+                                              trade_history=trade_history)
         
         if isinstance(open_signal, dict):
             trade_history = signal_obj.get_trade_history()
             if trade_history and trade_history[-1]["tradeStatus"]:
                 continue
-            position = open_signal.get('position')  # 임시값
-            leverage = open_signal.get('leverage')  # 임시값
+            position = open_signal.get('position')
+            leverage = open_signal.get('leverage')
 
             quantity = (leverage * wallet_obj.available_value) / current_price
             signal_obj.submit_trade_open_signal(

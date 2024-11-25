@@ -820,68 +820,6 @@ class FuturesDataControl(DataControlManager):
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit='second', duration=2)
 
-    # async def close_position(self, symbol: str, market_price: float):
-    #     """
-    #     1. 기능 : 포지션 종료 관련 함수 집합 계산하여 조건 성립시 포지션 종료 신호를 발생한다.
-    #     2. 매개변수
-    #         1) symbol : 쌍거래 symbol 정보
-    #         2) market_price : 마지막 거래 가격
-    #     """
-
-    #     # websocket data를 지속 입력시키면서 속성에 저장된 계좌정보를 조회 후 빈 계좌시 return 처리하여 동작 없음 지정함.
-    #     if not self.account_balance_summary.get(symbol, None):
-    #         return
-    #     await self._update_signal(ticker=symbol, current_price=market_price)
-
-    #     close_signal = await self._generate_close_signal(
-    #         symbol=symbol, market_price=market_price
-    #     )
-    #     if close_signal:
-    #         await self.submit_close_order_signal(symbol=symbol)
-
-    # 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
-    # async def get_available_funds(self):
-    #     """
-    #     1. 기능 : 현재 보유중인 잔액과 진행중인 포지션 수를 감안하여 거래가능한 대금값을 반환한다.
-    #     2. 매개변수 : 해당없음.
-    #     """
-    #     # 계좌 잔액 및 활성 심볼 업데이트
-    #     await self.fetch_active_positions()
-    #     active_symbols_count = len(self.account_active_symbols)
-
-    #     # 총 평가 잔액 및 사용 가능한 잔액 조회
-    #     total_balance = await self.client_instance.get_total_wallet_balance()
-    #     available_balance = await self.client_instance.get_available_balance()
-
-    #     # 평가 잔액 기준 거래 가능 금액 및 제한 계산
-    #     limits = self.account_limits(total_balance)
-    #     if not isinstance(limits, dict) or not limits:
-    #         return 0
-
-    #     # 안전 잔고 및 활성 잔고 계산
-    #     total_amount = limits.get('total_order_amount')
-    #     safety_margin = limits.get("safe_balance")
-    #     max_active_symbols = limits.get("max_symbol_count")
-
-    #     if total_amount is None or safety_margin is None or max_active_symbols is None:
-    #         return 0
-
-    #     order_limit_amount = (total_amount - safety_margin) / max_active_symbols
-
-    #     active_amount = available_balance - safety_margin
-
-    #     # 조건: 활성 자금이 0 이상이고 보유 가능한 심볼 수 제한 내에 있는지 확인
-    #     has_sufficient_funds = active_amount > 0
-    #     can_add_symbols = (max_active_symbols - active_symbols_count) > 0
-
-    #     # 조건을 충족하면 활성 자금 반환
-    #     if has_sufficient_funds and can_add_symbols:
-    #         return min(active_amount, order_limit_amount)
-
-    #     # 조건을 충족하지 않으면 0 반환
-    #     return 0
-
-
 if __name__ == "__main__":
 
     import os

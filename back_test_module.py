@@ -1,7 +1,10 @@
 import os
 import utils
-from typing import Dict, List, Union
+import Analysis
+from typing import Dict, List, Union, Any, Optional
+import time
 # from Analysis import AnalysisManager
+
 
 def update_data(kline_path: str, index_path: str):
     if not os.path.exists(kline_path):
@@ -12,13 +15,23 @@ def update_data(kline_path: str, index_path: str):
     index_data = utils._load_json(file_path=index_path)
     return (kline_data, index_data)
 
+# 임시생성 함수
+def signal(analy_data):
+    if analy_data[2] and analy_data[4]:
+        position = 'LONG' if analy_data[0]==1 else 'SHORT'
+        leverage = analy_data[3]
+        return {'position':position,
+                'leverage':leverage}
+    else:
+        return False
+
 class DataManager:
     def __init__(self, kline_data, index_data):
         self.kline_data = kline_data
         self.index_data = index_data
         self.intervals = list(kline_data.keys())
         self.__validate_data()
-    
+
     # 데이터의 유효성을 검사한다.
     def __validate_data(self):
         """
@@ -26,13 +39,13 @@ class DataManager:
         2. 매개변수 : 해당없음.
         """
         if not isinstance(self.kline_data, dict) or not self.kline_data:
-            raise ValueError(f'kline 데이터가 유효하지 않음.')
+            raise ValueError(f"kline 데이터가 유효하지 않음.")
         if not isinstance(self.index_data, list) or not self.index_data:
-            raise ValueError(f'index 데이터가 유효하지 않음.')
+            raise ValueError(f"index 데이터가 유효하지 않음.")
         if len(self.kline_data.keys()) != len(self.index_data[0]):
-            raise ValueError(f'kline interval값과 index 데이터의 길이가 맞지 않음.')
+            raise ValueError(f"kline interval값과 index 데이터의 길이가 맞지 않음.")
         return True
-    
+
     # 연산이 용이하도록 interval값과 index값을 이용하여 매핑값을 반환한다.
     def __map_intervals_to_indices(self, index_values: List[int]) -> Dict[str, int]:
         """
@@ -45,9 +58,11 @@ class DataManager:
             mapped_intervals[interval] = index_values[i]
 
         return mapped_intervals
-    
+
     # 기간별 각 interval값을 raw데이터와 동일한 형태로 반환한다.
-    def get_kline_data_by_range(self, end_index: int, step: int=4320) -> Dict[str, List[List[Union[int, str]]]]:
+    def get_kline_data_by_range(
+        self, end_index: int, step: int = 4320
+    ) -> Dict[str, List[List[Union[int, str]]]]:
         """
         1. 기능 : 기간별 데이터를 추출한다.
         2. 매개변수
@@ -58,11 +73,12 @@ class DataManager:
         start_index = end_index - step
         if start_index < 0:
             start_index = 0
-
         start_indices = self.index_data[start_index]
         end_indices = self.index_data[end_index]
 
-        start_mapped_intervals = self.__map_intervals_to_indices(index_values=start_indices)
+        start_mapped_intervals = self.__map_intervals_to_indices(
+            index_values=start_indices
+        )
         end_mapped_intervals = self.__map_intervals_to_indices(index_values=end_indices)
 
         result = {}
@@ -76,149 +92,283 @@ class DataManager:
         return result
 
 
-if __name__ == "__main__":
-    kline = "/Users/nnn/GitHub/DataStore/BTCUSDT.json"
-    index = "/Users/nnn/GitHub/DataStore/BTCUSDT_index.json"
-    
-    kline_data, index_data = update_data(kline_path=kline, index_path=index)
-    
-    obj = DataManager(kline_data=kline_data,
-                      index_data=index_data)
-    print(obj.get_kline_data_by_range(end_index=15))
+class SignalRecorder:
+    """
+    가상 거래 내역을 기록하고 해당 내용을 공유한다.
+    """
 
-# class DataManager:
-#     def __init__(self, symbol: str, data_directory: str = "DataStore"):
-#         self.symbol = symbol.upper()
-#         self.data_directory = data_directory
+    def __init__(self):
+        self.trade_history: List[Dict[str, Union[Any]]] = []
 
-#         self.file_extension = ".json"
-#         self.kline_data: Dict[str, List[List[Union[int, str]]]] = self.__load_kline_data()
-#         self.time_intervals = self.__extract_intervals()
-#         self.index_data: List[List[int]] = self.__load_index_data()
-#         self.mapped_intervals: Dict[str, int] = self.__map_intervals_to_indices(index_values=self.index_data[0])
+    def submit_trade_open_signal(
+        self,
+        position: bool,
+        nested_kline_data: list[Union[str, int]],
+        leverage: int,
+        quantity: float,
+        analysis_type: str = "anylisys_1",
+    ):
+        close_timestamp = nested_kline_data[6]
+        close_price = nested_kline_data[4]
+        trade_data = {
+            "tradeStatus": True,
+            "executionTimestamp": close_timestamp,
+            # "executionDate": utils._convert_to_datetime(close_timestamp),
+            "price": float(close_price),
+            "position": position,
+            "leverage": leverage,
+            "quantity": quantity,
+        }
+        self.trade_history.append(trade_data)
+        return trade_data
 
-#     # 데이터 파일 경로를 반환하는 메서드
-#     def __build_file_path(self, data_type: str) -> str:
-#         data_type = data_type.upper()
-#         if data_type == "KLINE":
-#             file_name = self.symbol + self.file_extension
-#         elif data_type == "INDEX":
-#             file_name = self.symbol + "_index" + self.file_extension
-#         current_directory = os.getcwd()
-#         parent_directory = os.path.dirname(current_directory)
-#         file_path = os.path.join(parent_directory, self.data_directory, file_name)
+    def submit_trade_close_signal(
+        self, nested_kline_data: list[Union[str, int]], stoploss_type: str = "stop_1"
+    ):
+        close_timestamp = nested_kline_data[6]
+        close_price = nested_kline_data[4]
+        quantity = self.trade_history[-1].get("quantity")
+        leverage = self.trade_history[-1].get("leverage")
+        last_position = self.trade_history[-1].get("position")
+        position = "LONG" if last_position == "SHORT" else "SHORT"
+        datetime = utils._convert_to_datetime(close_timestamp)
+        trade_data = {
+            "tradeStatus": False,
+            "executionTimestamp": close_timestamp,
+            # "executionDate": utils._convert_to_datetime(close_timestamp),
+            "price": close_price,
+            "position": position,
+            "leverage": leverage,
+            "quantity": quantity,
+        }
+        self.trade_history.append(trade_data)
+        return trade_data
 
-#         if not os.path.exists(file_path):
-#             raise ValueError(f"파일이 존재하지 않습니다: {file_path}")
-#         return file_path
+    def dump_to_json(self, file_path: str):
+        utils._save_to_json(
+            file_path=file_path, new_data=self.trade_history, overwrite=True
+        )
+        return
 
-#     # Kline 데이터를 불러오는 메서드
-#     def __load_kline_data(self) -> Dict[str, List[List[Union[int, str]]]]:
-#         """
-#         1. 기능 : kline데이터를 불러온다.
-#         2. 매개변수 : 해당없음.(class instance화 할때 변수값 반영)
-#         """
-#         file_path = self.__build_file_path(data_type="kline")
-#         data = utils._load_json(file_path=file_path)
-#         self.kline_data = data
-#         return self.kline_data
+    def get_trade_history(self):
+        return self.trade_history
 
-#     # 인덱스 데이터를 불러오는 메서드
-#     def __load_index_data(self) -> List[List[int]]:
-#         """
-#         1. 기능 : 인덱스 매칭 데이터를 불러온다.      
-#         2. 매개변수 : 해당없음.(class instance화 할때 변수값 반영)
-#         """
-#         file_path = self.__build_file_path(data_type="index")
-#         data = utils._load_json(file_path=file_path)
-#         self.index_data = data
-#         return self.index_data
 
-#     # Kline 데이터에서 구간(interval)을 추출하는 메서드
-#     def __extract_intervals(self) -> List[str]:
-#         """
-#         1. 기능 : kline 데이터의 interval 값을 추출한다. 1회 사용한다.
-#         2. 매개변수 : 해당없음.(class instance화 __ㅣ할때 변수값 반영)
-#         """
-#         if isinstance(self.kline_data, dict):
-#             return list(self.kline_data.keys())
-#         else:
-#             raise ValueError("Kline 데이터가 유효하지 않습니다.")
+class TradeStopper:
+    def __init__(self, rist_ratio: float = 0.85, profit_ratio: float = 0.015):
+        self.reference_price: Optional[float] = None
 
-#     # 구간(interval)과 인덱스 데이터를 매핑하는 메서드
-#     def __map_intervals_to_indices(self, index_values: List[int]) -> Dict[str, int]:
-#         """
-#         1. 기능 : interval과 index데이터를 연산이 용이하도록 매핑한다.
-#         2. 매개변수
-#             1) index_values : 각 구간별 index 정보
-#         """
-#         if len(self.time_intervals) != len(index_values):
-#             raise ValueError("구간 데이터와 인덱스 데이터의 길이가 일치하지 않습니다.")
+        self.risk_ratio = rist_ratio
+        self.profit_ratio = profit_ratio
+        self.target_price: Optional[float] = None
 
-#         mapped_intervals = {}
-#         for i, interval in enumerate(self.time_intervals):
-#             mapped_intervals[interval] = index_values[i]
+    def __clear_price_info(self):
+        self.reference_price = None
+        self.target_price = None
 
-#         return mapped_intervals
+    def __trade_status(self, trade_history) -> bool:
+        trade_data = trade_history[-1]
+        return trade_data.get("tradeStatus")
 
-#     def data_load(self, file_path: str):
-#         utils._load_json(file)
+    def __calculate_target_price(
+        self, entry_price: float, reference_price: float, position: str
+    ) -> float:
+        position = position.upper()
+        if position not in ["LONG", "BUY", "SELL", "SHORT"]:
+            raise ValueError(f"유효하지 않은 포지션: {position}")
+        if position in ["LONG", "BUY"]:
+            dead_line_price = entry_price + (
+                (reference_price - entry_price) * self.risk_ratio
+            )
+            return dead_line_price * (1 - self.profit_ratio)
+        elif position in ["SHORT", "SELL"]:
+            dead_line_price = entry_price - (
+                (entry_price - reference_price) * self.risk_ratio
+            )
+            return dead_line_price * (1 + self.profit_ratio)
+        else:
+            raise ValueError(f"position입력오류 : {position}")
 
-#     # 특정 범위의 데이터를 추출하는 메서드
-#     def get_kline_data_by_range(self, end_index: int, step: int=4320) -> Dict[str, List[List[Union[int, str]]]]:
-#         """
-#         1. 기능 : 기간별 데이터를 추출한다.
-#         2. 매개변수
-#             1) start_index : index 0 ~ x까지 값을 입력
-#             2) step : 데이터 기간(min : 4320
-#                 - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
-#         """
-#         start_index = end_index - step
-#         if len(start_index) <= 1:
-#             start_index = 0
-
-#         start_indices = self.index_data[start_index]
-#         end_indices = self.index_data[end_index]
-
-#         start_mapped_intervals = self.__map_intervals_to_indices(index_values=start_indices)
-#         # print(start_mapped_intervals)
-#         end_mapped_intervals = self.__map_intervals_to_indices(index_values=end_indices)
-#         # print(end_mapped_intervals)
-
-#         result = {}
-#         for interval in self.time_intervals:
-#             interval_data = self.kline_data.get(interval)
-#             start_index_value = start_mapped_intervals.get(interval)
-#             end_index_value = end_mapped_intervals.get(interval)
-
-#             sliced_data = interval_data[start_index_value:end_index_value]
-#             result[interval] = sliced_data
-#         return result
-
+    def generate_close_signal_scenario1(
+        self, nested_kline_data: list[Union[str, int]], trade_history: list
+    ) -> bool:
+        if not self.__trade_status(trade_history=trade_history):
+            return False
+        
+        current_price = float(nested_kline_data[4])
+        current_position = trade_history[-1].get("position")
+        # Reference price 업데이트
+        if not self.reference_price:
+            self.reference_price = current_price
             
-# class RecoderManager:
-#     def __init__(self):
-#         self.position_status = None
+        if current_position in ["LONG", "BUY"]:
+            self.reference_price = max(self.reference_price, current_price)
+        elif current_position in ["SHORT", "SELL"]:
+            self.reference_price = min(self.reference_price, current_price)
+
+        # self.reference_price = reference_price
+
+        utils._std_print(self.reference_price)
+        # Target price 계산
+        self.target_price = self.__calculate_target_price(
+            entry_price=current_price,
+            reference_price=self.reference_price,
+            position=current_position,
+        )
+
+        # 종료 조건
+        if current_position in ["LONG", "BUY"] and current_price <= self.target_price:
+            self.__clear_price_info()
+            return True
+        elif (
+            current_position in ["SHORT", "SELL"] and current_price >= self.target_price
+        ):
+            self.__clear_price_info()
+            return True
+
+        return False
+
+
+class Wallet:
+    def __init__(self, initial_capital: float = 1_000, fee_ratio: float = 0.05):
+        self.initial_capital: float = initial_capital
+        self.fee_ratio: float = fee_ratio
+        self.fee_value: float = 0
+        self.free: float = initial_capital
+        self.lock: float = 0
+        self.total_balance: float = 0
+        self.profit_to_loss_ratio: float = 0
+        self.safety_ratio: float = 0.35
+        self.available_value: float = initial_capital * (1-self.safety_ratio)
+
+    # 청산시 오류발생, 시스템 멈춤
+    def __vaildate_balance(self):
+        if self.free < 0:
+            raise ValueError(f"{self.free} - 청산 발생")
+
+    # 손익비율 계산
+    def __cals_profit_to_loss_ratio(self):
+        total_balance = self.lock + self.free
+        cals_ratio = total_balance / self.initial_capital
+        return round(cals_ratio, 3)
+
+    # 안전 자산 외 자산
+    def __cals_available_value(self):
+        return self.total_balance * (1 - self.safety_ratio)
+
+    # 잔고 총액 계산
+    def __cals_total_balance(self):
+        return self.free + self.lock
+
+    # 출금 처리
+    def withdrawal(self, USDT: float):
+        self.__vaildate_balance()
+        self.fee_value += self.fee_ratio * USDT
+        value = USDT - self.fee_value
+        self.free = self.free - USDT
+        self.lock += value
+        self.total_balance = self.__cals_total_balance()
+        self.available_value=self.__cals_available_value()
+        self.profit_to_loss_ratio = self.__cals_profit_to_loss_ratio()
+        self.__vaildate_balance()
+
+    # 입금 처리
+    def deposit(self, USDT: float):
+        value = (1 - self.fee_ratio) * USDT
+        self.fee_value += self.fee_ratio * USDT
+        self.lock = 0
+        self.free += self.lock
+        self.__cals_total_balance()
+        self.__cals_available_value()
+        self.__cals_profit_to_loss_ratio()
+
+    # 계좌정보 반환
+    def get_account_balance(self):
+        return {
+            "inital_money": self.initial_capital,
+            "fee_ratio": self.fee_ratio,
+            "fee_value": self.fee_value,
+            "free": self.free,
+            "lock": self.lock,
+            "total_balance": self.total_balance,
+            "profit_loss_ratio": self.profit_to_loss_ratio,
+            "safety_ratio": self.safety_ratio,
+        }
+
+
+if __name__ == "__main__":
+    directory = "/Users/cjupit/Desktop/DataStore/KlineData"
+    kline = os.path.join(directory, "BTCUSDT.json")
+    index = os.path.join(directory, "BTCUSDT_index.json")
+    path_trade_history = "/Users/cjupit/Desktop/trade_history.json"
+    # index = "/Users/nnn/GitHub/DataStore/BTCUSDT_index.json"
+
+    # analysis_ins = Analysis.AnalysisManager()
+
+    kline_data, index_data = update_data(kline_path=kline, index_path=index)
+
+    data_obj = DataManager(kline_data=kline_data, index_data=index_data)
+    signal_obj = SignalRecorder()
+    stopper_obj = TradeStopper()
+    wallet_obj = Wallet()
+    analy_obj = Analysis.AnalysisManager()
+
+    for i in range(len(index_data) - 1):
+        get_data = data_obj.get_kline_data_by_range(end_index=i)
+        # print('DEBUG 1=========')
+        if not get_data.get('3d'):
+            continue
+        # print('DEBUG 2')
         
-#         self.position_form = {'symbol':'btcusdt',
-#                               'position':'long',
-#                               'tradeStatus':'open',
-#                               'tradeTimeStemp':123123,
-#                               'entryPrice':0.0001,
-#                               'leverage':11231,
-#                               'quantity':1231,
-#                               }
+        # 데이터 분석 tool
+        analy_data = analy_obj.case2_conditions(ticker_data=get_data)
+        open_signal = signal(analy_data=analy_data)
+        # 1분봉 마지막 데이터 (최신데이터 대체적용)
+        nested_kline_data = get_data.get("1m")[-1]
+        # print(nested_kline_data)
+        # print('DEBUG 5')
+        # print(type(nested_kline_data))
+        # 현재가
+        current_price = float(nested_kline_data[4])
+
+        # 시나리오 true면
         
         
-# if __name__ == "__main__":
-#     symbol = 'btcusdt'
-#     obj = DataManager(symbol=symbol)
-#     analy_obj = AnalysisManager()
-#     result = []
-#     # for i in range(len(obj.index_data)-1):
-#     #     analy_obj.kline_data = obj.get_kline_data_by_range(end_index=i)
-#     #     # print(analy_obj.kline_data[-1])
-#     #     # case_1 = analy_obj.case2_conditions(kline_data=analy_obj.kline_data)
-#     #     # if case_1[2] and case_1[-1] and case_1[-2]>3:
-#     #     #     print(f'{i} - {case_1}')
-#     #     utils._std_print(len(analy_obj.kline_data))
+        
+        if isinstance(open_signal, dict):
+            trade_history = signal_obj.get_trade_history()
+            if trade_history and trade_history[-1]["tradeStatus"]:
+                continue
+            position = open_signal.get('position')  # 임시값
+            leverage = open_signal.get('leverage')  # 임시값
+
+            quantity = (leverage * wallet_obj.available_value) / current_price
+            signal_obj.submit_trade_open_signal(
+                position=position,
+                nested_kline_data=nested_kline_data,
+                leverage=leverage,
+                quantity=quantity,
+            )
+            wallet_obj.withdrawal(USDT=wallet_obj.available_value)
+            # signal_obj.dump_to_json(file_path=path_trade_history)
+
+        trade_history = signal_obj.get_trade_history()
+                
+        if trade_history:
+            close_signal = stopper_obj.generate_close_signal_scenario1(
+                nested_kline_data=nested_kline_data, trade_history=trade_history
+            )
+            # print(close_signal)
+            if close_signal:
+                signal_obj.submit_trade_close_signal(nested_kline_data=nested_kline_data)
+                last_trade_history = signal_obj.get_trade_history()[-1]
+
+                leverage = last_trade_history.get("leverage")
+                quantity = last_trade_history.get("quantity")
+
+                selling_amt = (quantity * current_price) / leverage
+                wallet_obj.deposit(selling_amt)
+                # signal_obj.dump_to_json(file_path=path_trade_history)
+
+        accout_balace = wallet_obj.get_account_balance()
+        utils._std_print(accout_balace)

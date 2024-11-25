@@ -83,7 +83,7 @@ if __name__ == "__main__":
     directory = ['spot', 'futures']
 
     end_date = utils._convert_to_datetime("2024-11-23 12:00:00")
-    start_date = utils._convert_to_datetime("2024-11-1 00:00:00")
+    start_date = utils._convert_to_datetime("2024-1-1 00:00:00")
 
     for ticker in tickers:
         data = {}  # 각 티커마다 초기화

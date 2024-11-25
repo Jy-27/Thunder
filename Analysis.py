@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Union, Any, Tuple
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
     def __init__(self):
-
+        ...
     # kline 데이터의 자료를 리터럴 변환
     def _convert_kline_data_to_literals(self) -> Dict[str, Dict[str, Union[Any]]]:
         """
@@ -378,7 +378,7 @@ class AnalysisManager:
         return position, trend_score, is_continuous, time_diff, is_threshold_broken
 
     def case2_conditions(
-        self, kline_data
+        self, ticker_data
     ) -> Tuple[int, int, bool, Optional[int], bool]:
         """
         1. 기능: 포지션 진입 시그널을 계산한다. Spot 시장의 경우 LONG 포지션만 진입 가능.
@@ -391,18 +391,100 @@ class AnalysisManager:
             - time_diff (Optional[int]): 전고점/전저점과의 시간 차이
             - is_threshold_broken (bool): 현재 가격이 전고점/전저점 임계값을 넘었는지 여부
         """
-        interval_5m = "5m"
-        interval_1h = "1h"
+        trend_check_interval = "1h"
+        trend_period = "3d"
+        position_check_interval = "5m"
         fail_data = (0, 0, False, 0, False)
-        
+
+        # if not isinstance(self.intervals, list) or not isinstance(
+        #     self.kline_data, dict
+        # ):
+        #     return fail_data
+        # 유효성 검사: 인터벌 확인
+        # if (
+        #     trend_check_interval not in self.intervals
+        #     or position_check_interval not in self.intervals
+        # ):
+        #     raise ValueError(f"유효하지 않은 interval 값이 있음.")
+
+        # # 데이터 유효성 검사
+        # if not self._validate_kline_data(ticker=ticker):
+        #     return fail_data
+
+        # ticker_data = self.kline_data.get(ticker, {})
+
+        # 트렌드 점수 계산
+        trend_data_high_low = self._compute_trend_scores(
+            ticker_data.get(trend_check_interval, {})
+        )
+        trend_data_position = self._compute_trend_scores(
+            ticker_data.get(position_check_interval, {})
+        )
+
+        if not trend_data_high_low or not trend_data_position:
+            return fail_data
+
+        # 포지션 결정
+        last_trend_position = trend_data_position[-1]
+        position = 1 if last_trend_position[0] else (2 if last_trend_position[1] else 0)
+
+        # 연속성 점수 및 유효 캔들 점수 계산
+        continuity_score = last_trend_position[2]
+        valid_candle_score = last_trend_position[3]
+        trend_score = min(continuity_score, valid_candle_score)
+        is_continuous = trend_score >= 3
+
+        # 데이터 준비
+        trend_interval_data = ticker_data.get(trend_check_interval)
+
+        # kline_data.clear()실행시 False로 반환처리 한다.
+        # tickers update시 잔존하는 queue값 잔존시 kline_data가 생성되므로 이에 대한 False로 반환
+        if len(trend_interval_data) == 1:
+            return fail_data
+
+        # 전고점/전저점 및 시간 차이 계산
+        time_diff = None
+        is_threshold_broken = False
+
+        try:
+            if position == 1:  # LONG
+                previous_high = self._get_previous_high(
+                    kline_data=trend_interval_data[:-1]
+                )
+                high_index = self._get_row_indices_by_threshold(
+                    kline_data=trend_interval_data[:-1],
+                    threshold=previous_high,
+                    column_index=2,
+                )
+                is_threshold_broken = previous_high < float(trend_interval_data[-1][2])
+                time_diff = (
+                    len(trend_data_high_low) - high_index
+                    if high_index is not None
+                    else None
+                )
+
+            elif position == 2:  # SHORT
+                previous_low = self._get_previous_low(
+                    kline_data=trend_interval_data[:-1]
+                )
+                low_index = self._get_row_indices_by_threshold(
+                    kline_data=trend_interval_data[:-1],
+                    threshold=previous_low,
+                    column_index=3,
+                )
+                is_threshold_broken = previous_low > float(trend_interval_data[-1][2])
+                time_diff = (
+                    len(trend_data_high_low) - low_index
+                    if low_index is not None
+                    else 0
+                )
+        except:
+            print(trend_interval_data)
+            print(ticker)
+            raise ValueError("ERROR")
+
+        return position, trend_score, is_continuous, time_diff, is_threshold_broken
 
 
-
-    def validate_kline_data(self, intervals:list, kline_data:dict):
-        for interval in intervals:
-            if not kline_data.get(interval):
-                return False
-        return True
-    
     
         

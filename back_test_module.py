@@ -306,8 +306,8 @@ class Wallet:
 
 
 if __name__ == "__main__":
-    directory = "/Users/cjupit/Desktop/DataStore/KlineData"
-    kline = os.path.join(directory, "BTCUSDT.json")
+    directory = "/Users/cjupit/Documents/GitHub/DataStore"
+    kline = os.path.join(directory, "ADAUSDT.json")
     index = os.path.join(directory, "BTCUSDT_index.json")
     path_trade_history = "/Users/cjupit/Desktop/trade_history.json"
     # index = "/Users/nnn/GitHub/DataStore/BTCUSDT_index.json"

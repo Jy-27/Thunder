@@ -36,13 +36,13 @@ OHLCV_INTERVALS: Final[list] = [
         "1m",
         "3m",
         "5m",
-        "15m",
-        "30m",
+        # "15m",
+        # "30m",
         "1h",
-        "2h",
-        "4h",
-        "6h",
-        "8h",
+        # "2h",
+        # "4h",
+        # "6h",
+        # "8h",
         "12h",
         "1d",
         "3d",
@@ -78,12 +78,12 @@ if __name__ == "__main__":
     obj_spot = SpotDataControl()
     # intervals = [interval for interval in obj.KLINE_INTERVALS[:9]]
     intervals = OHLCV_INTERVALS
-    tickers = ["btcusdt"]#, "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "trxusdt"]
+    tickers = ["btcusdt", "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "trxusdt", "adausdt"]
 
     directory = ['spot', 'futures']
 
     end_date = utils._convert_to_datetime("2024-11-23 12:00:00")
-    start_date = utils._convert_to_datetime("2024-1-1 00:00:00")
+    start_date = utils._convert_to_datetime("2024-8-1 00:00:00")
 
     for ticker in tickers:
         data = {}  # 각 티커마다 초기화

@@ -369,7 +369,7 @@ def _save_to_json(file_path: str, new_data: Any, overwrite: bool = False):
     # 덮어쓰기 여부에 따라 동작
     if overwrite:
         # 덮어쓰는 경우: 기존 데이터를 무시하고 새 데이터로 파일 작성
-        data_to_save = [new_data] if not isinstance(new_data, list) else new_data
+        data_to_save = new_data if not isinstance(new_data, list) else new_data
     else:
         # 누적 저장의 경우: 기존 데이터를 로드하거나 빈 리스트 초기화
         if os.path.exists(file_path):

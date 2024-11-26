@@ -603,10 +603,7 @@ if __name__ == "__main__":
             ins_analy.kline_data = ins_kline_ex.get_kline_data_by_range(end_index=idx, step=4320)
             # print(len(ins_analy.kline_data.get(symbol, 0)))
             print(symbol)
-            result = ins_analy.case1_conditions(ticker=symbol)
-            if result[2] and result[4]:
-                print(f'{symbol} - {result}')
-            time.sleep(0.1)
+            result = ins_analy.scenario_1(symbol=symbol)
             utils._std_print(result)
             
     print('END')

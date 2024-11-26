@@ -18,15 +18,21 @@ from typing import List, Dict, Optional, Union, Any, Tuple
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self, symbols: list):
-        self.symbols = symbols
+    def __init__(self):#, symbols: list):
+        self.symbols = []
         self.kline_data = {}
         self.intervals = []
+        self.OHLCV_COLUMNS: Final[List[str]] = [
+            "Open Time", "Open", "High", "Low", "Close", "Volume",
+            "Close Time", "Quote Asset Volume", "Number of Trades",
+            "Taker Buy Base Asset Volume", "Taker Buy Quote Asset Volume", "Ignore"
+            ]
+        self.ACTIVE_COLUMNS_INDEX: List[int] = [1,2,3,4,5,6,8,9,10,11]
     # kline 데이터의 자료를 리터럴 변환
     
     # 첫번재 작업
     # 중첩 kline data의 [symbol] interval값들을 array로 변환 후 dict로 반환한다.
-    def convert_kline_array(self, kline_data_lv1: dict, symbol:str):
+    def __convert_kline_array(self, symbol:str, interval:str):
         """
         1. 기능 : 중첩 kline data의 interval값들을 array로 변환 후 dict로 변환한다. 
         2. 매개변수
@@ -34,13 +40,13 @@ class AnalysisManager:
             2) symbol : target symbol
         """
         
-        nested_kline = kline_data.get(symbol)
-        
-        result = {}
-        for _, data in self.kline_data.items():
-            for interval, nested_data in data.items():
-                result[interval] = np.array(object=kline_data_lv1, dtype=float)
-        return result
+        nested_kline = self.kline_data.get(symbol)
+        if not isinstance(nested_kline, dict):
+            raise ValueError(f'데이터가 유효하지 않음.')
+        interval_data = nested_kline.get(interval)
+        if not isinstance(interval_data, list) and not interval_data:
+            raise ValueError(f'데이터가 유효하지 않음.')
+        return np.array(object=interval_data, dtype=float)
         
     # kline데이터의 'high'값의 max값을 반환한다. (전고점))
     def __get_previous_high(self, kline_data_lv2: List[Union[str, int]]) -> float:
@@ -106,112 +112,79 @@ class AnalysisManager:
         #윗꼬리 길이, 아래꼬리 길이, 몸통길이, 전체 길이.
         return (upper_wick_length, lower_wick_length, body_length, total_length)
     
-    
-    
-    
-    
-    
-    
-    
+    # np.array 데이터에서 지정 index위치의 증감 현황과 포지션 상태를 반환한다.
+    def __trade_score(self, col_idx:int, kline_data_lv2) -> Tuple[bool, int]:
+        column_values = kline_data_lv2[::-1, col_idx]
+        """
+        1. 기능 : np.array의 값의 연속성을 계산하고 현재 등락 상태를 반환한다.
+        2. 매개변서
+            1) col_idx : 자료의 column_index값
+            2) kline_data_lv2 : kline_data.get(interval)
+        """        
+        diffs = np.diff(column_values)
+        is_decreasing = diffs < 0
+        long_point = np.argmax(~is_decreasing) + 1 if np.any(~is_decreasing) else len(column_values)
         
-    # interval별 연속 상승/하락에 대한 값을 연산 반환한다.
-    def _compute_trend_scores(
-        self, kline_data: List[List[Union[str, int]]]
-    ) -> List[List[int]]:
-        """
-        기능: OHLCV 데이터에서 LONG, SHORT 연속성 점수와 캔들 유효성을 계산한다.
-
-        매개변수:
-            - kline_data (List): kline 데이터 리스트.
-            [timestamp, open, high, low, close, volume] 형식의 데이터를 가정.
-
-        반환값:
-            - trend_data (List): [Long, Short, Continuity, Valid Candle Count] 형태의 점수 리스트.
-        """
-        trend_data = []  # 결과 데이터를 저장
-        target_candle_shadow_ratio = (
-            0.4  # 위아래 꼬리의 합계가 몸통 대비 40% 이하여야 함.
-        )
-
-        for index, data in enumerate(kline_data):
-            if index == 0:
-                # 첫 번째 데이터 초기화
-                trend_data.append([0, 0, 0, 0])
-                continue
-
-            # 현재 데이터와 이전 트렌드 정보 가져오기
-            prev_data = trend_data[index - 1]
-            prev_continuity = prev_data[2]
-            prev_valid_candles = prev_data[3]
-
-            current_open = float(data[1])
-            current_close = float(data[4])
-
-            # 캔들 길이 계산 (몸통, 위/아래 꼬리)
-            candle = self._candle_lengths(data)
-            shadow_ratio = (
-                (candle[0] + candle[1]) / candle[3] if candle[3] != 0 else 0
-            )  # 꼬리 비율 계산
-
-            # 상승(bullish), 하락(bearish) 여부 판단
-            is_bullish = current_open < current_close
-            is_bearish = current_open > current_close
-
-            # 연속성 계산 (Continuity)
-            if is_bullish:
-                continuity_count = prev_continuity + 1 if prev_data[0] else 1
-            elif is_bearish:
-                continuity_count = prev_continuity + 1 if prev_data[1] else 1
-            else:
-                continuity_count = 0
-
-            # 유효 캔들 판단 및 유효 캔들 수 계산
-            is_valid_candle = shadow_ratio <= target_candle_shadow_ratio
-            valid_candle_count = (
-                prev_valid_candles + 1
-                if is_valid_candle and continuity_count > 1
-                else int(is_valid_candle)
-            )
-
-            # LONG/SHORT 점수 계산
-            long_score = int(is_bullish)
-            short_score = int(is_bearish)
-
-            # 결과 저장
-            trend_data.append(
-                [long_score, short_score, continuity_count, valid_candle_count]
-            )
-
-        return trend_data
-
-
-
+        is_decreasing = diffs > 0
+        short_point = np.argmax(~is_decreasing) + 1 if np.any(~is_decreasing) else len(column_values)
+        
+        if long_point > short_point:
+            return (True, long_point)
+        else:
+            return (False, short_point)
+        
     # kline에서 특정값의 인덱스를 찾는다.
-    def _get_row_indices_by_threshold(
+    def __get_row_indices_by_threshold(
         self,
-        kline_data: List[List[Union[str, int]]],
+        kline_data_lv1: List[List[Union[str, int]]],
         threshold: float,
-        column_index: int,
+        col_idx: int,
     ) -> Optional[int]:
         """
         1. 기능 : kline에서 특정값의 인덱스를 찾는다.
         2. 매개변수
             1) klline_data : 찾고자하는 데이터의 interval.get()
             2) threshold : 찾고자하는 값
-            3) column_index : 자료의 column_index값
+            3) col_idx : 자료의 column_index값
         """
 
         # kline_data를 numpy 배열로 변환
         np_array = np.array(kline_data, dtype=float)
 
         # 주어진 열에서 기준값과 정확히 일치하는 행의 인덱스 찾기
-        row_indices = np.where(np_array[:, column_index] == threshold)[0]
+        row_indices = np.where(np_array[:, col_idx] == threshold)[0]
 
         # 조건을 만족하는 첫 번째 인덱스를 반환하거나, 없으면 None 반환
         return int(row_indices[0]) if row_indices.size > 0 else None
 
+    def scenario_1(self, symbol: str):
+        ticker_data = self.kline_data.get(symbol)
+        if not isinstance(ticker_data, dict):
+            pass
+        
+        total_signal = []
+        total_score = []
+        
+        # 기초데이터 생성.
+        data_convert = self.__convert_kline_array(kline_data=self.kline_data,
+                                                  symbol=symbol)
+        for idx in self.ACTIVE_COLUMNS_INDEX:
+            signal, score = self.__trade_score(col_idx=idx, kline_data_lv2=data_convert)
+            total_score.append(score)
+            total_signal.append(signal)
+        return (total_signal, total_score)
+        
+        
 
-    # def _get_row_indices_by_threshold_range(
+
+
+
+
+
+
+
+
+    # def _get_row_idices_by_threshold_range(
     #     self,
     #     kline_data: List[List[Union[str, int]]],
     #     threshold_min: float,

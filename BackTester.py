@@ -3,6 +3,7 @@ import utils
 import Analysis
 import time
 import numpy as np
+from numpy.typing import NDArray
 import TradingDataManager
 import asyncio
 from typing import Dict, List, Union, Any, Optional
@@ -277,7 +278,7 @@ class IntervalKlineExtractor:
     # 기간별 각 interval값을 raw데이터와 동일한 형태로 반환한다.
     def get_kline_data_by_range(
         self, end_index: int, step: int = 4320
-    ) -> Dict[str, List[List[Union[int, str]]]]:
+    ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
         """
         1. 기능 : 기간별 데이터를 추출한다.
         2. 매개변수
@@ -286,28 +287,32 @@ class IntervalKlineExtractor:
                 - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
         """
         result = {}
-        for symbol in self.symbols:
-            target_kline_data = self.kline_data.get(symbol)
-            
-            start_index = end_index - step
-            if start_index < 0:
-                start_index = 0
-            start_indices = self.index_data[start_index]
-            end_indices = self.index_data[end_index]
-
-            start_mapped_intervals = self.__map_intervals_to_indices(
-                index_values=start_indices
-            )
-            end_mapped_intervals = self.__map_intervals_to_indices(index_values=end_indices)
-
+        
+        for symbol, kline_data_symbol in self.kline_data.items():
             result[symbol] = {}
-            for interval in self.intervals:
-                interval_data = target_kline_data.get(interval)
+            for interval, kline_data_interval in kline_data_symbol.items():
+                #intervals 리스트에 없는 interval은 제외한다.
+                if not interval in self.intervals:
+                    continue
+                start_index = end_index - step
+                if start_index < 0:
+                    start_index = 0
+                start_indices = self.index_data[start_index]
+                end_indices = self.index_data[end_index]
+
+                
+                start_mapped_intervals = self.__map_intervals_to_indices(
+                    index_values=start_indices
+                )
+                end_mapped_intervals = self.__map_intervals_to_indices(index_values=end_indices)
+
+
                 start_index_value = start_mapped_intervals.get(interval)
                 end_index_value = end_mapped_intervals.get(interval)
 
-                sliced_data = interval_data[start_index_value:end_index_value]
-                result[symbol][interval] = sliced_data
+                sliced_data = kline_data_interval[start_index_value:end_index_value]
+                data_np_array = np.array(object=sliced_data, dtype=float)
+                result[symbol][interval] = data_np_array
         return result
 
 
@@ -524,86 +529,191 @@ class Wallet:
         }
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     
-    #paramas 정보사항
+#     #paramas 정보사항
+#     market = 'futures'
+#     start_date = '2024-1-1 00:00:00'
+#     end_date = '2024-11-26 00:00:00'
+#     symbols = ['BTCUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'SOLUSDT']
+#     directory = '/Users/nnn/GitHub/DataStore'
+#     suffix = 'index.json'
+#     # intervals = ['1m', '3m', '5m', '1d', '3d']
+#     intervals = ['1m', '5m', '1h', '3d']
+    
+#     # dummy_data 저장 위치
+#     path_data = os.path.join(directory, 'merge.json')
+#     # index 매칭 데이터 저장 위치
+#     path_idx = os.path.join(directory, 'indices_data.json')
+    
+#     #class instance
+#     # dummy data 수집
+#     ins_generator = DummyDataGenerator(market_type=market)
+#     # dummy data index매칭
+#     ins_indices = MatchingIndicesGenerator()
+#     # 주문 발생시 신호 기록
+#     ins_signal = SignalRecorder()
+#     # 손절 또는 매각 가격 계산
+#     ins_stopper = TradeStopper()
+#     # 지갑정보 관련
+#     ins_wallet = Wallet()
+    
+#     # 현재 시장 분석툴
+#     ins_analy = Analysis.AnalysisManager()
+    
+#     # ticker 정보를 속성값에 저장한다.
+#     ins_analy.symbols = symbols
+    
+#     # interval 값을 속성값에 저장한다.
+#     ins_analy.intervals = intervals
+    
+    
+    
+    
+#     # symbol별 데이터 수집 및 병합, 저장처리 (기존에 처리한 자료있으면 누락해도 됨.)
+#     def data_sync():
+#         for symbol in symbols:
+#             symbol = symbol.upper()
+#             path = os.path.join(directory, symbol+"_"+suffix)
+#             data = asyncio.run(ins_generator.get_historical_kline(symbol=symbol,
+#                                                                 start_date=start_date,
+#                                                                 end_date=end_date,
+#                                                                 intervals=intervals))
+#             utils._save_to_json(file_path=path, new_data=data, overwrite=True)
+            
+#         merge_data = ins_generator.merge_json_files(directory_path=directory, file_suffix=suffix)
+#         utils._save_to_json(file_path=path_data, new_data=merge_data, overwrite=True)
+
+#         # dummy_data의 interval간 index 매칭 및 저장
+#         indices_data = ins_indices.calculate_matching_indices(merge_data)
+#         utils._save_to_json(file_path=path_idx, new_data=indices_data, overwrite=True)
+        
+#         # symbol별 데이터 로드, 위 코드 실행시 누락처리 가능.
+    
+#     # data_sync()
+    
+#     print('merge_data 로딩 시작.')
+#     merge_data = utils._load_json(file_path=path_data)
+#     print(f'merge_data 로딩완료 - {len(merge_data)}')
+#     print('indices_data 로딩시작.')
+#     indices_data = utils._load_json(file_path=path_idx)
+#     print(f'indices_data 로딩완료 - {len(indices_data)}')
+#     #class instance 추가 선언 (속성값 kline_data, index_data필요하므로...)
+#     ins_kline_ex = IntervalKlineExtractor(kline_data=merge_data,
+#                                           index_data=indices_data,
+#                                           symbols=symbols)
+
+    
+#     # kline 시뮬레이션에 필요한 for문 range에 들어갈 값 계산 (데이터의 길이)
+#     data_length = ins_kline_ex.get_data_length()
+    
+#     # 시뮬레이션 시작
+#     # 데이터의 index값을 발생한다.
+    
+#     # MAX interval 분단위로 환산
+#     data_range = 4320
+    
+#     n = 0 
+#     for idx in range(data_length):
+#         i = idx + data_range
+#         # 데이터에 적용할 symbol값을 발생한다.
+#         for symbol in symbols:
+#             symbol = symbol.upper()
+#             # index와 symbol값을 대입하여 값을 반환 받는다.
+#             ins_analy.kline_data = ins_kline_ex.get_kline_data_by_range(end_index=i, step=data_range)
+#             data_status = ins_analy.describe_data_state()
+#             if not data_status.get('status'):
+#                 utils._std_print(i)
+#                 continue
+#             # convert_data = ins_analy.convert_kline_array()
+#             scenario_1 = ins_analy.scenario_1(symbol=symbol)#, convert_data=convert_data)
+#             # result = ins_analy.scenario_1(symbol=symbol)
+#             if scenario_1[2]>2 and scenario_1[3]>2 and scenario_1[4]>0 and scenario_1[-1]:
+#                 index_ = indices_data[i][0]
+#                 data_ = merge_data[intervals[0]][index_]
+#                 print(symbol, scenario_1[0], data_)
+#             utils._std_print(i)
+from concurrent.futures import ThreadPoolExecutor
+import os
+import asyncio
+
+# 데이터 동기화 및 준비 함수
+def data_sync():
+    for symbol in symbols:
+        symbol = symbol.upper()
+        path = os.path.join(directory, symbol + "_" + suffix)
+        data = asyncio.run(ins_generator.get_historical_kline(
+            symbol=symbol, start_date=start_date, end_date=end_date, intervals=intervals))
+        utils._save_to_json(file_path=path, new_data=data, overwrite=True)
+
+    merge_data = ins_generator.merge_json_files(directory_path=directory, file_suffix=suffix)
+    utils._save_to_json(file_path=path_data, new_data=merge_data, overwrite=True)
+
+    indices_data = ins_indices.calculate_matching_indices(merge_data)
+    utils._save_to_json(file_path=path_idx, new_data=indices_data, overwrite=True)
+
+# 심볼별 시뮬레이션 처리 함수
+def process_symbol(symbol, i, kline_cache):
+    symbol = symbol.upper()
+    ins_analy.kline_data = kline_cache[i]
+    data_status = ins_analy.describe_data_state()
+
+    if not data_status.get('status'):
+        return None
+
+    scenario_1 = ins_analy.scenario_1(symbol=symbol)
+    if scenario_1[-1] and scenario_1[2] > 2 and scenario_1[3] > 2 and scenario_1[4] > 0:
+        index_ = indices_data[i][0]
+        data_ = merge_data[intervals[0]][index_]
+        return (symbol, scenario_1[0], data_)
+
+    return None
+
+# 메인 실행 코드
+if __name__ == "__main__":
+    # 파라미터 설정
     market = 'futures'
     start_date = '2024-1-1 00:00:00'
     end_date = '2024-11-26 00:00:00'
     symbols = ['BTCUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'SOLUSDT']
-    directory = '/Users/cjupit/Documents/GitHub/DataStore'
+    directory = '/Users/nnn/GitHub/DataStore'
     suffix = 'index.json'
-    # intervals = ['1m', '3m', '5m', '1d', '3d']
     intervals = ['1m', '5m', '1h', '3d']
-    
-    # dummy_data 저장 위치
+
     path_data = os.path.join(directory, 'merge.json')
-    # index 매칭 데이터 저장 위치
     path_idx = os.path.join(directory, 'indices_data.json')
-    
-    #class instance
-    # dummy data 수집
+
     ins_generator = DummyDataGenerator(market_type=market)
-    # dummy data index매칭
     ins_indices = MatchingIndicesGenerator()
-    # 주문 발생시 신호 기록
-    ins_signal = SignalRecorder()
-    # 손절 또는 매각 가격 계산
-    ins_stopper = TradeStopper()
-    # 지갑정보 관련
-    ins_wallet = Wallet()
-    
-    # 현재 시장 분석툴
     ins_analy = Analysis.AnalysisManager()
-    # ticker 정보를 속성값에 저장한다.
-    ins_analy.tickers = symbols
-    
-    # interval 값을 속성값에 저장한다.
+    ins_analy.symbols = symbols
     ins_analy.intervals = intervals
-    
-    
-    
-    # # symbol별 데이터 수집 및 병합, 저장처리 (기존에 처리한 자료있으면 누락해도 됨.)
-    # for symbol in symbols:
-    #     symbol = symbol.upper()
-    #     path = os.path.join(directory, symbol+"_"+suffix)
-    #     data = asyncio.run(ins_generator.get_historical_kline(symbol=symbol,
-    #                                                         start_date=start_date,
-    #                                                         end_date=end_date,
-    #                                                         intervals=intervals))
-    #     utils._save_to_json(file_path=path, new_data=data, overwrite=True)
-        
-    # merge_data = ins_generator.merge_json_files(directory_path=directory, file_suffix=suffix)
-    # utils._save_to_json(file_path=path_data, new_data=merge_data, overwrite=True)
 
-    # # dummy_data의 interval간 index 매칭 및 저장
-    # indices_data = ins_indices.calculate_matching_indices(merge_data)
-    # utils._save_to_json(file_path=path_idx, new_data=indices_data, overwrite=True)
-    
-    # symbol별 데이터 로드, 위 코드 실행시 누락처리 가능.
+    # 데이터 로드
+    print('merge_data 로딩 시작.')
     merge_data = utils._load_json(file_path=path_data)
+    print(f'merge_data 로딩완료 - {len(merge_data)}')
+    print('indices_data 로딩시작.')
     indices_data = utils._load_json(file_path=path_idx)
-    
-    #class instance 추가 선언 (속성값 kline_data, index_data필요하므로...)
-    ins_kline_ex = IntervalKlineExtractor(kline_data=merge_data,
-                                          index_data=indices_data,
-                                          symbols=symbols)
+    print(f'indices_data 로딩완료 - {len(indices_data)}')
 
-    
-    # kline 시뮬레이션에 필요한 for문 range에 들어갈 값 계산 (데이터의 길이)
+    ins_kline_ex = IntervalKlineExtractor(kline_data=merge_data, index_data=indices_data, symbols=symbols)
     data_length = ins_kline_ex.get_data_length()
-    
-    # # 시뮬레이션 시작
-    # # 데이터의 index값을 발생한다.
+    data_range = 4320
+
+    kline_cache = {}
+
+    print("시뮬레이션 시작")
     for idx in range(data_length):
-        # 데이터에 적용할 symbol값을 발생한다.
-        for symbol in symbols:
-            symbol = symbol.upper()
-            # index와 symbol값을 대입하여 값을 반환 받는다.
-            ins_analy.kline_data = ins_kline_ex.get_kline_data_by_range(end_index=idx, step=4320)
-            # print(len(ins_analy.kline_data.get(symbol, 0)))
-            print(symbol)
-            result = ins_analy.scenario_1(symbol=symbol)
-            utils._std_print(result)
-            
-    print('END')
+        i = idx + data_range
+        if i not in kline_cache:
+            kline_cache[i] = ins_kline_ex.get_kline_data_by_range(end_index=i, step=data_range)
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(process_symbol, symbol, i, kline_cache) for symbol in symbols]
+            for future in futures:
+                result = future.result()
+                if result:
+                    print(*result)
+
+        utils._std_print(i)

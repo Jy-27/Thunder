@@ -188,32 +188,39 @@ class AnalysisManager:
 
     # np.array 데이터에서 지정 index위치의 증감 현황과 포지션 상태를 반환한다.
     def __get_trade_score(self, col_idx: int, kline_data_interval) -> Tuple[bool, int]:
-        column_values = kline_data_interval[::-1, col_idx]
         """
         1. 기능 : np.array의 값의 연속성을 계산하고 현재 등락 상태를 반환한다.
-        2. 매개변서
-            1) col_idx : 자료의 col_idx값
+        2. 매개변수:
+            1) col_idx : 자료의 열 인덱스
             2) kline_data_interval : kline_data.get(interval)
         """
-        diffs = np.diff(column_values)
-        is_decreasing = diffs < 0
-        long_point = (
-            np.argmax(~is_decreasing) + 1
-            if np.any(~is_decreasing)
+        # 열 값 추출 (역순으로)
+        column_values = kline_data_interval[::-1, col_idx]
+        adjustment_offset = 1
+
+        # 연속적인 차이를 계산
+        value_differences = np.diff(column_values)
+        
+        # 상승과 하락 상태를 확인
+        is_rising = value_differences < 0
+        rising_streak = (
+            np.argmax(~is_rising) + 1
+            if np.any(~is_rising)
             else len(column_values)
         )
 
-        is_decreasing = diffs > 0
-        short_point = (
-            np.argmax(~is_decreasing) + 1
-            if np.any(~is_decreasing)
+        is_falling = value_differences > 0
+        falling_streak = (
+            np.argmax(~is_falling) + 1
+            if np.any(~is_falling)
             else len(column_values)
         )
 
-        if long_point > short_point:
-            return (1, long_point)
-        elif long_point < short_point:
-            return (2, short_point)
+        # 비교하여 결과 반환
+        if rising_streak > falling_streak:
+            return (1, rising_streak - adjustment_offset)
+        elif rising_streak < falling_streak:
+            return (2, falling_streak - adjustment_offset)
         else:
             return (0, 0)
 
@@ -239,9 +246,9 @@ class AnalysisManager:
         kline_data_1h = convert_data.get(symbol).get(target_interval[1])
 
         # 종가 연속성 및 포지션 체크
-        close_price_score, price_bool = self.__get_trade_score(col_idx=4, kline_data_interval=kline_data_5m)
+        price_bool, close_price_score = self.__get_trade_score(col_idx=4, kline_data_interval=kline_data_5m)
         # 거래대금 연속성 및 포지션 체크
-        value_score, value_bool = self.__get_trade_score(col_idx=10, kline_data_interval=kline_data_5m)
+        value_bool, value_score = self.__get_trade_score(col_idx=10, kline_data_interval=kline_data_5m)
         
         # mode 초기값 None으로 처리하여 연속성 데이터 검토시 (0, 0)결과에 대비한다.
         mode = None
@@ -281,3 +288,4 @@ class AnalysisManager:
         wick_bool = all(result_bool)
         scenario_code = 1
         return [scenario_code, position_signal, close_price_score, value_score, time_diff, wick_bool]
+    

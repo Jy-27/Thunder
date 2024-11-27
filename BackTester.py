@@ -639,6 +639,7 @@ import asyncio
 
 # 데이터 동기화 및 준비 함수
 def data_sync():
+    global merge_data, indices_data
     for symbol in symbols:
         symbol = symbol.upper()
         path = os.path.join(directory, symbol + "_" + suffix)
@@ -653,18 +654,22 @@ def data_sync():
     utils._save_to_json(file_path=path_idx, new_data=indices_data, overwrite=True)
 
 # 심볼별 시뮬레이션 처리 함수
-def process_symbol(symbol, i, kline_cache):
+def process_symbol(symbol, i, kline_data):
     symbol = symbol.upper()
-    ins_analy.kline_data = kline_cache[i]
+    ins_analy.kline_data = kline_data
     data_status = ins_analy.describe_data_state()
-
+    
     if not data_status.get('status'):
         return None
 
     scenario_1 = ins_analy.scenario_1(symbol=symbol)
-    if scenario_1[-1] and scenario_1[2] > 2 and scenario_1[3] > 2 and scenario_1[4] > 0:
+    utils._std_print(scenario_1)
+
+    # 구매 신호 조건
+    if scenario_1[2] >= 3 and scenario_1[3]>=3 and scenario_1[-1]:# and scenario_1[2]>=3 and scenario_1[4] > 0:#  and (scenario_1[2] > 2 or scenario_1[3]) > 2 and scenario_1[4] > 0:
+        print(scenario_1)
         index_ = indices_data[i][0]
-        data_ = merge_data[intervals[0]][index_]
+        data_ = merge_data[symbol][intervals[0]][index_]
         return (symbol, scenario_1[0], data_)
 
     return None
@@ -673,12 +678,12 @@ def process_symbol(symbol, i, kline_cache):
 if __name__ == "__main__":
     # 파라미터 설정
     market = 'futures'
-    start_date = '2024-1-1 00:00:00'
-    end_date = '2024-11-26 00:00:00'
-    symbols = ['BTCUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'SOLUSDT']
+    start_date = '2024-11-18 00:00:00'
+    end_date = '2024-11-24 00:00:00'
+    symbols = ['NOTUSDT', 'TIAUSDT', 'FETUSDT', 'XLMUSDT', 'SANDUSDT', 'DOTUSDT', 'ALGOUSDT']
     directory = '/Users/nnn/GitHub/DataStore'
     suffix = 'index.json'
-    intervals = ['1m', '5m', '1h', '3d']
+    intervals = ['1m', '5m', '1h']#, '3d']
 
     path_data = os.path.join(directory, 'merge.json')
     path_idx = os.path.join(directory, 'indices_data.json')
@@ -688,6 +693,8 @@ if __name__ == "__main__":
     ins_analy = Analysis.AnalysisManager()
     ins_analy.symbols = symbols
     ins_analy.intervals = intervals
+
+    # data_sync()
 
     # 데이터 로드
     print('merge_data 로딩 시작.')
@@ -699,21 +706,16 @@ if __name__ == "__main__":
 
     ins_kline_ex = IntervalKlineExtractor(kline_data=merge_data, index_data=indices_data, symbols=symbols)
     data_length = ins_kline_ex.get_data_length()
-    data_range = 4320
-
-    kline_cache = {}
+    data_range = 60 * 24
 
     print("시뮬레이션 시작")
-    for idx in range(data_length):
+    for idx in range(data_length, ):
         i = idx + data_range
-        if i not in kline_cache:
-            kline_cache[i] = ins_kline_ex.get_kline_data_by_range(end_index=i, step=data_range)
-
+        kline_data = ins_kline_ex.get_kline_data_by_range(end_index=i, step=data_range)
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [executor.submit(process_symbol, symbol, i, kline_cache) for symbol in symbols]
+            futures = [executor.submit(process_symbol, symbol, i, kline_data) for symbol in symbols]
             for future in futures:
                 result = future.result()
                 if result:
                     print(*result)
-
-        utils._std_print(i)
+        # utils._std_print(i)

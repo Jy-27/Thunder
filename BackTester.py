@@ -681,7 +681,7 @@ if __name__ == "__main__":
     start_date = '2024-11-18 00:00:00'
     end_date = '2024-11-24 00:00:00'
     symbols = ['NOTUSDT', 'TIAUSDT', 'FETUSDT', 'XLMUSDT', 'SANDUSDT', 'DOTUSDT', 'ALGOUSDT']
-    directory = '/Users/nnn/GitHub/DataStore'
+    directory = '/Users/cjupit/Documents/GitHub/DataStore'
     suffix = 'index.json'
     intervals = ['1m', '5m', '1h']#, '3d']
 
@@ -694,22 +694,22 @@ if __name__ == "__main__":
     ins_analy.symbols = symbols
     ins_analy.intervals = intervals
 
-    # data_sync()
+    data_sync()
 
     # 데이터 로드
-    print('merge_data 로딩 시작.')
-    merge_data = utils._load_json(file_path=path_data)
-    print(f'merge_data 로딩완료 - {len(merge_data)}')
-    print('indices_data 로딩시작.')
-    indices_data = utils._load_json(file_path=path_idx)
-    print(f'indices_data 로딩완료 - {len(indices_data)}')
+    # print('merge_data 로딩 시작.')
+    # merge_data = utils._load_json(file_path=path_data)
+    # print(f'merge_data 로딩완료 - {len(merge_data)}')
+    # print('indices_data 로딩시작.')
+    # indices_data = utils._load_json(file_path=path_idx)
+    # print(f'indices_data 로딩완료 - {len(indices_data)}')
 
     ins_kline_ex = IntervalKlineExtractor(kline_data=merge_data, index_data=indices_data, symbols=symbols)
-    data_length = ins_kline_ex.get_data_length()
+    # data_length = ins_kline_ex.get_data_length()
     data_range = 60 * 24
 
     print("시뮬레이션 시작")
-    for idx in range(data_length, ):
+    for idx in range(0, len(indices_data)-data_range, 1):
         i = idx + data_range
         kline_data = ins_kline_ex.get_kline_data_by_range(end_index=i, step=data_range)
         with ThreadPoolExecutor(max_workers=4) as executor:

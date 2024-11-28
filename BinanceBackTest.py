@@ -84,8 +84,9 @@ class DataManager:
         self.ins_spot = SpotDataControl()
         self.ins_futures = FuturesDataControl()
 
-        self.real_data_file = "real_time_data.json"
-        self.indices_file = "real_time_data.npy"
+        self.storeage = "DataStore"
+        self.real_time_data_file = "real_time_data.npy"
+        self.indices_file = "indices_data.json"
         self.kline_data_file = "kline_data.json"
 
     # 현물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
@@ -135,11 +136,11 @@ class DataManager:
     # 선물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
     async def get_futures_kilne_data(
         self,
-        symbols: Optional[str] = None,
+        symbols: Optional[Union[str, list]] = None,
         intervals: Optional[Union[List[str], str]] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-    ) -> Dict[str, List]:
+    ) -> Dict[str, Dict[str, List[List[Union[str, int]]]]]:
         """
         1. 기능 : symbol별 입력된 interval값 전체를 수신 및 반환한다.
         2. 매개변수
@@ -149,6 +150,11 @@ class DataManager:
             4) save_directory_path : 저장할 파일 위치 (파일명 or 전체 경로)
             5) intervals : 수신하고자 하는 데이터의 interval 구간
         """
+
+        # target_symbols 타입힌트 오류 방지용
+        symbols = symbols or []
+        if isinstance(symbols, str):
+            symbols = [symbols]
 
         # 현재 매개변수 입력값이 None일경우 속성값으로 대체 (별도 계산필요시 적용 위함.)
         target_symbols = symbols or self.symbols
@@ -183,7 +189,7 @@ class DataManager:
     def generate_real_time_kline_data(
         self,
         indices_data: List[List[int]],
-        kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
+        kline_data: Dict[str, Dict[str, List[Union[Any]]]],
     ):
         """
         1. 기능 : 수신된 각 symbol별, interval별 수신된 데이터를 1분봉 데이터 기준으로 리얼 데이터를 생성한다.
@@ -455,8 +461,13 @@ class DataManager:
         2. 매개변수
             1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
         """
-        # directory가 None일 경우 현재폴더 위치로 지정
-        target_directory = directory or os.getcwd()
+        # directory가 None일 경우 상위폴더 위치로 지정
+        target_directory = os.path.join(
+            directory or os.path.dirname(os.getcwd()), self.storeage
+        )
+
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory)
 
         # Data 순차적 로드
         kline_data = await self.get_futures_kilne_data(symbols=self.symbols)
@@ -471,19 +482,43 @@ class DataManager:
         # 각 데이터들 저장할 path 지정
         kline_path = os.path.join(target_directory, self.kline_data_file)
         indices_path = os.path.join(target_directory, self.indices_file)
-        real_time_path = os.path.join(target_directory, self.real_data_file)
+        real_time_path = os.path.join(target_directory, self.real_time_data_file)
 
         # Data 저장
         utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
         utils._save_to_json(
             file_path=indices_path, new_data=indices_data, overwrite=True
         )
-        # utils._save_to_json(file_path=real_time_path, new_data=real_time_data, overwrite=True)
+        # utils._save_to_json(file_path=real_time_path, new_data=real_time_data_file, overwrite=True)
         # real_time_path는 np.array타입이므로 별도 저장.
         np.save(real_time_path, real_time_data)
 
         # Tuple 형태로 자료 반환.
         return (range_length_data, real_time_data)
+
+    # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
+    async def read_data_run(self, download_if_missing: bool = False):
+        """
+        1. 기능 : 본 class의 기능을 사용하기 용이하도록 통합적용. 데이터를 불러오는 함수이며, 데이터가 미존재시 신규 다운로드 하는 기능 추가.
+        2. 매개변수
+            1) download_if_missing : True일 경우 파일없을시 신규 다운로드.
+        """
+
+        # 불러올 데이터의 초기부분 주소명 확보
+        parent_folder = os.path.dirname(os.getcwd())
+        # indices_path 주소 생성
+        indices_path = os.path.join(self.storeage, self.indices_file)
+        real_time_path = os.path.join(self.storeage, self.real_time_data_file)
+
+        # 항목별 해당주소에 파일 존재여부 확인.
+        for path in [indices_path, real_time_path]:
+            if not os.path.exists(path=path):
+                # 만약 데이터가 없다면 신규 다운로드
+                if download_if_missing:
+                    return await self.download_data_run()
+                # 만약 데이터가 없다면 error 발생
+                else:
+                    raise ValueError(f"path 정보가 유효하지 않음 - {path}")
 
 
 class WasteTypeCode:

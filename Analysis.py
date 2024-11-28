@@ -48,7 +48,7 @@ class AnalysisManager:
 
     # 첫번째, 필수사항
     # 검토할 데이터를 연산이 용이하도록 np.array처리한다.
-    def convert_kline_array(self) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+    def convert_kline_array(self, kline_data:Optional[Dict[str, Dict[str, List[Union[int, str]]]]]=None) -> Dict[str, Dict[str, NDArray[np.float64]]]:
         """
         1. 기능 : 데이터를 연산하기 전에 self.kline_data를 numpy.array타입으로 변환한다.
         2. 매개변수 : 해당없음.
@@ -57,8 +57,10 @@ class AnalysisManager:
             24.11.27 : data를 parameter로 지정할까 고민했었으나, 불필요하다는 결론을 내림.
 
         """
+        if kline_data is None:
+            kline_data = self.kline_data
         result = {}
-        for symbol, kline_data_symbol in self.kline_data.items():
+        for symbol, kline_data_symbol in kline_data.items():
             result[symbol] = {}
             for interval, kline_data_interval in kline_data_symbol.items():
                 result[symbol][interval] = np.array(

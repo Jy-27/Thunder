@@ -290,6 +290,8 @@ class IntervalKlineExtractor:
             1) start_index : index 0 ~ x까지 값을 입력
             2) step : 데이터 기간(min : 4320
                 - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
+        3. 수정이력
+            24.11.28 : raw데이터의 idx별 매칭 테스트 결과 신뢰성 없음 확인되어 사용중단.
         """
         result = {}
 
@@ -421,7 +423,6 @@ class IntervalKlineExtractor:
                 processed_data[symbol][interval] = np.array(processed_data[symbol][interval])
 
         return processed_data
-
 class SignalRecorder:
     """
     가상 거래 내역을 기록하고 해당 내용을 공유한다.
@@ -619,7 +620,7 @@ class Wallet:
         quantity = last_trade_history.get("quantity")
         return (current_price * quantity) / leverage
 
-    # 계좌 및 세팅 조회
+    # 계좌정보 반환
     def get_account_balance(self):
         return {
             "inital_money": self.initial_capital,

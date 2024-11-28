@@ -428,7 +428,7 @@ class DataControlManager:
         return int(max_klines_per_day)
 
     # kline minute 또는 hour의 장시간 대량 데이터 수집
-    async def fetch_historical_kline_hour_min(
+    async def get_historical_kline_hour_min(
         self,
         symbol: str,
         interval: str,

@@ -1,52 +1,64 @@
-from typing import Tuple, List
-from functools import lru_cache
+from decimal import Decimal, getcontext
 
+def calculate_liquidation_price(entry_price, size, leverage, maint_margin_percent, fee_rate, liquidation_fee, position_type="long"):
+    """
+    Binance 격리 마진(Isolated Margin) 청산 가격 계산기.
+    :param entry_price: 진입 가격 (Decimal, USDT)
+    :param size: 포지션 크기 (Decimal, 계약 수)
+    :param leverage: 레버리지 (Decimal)
+    :param maint_margin_percent: 유지 증거금 비율 (Decimal, 예: 0.025)
+    :param fee_rate: 거래 수수료율 (Decimal, 예: 0.0005)
+    :param liquidation_fee: 청산 수수료 비율 (Decimal, 예: 0.015)
+    :param position_type: 포지션 타입 ("long" 또는 "short")
+    :return: 청산 가격 (Decimal)
+    """
+    # 포지션 명목 가치
+    position_value = entry_price * size
 
-class FunctionGroup:
-    # KLINE DATA에서 OpenTimestamp, CloseTimestamp값을 추출 및 반환한다.
-    def _get_timestamps(self, kline_data: List) -> Tuple[int, int]:
-        """
-        1. 기능 : KLINE DATA값에서 OpenTimestamp, CloseTimestamp값을 추출 및 반환한다.
-        2. 매개변수
-            1) kline_data (List): KLINE DATA의 최하위 List값
-        3. 오류발생시
-            1) ValueError
-                - Params kline_data 타입이 List가 아닐때
-                - Rarams Kline_data의 길이가 12개가 아닐때
-                - index값 타입이 int가 아닐때
-        4. 반환값 (Tuple)
-            1) open_timestamp : OpenTimestamp (마이크로 타임스템프)
+    # 초기 증거금
+    initial_margin = position_value / leverage
 
-        Returns:
-            Tuple[int, int]: _description_
-        """
-        if not isinstance(kline_data, list) or len(kline_data) != 12:
-            raise ValueError(f"Params 타입 오류 - {type(kline_data)}")
-        oepn_timestamp = kline_data[0]
-        close_timestamp = kline_data[6]
-        if not isinstance(oepn_timestamp, int) or not isinstance(close_timestamp, int):
-            raise ValueError(f"kline data 오류")
-        return (oepn_timestamp, close_timestamp)
+    # 유지 증거금
+    maintenance_margin = position_value * maint_margin_percent
 
+    # 총 수수료 (진입 + 청산)
+    total_fee = 2 * (position_value * fee_rate)
 
-# class main(FunctionGroup):
+    # 청산 수수료
+    liquidation_fee_value = position_value * liquidation_fee
 
+    # 사용 가능한 증거금
+    available_margin = initial_margin - maintenance_margin - total_fee - liquidation_fee_value
 
-# @lru_cache
-# def calculate_stop_loss(entry_price: float, target_price: float, start_margin_ratio: float = 0.015, profit_take_ratio: float = 0.6):
-#     """
-#     Stop-loss 가격을 계산하는 함수.
+    # 청산 가격 계산
+    if position_type == "long":
+        liquidation_price = entry_price * (1 - available_margin / position_value)
+    elif position_type == "short":
+        liquidation_price = entry_price * (1 + available_margin / position_value)
+    else:
+        raise ValueError("position_type은 'long' 또는 'short'여야 합니다.")
 
-#     Parameters:
-#     - entry_price (float): 진입 가격.
-#     - target_price (float): 목표 가격.
-#     - start_margin_ratio (float): 시작 마진 비율, 기본값 0.015 (1.5%).
-#     - profit_take_ratio (float): 목표 이익에서 취할 비율, 기본값 0.6 (60%).
+    return liquidation_price
 
-#     Returns:
-#     - float: 계산된 손절 가격 (stop-loss price).
-#     """
-#     adjusted_entry_price = entry_price - (entry_price * start_margin_ratio)
-#     profit_threshold = (target_price - adjusted_entry_price) * profit_take_ratio
-#     stop_loss_price = adjusted_entry_price + profit_threshold
-#     return stop_loss_price
+# 소수점 정밀도 설정
+getcontext().prec = 8
+
+# 입력 데이터
+entry_price = Decimal('0.008845')
+size = Decimal('566')
+leverage = Decimal('7')
+maint_margin_percent = Decimal('0.025')
+fee_rate = Decimal('0.0005')
+liquidation_fee = Decimal('0.015')
+
+# 롱 포지션 청산 가격 계산
+liq_price_long = calculate_liquidation_price(
+    entry_price, size, leverage, maint_margin_percent, fee_rate, liquidation_fee, position_type="long"
+)
+print(f"롱 포지션 청산 가격: {liq_price_long}")
+
+# 숏 포지션 청산 가격 계산
+liq_price_short = calculate_liquidation_price(
+    entry_price, size, leverage, maint_margin_percent, fee_rate, liquidation_fee, position_type="short"
+)
+print(f"숏 포지션 청산 가격: {liq_price_short}")

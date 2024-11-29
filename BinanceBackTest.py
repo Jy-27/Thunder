@@ -9,6 +9,7 @@ from TradingDataManager import SpotDataControl, FuturesDataControl
 from typing import Dict, List, Union, Any, Optional, Tuple
 import utils
 import datetime
+from BinanceTradeClient import FuturesOrderManager, SpotOrderManager
 
 """
 1. 목적
@@ -520,6 +521,67 @@ class DataManager:
                 else:
                     raise ValueError(f"path 정보가 유효하지 않음 - {path}")
 
+
+
+class OrderManager:
+    def __init__(self):
+        self.ins_futures_client = FuturesOrderManager()
+        self.ins_spot_client = SpotOrderManager()
+        self.market_type = ['FUTURES', 'SPOT']
+    
+    def generate_order_open_siganl(self, symbol:str, leverage:int, balance:float, market_type:str='futures'):
+        """
+        1. 기능 : 조건 신호 발생시 가상의 구매신호를 발생한다.
+        2. 매개변수
+        
+        """
+        
+        
+        market = market.upper()
+        if not market in self.market_type:
+            raise ValueError(f'market type 입력오류 - {market_type}')
+        
+        return = 
+    symbol,
+    leverage,
+    증거금,
+    수량,
+    시간.
+    
+        
+    
+    # 테스트 실행결과 안맞다. 방법을 못찾겠따.
+    def get_liquidation_price(self, entry_price:float, leverage:int, quantity:float, margin_balance:float, position_type="long"):
+        """
+        Binance 선물 거래 청산 가격 계산 함수.
+        
+        :param entry_price: 진입 가격 (float)
+        :param leverage: 레버리지 (int)
+        :param position_size: 포지션 크기 (float, 계약 수)
+        :param margin_balance: 증거금 (float)
+        :param position_type: 포지션 타입 ("long" 또는 "short")
+        :return: 청산 가격 (float)
+        """
+        if leverage <= 0:
+            raise ValueError("Leverage must be greater than 0.")
+        if quantity <= 0:
+            raise ValueError("Position size must be greater than 0.")
+        if margin_balance <= 0:
+            raise ValueError("Margin balance must be greater than 0.")
+        if position_type not in ["long", "short"]:
+            raise ValueError("Position type must be 'long' or 'short'.")
+        
+        # 초기 증거금 계산
+        initial_margin = position_size / leverage
+        
+        # 롱 포지션 청산 가격 계산
+        if position_type == "long":
+            liquidation_price = entry_price * (1 - (margin_balance / quantity))
+        # 숏 포지션 청산 가격 계산
+        else:  # position_type == "short"
+            liquidation_price = entry_price * (1 + (margin_balance / quantity))
+        
+        return round(liquidation_price, 2)
 
 class WasteTypeCode:
     ...

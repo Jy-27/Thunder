@@ -88,7 +88,7 @@ class DataManager:
         self.ins_futures = FuturesTrade()
 
         self.storeage = "DataStore"
-        self.real_time_data_file = "real_time_data.pkl"
+        self.kline_closing_sync_data = "closing_sync_data.pkl"
         self.indices_file = "indices_data.json"
         self.kline_data_file = "kline_data.json"
 
@@ -135,8 +135,8 @@ class DataManager:
 
         return historical_data
 
-    # 선물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
-    async def get_futures_kilne_data(
+    # 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다. (오리지날 데이터)
+    async def generate_kline_interval_data(
         self,
         symbols: Optional[Union[str, list]] = None,
         intervals: Optional[Union[List[str], str]] = None,
@@ -144,7 +144,7 @@ class DataManager:
         end_date: Optional[str] = None,
     ) -> Dict[str, Dict[str, List[List[Union[str, int]]]]]:
         """
-        1. 기능 : symbol별 입력된 interval값 전체를 수신 및 반환한다.
+        1. 기능 : 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다.
         2. 매개변수
             1) symbol : 쌍거래 symbol
             2) start_date : '2024-01-01 00:00:00'
@@ -187,17 +187,18 @@ class DataManager:
 
         return historical_data
 
-    # kline의 과거 데이터를 활용하여 interval로 구분가능한 1분 단위 또는 지정 단위 기준으로 실시간 데이터 생성
-    def generate_real_time_kline_data(
+
+    # 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
+    def generate_kline_closing_sync(
         self,
         indices_data: List[List[int]],
         kline_data: Dict[str, Dict[str, List[Union[Any]]]],
     ):
         """
-        1. 기능 : 수신된 각 symbol별, interval별 수신된 데이터를 1분봉 데이터 기준으로 리얼 데이터를 생성한다.
+        1. 기능 : 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
         2. 매개변수
             1) indices_data : get_matching_indices() 함수 데이터
-            2) kline_data : get_futures_kilne_data() 함수 데이터
+            2) kline_data : generate_kline_interval_data() 함수 데이터
         3. 리얼데이터 생성기로 백테스트 연산시 본 함수의 결과물을 대입할 것.
         """
 
@@ -350,7 +351,7 @@ class DataManager:
         """
         1. 기능 : 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다.
         2. 매개변수
-            1) kline_data : 원본 kline data 또는 self.get_futures_kilne_data() 함수값
+            1) kline_data : 원본 kline data 또는 self.generate_kline_interval_data() 함수값
         """
         array_data = self.__convert_dict_to_array(kline_data=kline_data)
         intervals = self.__extract_intervals(array_data)
@@ -420,7 +421,7 @@ class DataManager:
                 result[symbol][interval] = real_data_interval[start_idx:end_idx]
         return result
 
-    # 기간별 각 interval값을 raw데이터와 동일한 형태로 반환한다.
+    # 기간별 각 interval값을 raw데이터와 index값을 찾아 반환한다.동일한 형태로 반환한다.
     def get_kline_data_by_range(
         self,
         end_idx: int,
@@ -477,9 +478,9 @@ class DataManager:
             os.makedirs(target_directory)
 
         # Data 순차적 로드
-        kline_data = await self.get_futures_kilne_data(symbols=self.symbols)
+        kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
         indices_data = self.get_matching_indices(kline_data=kline_data)
-        real_time_data = self.generate_real_time_kline_data(
+        real_time_data = self.generate_kline_closing_sync(
             indices_data=indices_data, kline_data=kline_data
         )
 
@@ -489,7 +490,7 @@ class DataManager:
         # 각 데이터들 저장할 path 지정
         kline_path = os.path.join(target_directory, self.kline_data_file)
         indices_path = os.path.join(target_directory, self.indices_file)
-        real_time_path = os.path.join(target_directory, self.real_time_data_file)
+        real_time_path = os.path.join(target_directory, self.kline_closing_sync_data)
 
         # Data 저장
         utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
@@ -517,7 +518,7 @@ class DataManager:
         parent_folder = os.path.dirname(os.getcwd())
         # indices_path 주소 생성
         real_time_path = os.path.join(
-            parent_folder, self.storeage, self.real_time_data_file
+            parent_folder, self.storeage, self.kline_closing_sync_data
         )
 
         if download_if_missing:

@@ -25,11 +25,11 @@ symbols = [
     "DOGEUSDT",
 ]
 # interval 지정.
-intervals = ["5m", "1h"]
+intervals = ["1m", "5m", "1h"]
 # intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-1 00:00:00"
+start_date = "2024-11-15 00:00:00"
 end_date = "2024-11-29 23:59:59"
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
@@ -73,7 +73,17 @@ for i in range(10, data_length, 1):
 
         # 시나리오 1 검사.
         case_1 = obj_analy.scenario_1(symbol=symbol, convert_data=data)
-
+        """
+        대단히 큰 오점이 있다. real_time_segments는 데이터를 1m 기준으로 모든 interval값을 실시간 반영처리하지만,
+        scenrario에서 자료 검토시 연속성을 보기 때문에 1분이 아닌 다른 interval 데이터에서 연속성을 보는게 의미가 없다.
+        index값을 참조해야한다.
+        
+        
+        kline 데이터의 1분봉 값 index를 찾는다. 
+        real_time 데이터에서 해당 나머지 interval 데이터를 획득한다.
+        
+        kline_ index값에 해당하는 interval 값을 획득한 데이터로 대체한다.
+        """
         # 주문 제약 사항 스펙
         constraint = obj_con.calc_fund(
             obj_wallet.balance_info["total_assets"], rate=0.2

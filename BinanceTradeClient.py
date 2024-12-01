@@ -8,7 +8,7 @@ import os
 import utils
 import math
 import requests
-from MarketDataFetcher import SpotFetcher, FuturesFetcher
+from MarketDataFetcher import SpotMarket, FuturesMarket
 from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
@@ -217,12 +217,12 @@ class BinanceOrderManager:
         return await self.__send_request("DELETE", endpoint, params)
 
 
-class SpotOrderManager(BinanceOrderManager):
+class SpotOrder(BinanceOrderManager):
     BASE_URL = "https://api.binance.com"
 
-    def __init__(self, spot_api: Optional[SpotFetcher] = None):
+    def __init__(self, spot_api: Optional[SpotMarket] = None):
         super().__init__()
-        self.spot_api = SpotFetcher()
+        self.spot_api = SpotMarket()
 
     async def get_min_trade_quantity(self, symbol: str) -> Union[int, float]:
         exchange_info_data = await self.spot_api.fetch_exchange_info(symbol=symbol)
@@ -350,12 +350,12 @@ class SpotOrderManager(BinanceOrderManager):
 
 
 
-class FuturesOrderManager(BinanceOrderManager):
+class FuturesOrder(BinanceOrderManager):
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self, futures_api: Optional[FuturesFetcher] = None):
+    def __init__(self, futures_api: Optional[FuturesMarket] = None):
         super().__init__()
-        self.futures_api = FuturesFetcher()
+        self.futures_api = FuturesMarket()
 
     # Ticker의 leverage 정보 수신 및 반환
     async def __get_leverage_brackets(self, symbol: str) -> Dict:
@@ -693,8 +693,8 @@ class FuturesOrderManager(BinanceOrderManager):
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
-    spot_obj = SpotOrderManager()
-    futures_obj = FuturesOrderManager()
+    spot_obj = SpotOrder()
+    futures_obj = FuturesOrder()
 
     target_symbol = "xrpusdt"
     spot_data = asyncio.run(spot_obj.fetch_order_status(target_symbol))  # symbol=target_symbol)

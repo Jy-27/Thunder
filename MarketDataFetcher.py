@@ -13,7 +13,7 @@ logging.basicConfig(
 T = TypeVar("T")
 
 
-class BinanceAPIBase:
+class MarketDataManager:
     BASE_URL: str
     OHLCV_INTERVALS: Final[list] = [
         "1m",
@@ -303,7 +303,7 @@ class BinanceAPIBase:
         return utils._none_or(result)
 
 
-class SpotFetcher(BinanceAPIBase):
+class SpotMarket(MarketDataManager):
     BASE_URL = "https://api.binance.com/api/v3/"
 
     def __init__(self):
@@ -320,17 +320,18 @@ class SpotFetcher(BinanceAPIBase):
             symbol = symbol.upper()
             query_params = {"symbol": symbol}
             # 맹글링(Name Mangling)을 우회하기 위하여 "self._ + 부모클라스 + 비공개 함수"를 사용하였음.
-            exchange_data = await self._BinanceAPIBase__retrieve_api_data(
+            exchange_data = await self._MarketDataManager__retrieve_api_data(  # type: ignore
                 "exchangeInfo", params=query_params
-            )
+            )  # type: ignore
             return exchange_data if exchange_data is not None else {}
 
         # 전체 거래소 정보를 가져오는 경우
-        exchange_data = await self.__retrieve_api_data("exchangeInfo")
+        # 맹글링(Name Mangling)을 우회하기 위하여 "self._ + 부모클라스 + 비공개 함수"를 사용하였음.
+        exchange_data = await self._MarketDataManager__retrieve_api_data("exchangeInfo")  # type: ignore
         return exchange_data if exchange_data is not None else {}
 
 
-class FuturesFetcher(BinanceAPIBase):
+class FuturesMarket(MarketDataManager):
     BASE_URL = "https://fapi.binance.com/fapi/v1/"
 
     def __init__(self):
@@ -344,7 +345,7 @@ class FuturesFetcher(BinanceAPIBase):
             >> symbol값 별도 입력을 이용한 선택 조회 안됨.
         """
         # 맹글링(Name Mangling)을 우회하기 위하여 "self._ + 부모클라스 + 비공개 함수"를 사용하였음.
-        exchange_data = await self._BinanceAPIBase__retrieve_api_data("exchangeInfo")
+        exchange_data = await self._MarketDataManager__retrieve_api_data("exchangeInfo")  # type: ignore
         return exchange_data if exchange_data is not None else {}
 
 
@@ -354,26 +355,26 @@ if __name__ == "__main__":
 
     # 예시 실행
     # async def main():
-    spot_obj = SpotFetcher()
-    futures_obj = FuturesFetcher()
+    spot_obj = SpotMarket()
+    futures_obj = FuturesMarket()
 
-    # SpotFetcher 예시 호출
+    # SpotMarket 예시 호출
     spot_price = asyncio.run(spot_obj.fetch_ticker_price())
-    print("Spot Ticker Price:", spot_price)
+    print(f"TEST 1. Spot Ticker Price : {spot_price}")
 
-    # FuturesFetcher 예시 호출
+    # FuturesMarket 예시 호출
     futures_price = asyncio.run(futures_obj.fetch_ticker_price())
-    print("Futures Ticker Price:", futures_price)
+    print(f"TEST 2. Futures Ticker Price : {futures_price}")
 
     # 추가된 fetch_avg_price 호출 예시
     avg_price = asyncio.run(spot_obj.fetch_avg_price("BTCUSDT"))
-    print("Average Price for BTCUSDT:", avg_price)
+    print(f"TEST 3. Average Price for BTCUSDT : {avg_price}")
 
     # 추가된 fetch_symbol_ticker_price 호출 예시
     symbol_price = asyncio.run(spot_obj.fetch_symbol_price("BTCUSDT"))
-    print("Symbol Ticker Price for BTCUSDT:", symbol_price)
+    print(f"TEST 4. Symbol Ticker Price for BTCUSDT : {symbol_price}")
 
     symbol_exchange = asyncio.run(spot_obj.fetch_exchange_info())
-    print(symbol_exchange)
+    print(f"TEST 5. Symbol Ticker Exchange : {symbol_exchange}")
 
     # asyncio.run(main())

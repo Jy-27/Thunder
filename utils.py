@@ -247,9 +247,9 @@ def _convert_to_timestamp_ms(date: Union[str, datetime]) -> int:
 
 
 # 문자열 시간을 datetime 형태로로 변환 및 반환.
-def _convert_to_datetime(date: Union[str, datetime, int]) -> datetime:
+def _convert_to_datetime(date: Union[str, datetime, float, int]) -> datetime:
     """
-    1. 기능 : 문자형 시간 또는 datetime형태의 변수를 밀리초 timestamp로 변환 및 반환
+    1. 기능 : str, int, datetime형태의 시간입력시 문자열 시간으로 반환한다.
     2. 매개변수
         1) date : str(예 : 2024-01-01 17:14:00)형태 변수
     """
@@ -258,8 +258,8 @@ def _convert_to_datetime(date: Union[str, datetime, int]) -> datetime:
 
     if isinstance(date, datetime):
         return date
-    elif isinstance(date, int):
-        return datetime.fromtimestamp(date / 1000)
+    elif isinstance(date, (float, int)):
+        return datetime.fromtimestamp(int(date / 1000)).strftime("%Y-%m-%d %H:%M:%S")
     elif isinstance(date, str):
         return datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
 

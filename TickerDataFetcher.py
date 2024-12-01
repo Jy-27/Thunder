@@ -1,10 +1,10 @@
 import asyncio
 import utils
 from typing import Optional, List
-from MarketDataFetcher import SpotFetcher, FuturesFetcher
+from MarketDataFetcher import SpotMarket, FuturesMarket
 
 
-class BinanceTicker:
+class TickerDataManager:
     def __init__(self, api_instance):
         self.api_instance = api_instance
 
@@ -149,14 +149,14 @@ class BinanceTicker:
         return list(filtered_tickers)
 
 
-class SpotTickers(BinanceTicker):
+class SpotTickers(TickerDataManager):
     def __init__(self):
-        super().__init__(SpotFetcher())
+        super().__init__(SpotMarket())
 
 
-class FuturesTickers(BinanceTicker):
+class FuturesTickers(TickerDataManager):
     def __init__(self):
-        super().__init__(FuturesFetcher())
+        super().__init__(FuturesMarket())
 
 
 if __name__ == "__main__":
@@ -164,31 +164,43 @@ if __name__ == "__main__":
     futures_obj = FuturesTickers()
 
     spot_tickers_all = asyncio.run(spot_obj.get_tickers_all())
+    print(f"TEST 1. Spot Tickers : {spot_tickers_all}")
     futures_tickers_all = asyncio.run(futures_obj.get_tickers_all())
+    print(f"TEST 2. Futures Tickers : {futures_tickers_all}")
 
     spot_asset_tickers = asyncio.run(spot_obj.get_asset_tickers(quote="USDT"))
+    print(f"TEST 3. Spot Asset Tickers : {spot_asset_tickers}")
     futures_asset_tickers = asyncio.run(futures_obj.get_asset_tickers(quote="USDT"))
+    print(f"TEST 4. Futures Asset Tickers : {futures_asset_tickers}")
 
     spot_crypto_assets = asyncio.run(spot_obj.get_crypto_assets(asset_type="base"))
+    print(f"TEST 5. Spot Crypto Assets : {spot_crypto_assets}")
     futures_crypto_assets = asyncio.run(
         futures_obj.get_crypto_assets(asset_type="base")
     )
+    print(f"TEST 6. Futures Crypto Assets : {futures_crypto_assets}")
 
     spot_above_price = asyncio.run(spot_obj.get_tickers_above_price(target_price=50))
+    print(f"TEST 7. Spot Above Price : {spot_above_price}")
     futures_above_price = asyncio.run(
         futures_obj.get_tickers_above_price(target_price=50)
     )
+    print(f"TEST 8. Futures Above Price : {futures_above_price}")
 
     spot_above_value = asyncio.run(
         spot_obj.get_tickers_above_value(target_value=150_000_000)
     )
+    print(f"TEST 9. Spot Above Value : {spot_above_value}")
     futures_above_value = asyncio.run(
         futures_obj.get_tickers_above_value(target_value=150_000_000)
     )
+    print(f"TEST 10. Futures Above Value : {futures_above_value}")
 
     spot_above_change = asyncio.run(
         spot_obj.get_tickers_above_change(target_percent=0.05)
     )
+    print(f"TEST 11. Spot Above Change : {spot_above_change}")
     futures_above_change = asyncio.run(
         futures_obj.get_tickers_above_change(target_percent=0.05)
     )
+    print(f"TEST 12. Futures Above Change : {futures_above_change}")

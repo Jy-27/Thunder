@@ -24,7 +24,8 @@ from numpy.typing import NDArray
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self):  # , symbols: list):
+    def __init__(self, back_test: bool = False):  # , symbols: list):
+        self.back_test = back_test
         self.symbols = []
         self.kline_data = {}
         self.intervals = []
@@ -48,7 +49,9 @@ class AnalysisManager:
 
     # 첫번째, 필수사항
     # 검토할 데이터를 연산이 용이하도록 np.array처리한다.
-    def convert_kline_array(self, kline_data:Optional[Dict[str, Dict[str, List[Union[int, str]]]]]=None) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+    def convert_kline_array(
+        self, kline_data: Optional[Dict[str, Dict[str, List[Union[int, str]]]]] = None
+    ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
         """
         1. 기능 : 데이터를 연산하기 전에 self.kline_data를 numpy.array타입으로 변환한다.
         2. 매개변수 : 해당없음.
@@ -76,11 +79,7 @@ class AnalysisManager:
         2. 매개변수 : 해당없음.
         """
         # 상태 초기화
-        status = {
-            "valid": [],
-            "invalid": [],
-            "status": None
-        }
+        status = {"valid": [], "invalid": [], "status": None}
 
         # 1. 기본 데이터 상태 확인
         if not isinstance(self.symbols, list) or not self.symbols:
@@ -94,7 +93,9 @@ class AnalysisManager:
             status["valid"].append("intervals 값이 유효함")
 
         if not isinstance(self.kline_data, dict) or not self.kline_data:
-            status["invalid"].append(f"kline_data 값이 유효하지 않음: {self.kline_data}")
+            status["invalid"].append(
+                f"kline_data 값이 유효하지 않음: {self.kline_data}"
+            )
         else:
             status["valid"].append("kline_data 값이 유효함")
 
@@ -189,91 +190,195 @@ class AnalysisManager:
         return (upper_wick_length, lower_wick_length, body_length, total_length)
 
     # np.array 데이터에서 지정 index위치의 증감 현황과 포지션 상태를 반환한다.
-    def __get_trade_score(self, col_idx: int, kline_data_interval) -> Tuple[bool, int]:
+    def __get_trade_score(
+        self, kline_data_interval: np.ndarray, col_idx: int
+    ) -> Tuple[int, int, int]:
+        """'
+        1. 기능 : 데이터 트렌드 분석하는 함수
+        2. 매개변수 : kline_data_interval
+            1) kline_data_interval : kilne_data
+            2) col_idx : 확인하고자 하는 index
+
+        3. 반환값 내용 상세 - (A, B, C)
+            1) position >> {1:'LONG', 2:'SHORT', 0:None}
+            2) position_count >> 상승 하락 연속성
+            3) trend 
+                1 >> 점점 증가
+                2 >> 점점 감소
+            4) streack_count : 최고점 또는 최저점이 몇시간 전인지 체크
         """
-        1. 기능 : np.array의 값의 연속성을 계산하고 현재 등락 상태를 반환한다.
-        2. 매개변수:
-            1) col_idx : 자료의 열 인덱스
-            2) kline_data_interval : kline_data.get(interval)
-        """
-        # 열 값 추출 (역순으로)
-        column_values = kline_data_interval[::-1, col_idx]
-        adjustment_offset = 1
 
-        # 연속적인 차이를 계산
-        value_differences = np.diff(column_values)
-        
-        # 상승과 하락 상태를 확인
-        is_rising = value_differences < 0
-        rising_streak = (
-            np.argmax(~is_rising) + 1
-            if np.any(~is_rising)
-            else len(column_values)
-        )
+        def count_increasing_streak(values, index):
+            """
+            재귀적으로 값이 증가하는 구간의 길이를 계산.
+            """
+            if index <= 0:  # 리스트 시작
+                return 0
+            if values[index] <= values[index - 1]:  # 증가 조건 깨짐
+                return 0
+            return 1 + count_increasing_streak(values, index - 1)
 
-        is_falling = value_differences > 0
-        falling_streak = (
-            np.argmax(~is_falling) + 1
-            if np.any(~is_falling)
-            else len(column_values)
-        )
+        def count_decreasing_streak(values, index):
+            """
+            재귀적으로 값이 감소하는 구간의 길이를 계산.
+            """
+            if index <= 0:  # 리스트 시작
+                return 0
+            if values[index] >= values[index - 1]:  # 감소 조건 깨짐
+                return 0
+            return 1 + count_decreasing_streak(values, index - 1)
 
-        # 비교하여 결과 반환
-        if rising_streak > falling_streak:
-            return (1, rising_streak - adjustment_offset)
-        elif rising_streak < falling_streak:
-            return (2, falling_streak - adjustment_offset)
+        # 데이터가 3개 미만이면 분석 불가능
+        column_values = kline_data_interval[:, col_idx]
+        n = len(column_values)
+        if n < 3:
+            return 0, 0, 0
+
+        # 1. 포지션 결정
+        last_value = column_values[-1]
+        second_last_value = column_values[-2]
+
+        if last_value > second_last_value:
+            increasing_streak = count_increasing_streak(
+                column_values, len(column_values) - 1
+            )
+            decreasing_streak = 0
+        elif last_value < second_last_value:
+            decreasing_streak = count_decreasing_streak(
+                column_values, len(column_values) - 1
+            )
+            increasing_streak = 0
         else:
-            return (0, 0)
+            increasing_streak = 0
+            decreasing_streak = 0
+
+        if increasing_streak > decreasing_streak:
+            position = 1  # Long
+            position_count = increasing_streak
+            relevant_values = (
+                column_values[-increasing_streak - 1 :]
+                if increasing_streak > 0
+                else column_values[-1:]
+            )
+        else:
+            position = 2  # Short
+            position_count = decreasing_streak
+            relevant_values = (
+                column_values[-decreasing_streak - 1 :]
+                if decreasing_streak > 0
+                else column_values[-1:]
+            )
+            
+        # 2. 변화 계산
+        differences = []
+        for i in range(len(relevant_values) - 1):
+            diff = abs(relevant_values[i] - relevant_values[i + 1])
+            differences.append(diff)
+
+        # 차이값 역순 처리
+        differences = differences[::-1]
+
+        # 증가 및 감소 구간 계산
+        decreasing_streak_diff = count_decreasing_streak(
+            differences, len(differences) - 1
+        )
+        increasing_streak_diff = count_increasing_streak(
+            differences, len(differences) - 1
+        )
+
+        # None 처리 (불필요하지만 안전하게)
+        decreasing_streak_diff = decreasing_streak_diff or 0
+        increasing_streak_diff = increasing_streak_diff or 0
+
+        # 상황 결정
+        if decreasing_streak_diff < increasing_streak_diff:
+            trend = 1
+            streak_count = increasing_streak_diff + 1
+        elif decreasing_streak_diff > increasing_streak_diff:
+            trend = 2
+            streak_count = decreasing_streak_diff + 1
+        else:
+            trend = 0
+            streak_count = 0
+
+
+        return (position, position_count, trend, streak_count)
 
     def scenario_1(
-        self, symbol: str, convert_data: Dict[str, Dict[str, NDArray[np.float64]]] = None
+        self,
+        symbol: str,
+        convert_data: Dict[str, Dict[str, NDArray[np.float64]]] = None,
     ):
         """'
         1. 5분봉 close 가격 연속 3회 상승 or 하락
-        1. 5분봉 상승금액 연속 3회 이상 상승 or 하락
-        2. 5분봉 거래대금 연속 3회 이상 상승 or 하락
-        3. [:-1]hour max or min값 초과시
-        4. candle 꼬리 합 비율 40% 미만시
+        2. 5분봉 상승금액 연속 3회 이상 상승 or 하락
+        3. 5분봉 거래대금 연속 3회 이상 상승 or 하락
+        4. [:-1]hour max or min값 초과시
+        5. candle 꼬리 합 비율 40% 미만시
         """
         if convert_data is None:
             convert_data = self.kline_data
-        target_interval = ["5m", "1h"]
+        target_interval = ["1m", "5m", "1h"]
         for interval in target_interval:
             if not interval in self.intervals:
                 raise ValueError(f"kline 데이터에 {interval}데이터가 없음.")
 
         # kline data를 interval별로 변수 지정
-        kline_data_5m = convert_data.get(symbol).get(target_interval[0])
-        kline_data_1h = convert_data.get(symbol).get(target_interval[1])
+        kline_data_5m = convert_data.get(symbol).get(target_interval[1])
+        kline_data_1h = convert_data.get(symbol).get(target_interval[2])
+        kline_data_1m = convert_data.get(symbol).get(target_interval[0])
 
         # 종가 연속성 및 포지션 체크
-        price_bool, close_price_score = self.__get_trade_score(col_idx=4, kline_data_interval=kline_data_5m)
+        price_bool, _, price_case, close_price_score = self.__get_trade_score(
+            col_idx=4, kline_data_interval=kline_data_5m
+        )
         # 거래대금 연속성 및 포지션 체크
-        value_bool, value_score = self.__get_trade_score(col_idx=10, kline_data_interval=kline_data_5m)
-        
+        value_bool, _, value_case_, value_score = self.__get_trade_score(
+            col_idx=10, kline_data_interval=kline_data_5m
+        )
+
         # mode 초기값 None으로 처리하여 연속성 데이터 검토시 (0, 0)결과에 대비한다.
         mode = None
-        if price_bool==1 and value_bool==1:
-            mode = 'max'
-            position_signal = 1
-        elif price_bool==2 and value_bool==2:
-            mode = 'min'
-            position_signal = 2
+        position_signal = price_bool
+        if price_bool == 1 and value_bool == 1:
+            # interval 동안 high값 찾기위함.
+            mode = "max"
+        elif price_bool == 2 and value_bool == 1:
+            # interval 동안 low값 찾기위함.
+            mode = "min"
         # 결과값이 long or short이 아닐경우 time_diff값, position_signal을 0으로 처리한다.
         else:
             position_signal = 0
             time_diff = 0
-        
+
+        # 백테스트용으로 사용시 별도 세팅값 적용
+
+        time_ago_minute = -60
+        time_ago_hour = -1
+
+        # 초기 데이터의 길이가 60이 넘지 않을경우 time_ago_minute 반영시 error발생. 이를 방지하기 위함.
+        if self.back_test and len(kline_data_1m) >= abs(
+            time_ago_minute + time_ago_hour
+        ):
+            """
+            real time data의 1h값 데이터는 1m과 길이가 같으므로 동일하게 -1 적용시 1분 전 데이터 반영됨.
+            그러므로 60분 전 데이터를 적용
+            """
+            target_end_idx = time_ago_minute
+        else:
+            target_end_idx = time_ago_hour
+
         # mode None이 아닐경우 계산을 시작한다.
         if mode:
-            extreme_price = self.__get_column_extreme(mode=mode,
-                                                    data=kline_data_1h[:-1],
-                                                    col_idx=4)
-            time_diff = self.__get_index_by_value(kline_data_interval=kline_data_1h[:-1],
-                                                threshold=extreme_price,
-                                                col_idx=4)
-        
+            extreme_price = self.__get_column_extreme(
+                mode=mode, data=kline_data_1h[:target_end_idx], col_idx=4
+            )
+            time_diff = self.__get_index_by_value(
+                kline_data_interval=kline_data_1h[:target_end_idx],
+                threshold=extreme_price,
+                col_idx=4,
+            )
+
         # 꼬리값 계산
         result_bool = []
         for data in reversed(kline_data_5m[:3]):
@@ -289,5 +394,11 @@ class AnalysisManager:
 
         wick_bool = all(result_bool)
         scenario_code = 1
-        return [scenario_code, position_signal, close_price_score, value_score, time_diff, wick_bool]
-    
+        return (
+            scenario_code,
+            position_signal,
+            close_price_score,
+            value_score,
+            time_diff,
+            wick_bool,
+        )

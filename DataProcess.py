@@ -133,7 +133,7 @@ class OrderConstraint:
     
     
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
-    def calc_fund(self, funds: float, ratio: float = 0.35) -> dict:
+    def calc_fund(self, funds: float, rate: float = 0.35) -> dict:
         """
         총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
 
@@ -145,13 +145,18 @@ class OrderConstraint:
             dict: 계산 결과를 담은 딕셔너리.
         """
         # 자금이 10 미만일 경우 초기값 반환
+        
+        init_safety_value = round(10 * rate, 3)
+        init_usable_value = 10 - init_safety_value
+        init_trade_value = min(6, init_usable_value)
+        
         if funds < 10:
             return {
-                "count": 0,            # 보유 가능량
-                "target_value": 0,     # 다음 기준 금액
-                "safety_value": 0,     # 안전 금액
-                "usable_value": 0,     # 유효 금액
-                "trade_value": 0       # 회당 거래대금
+                "count": 1,            # 보유 가능량
+                "targetValue": 10,     # 다음 기준 금액
+                "safetyValue": init_safety_value,     # 안전 금액
+                "usableValue": init_usable_value,     # 유효 금액
+                "tradeValue": init_trade_value       # 회당 거래대금
             }
 
         steps = [2, 3]  # 증가 단계
@@ -169,17 +174,17 @@ class OrderConstraint:
                     break
 
         # 안전 금액 및 유효 금액 계산
-        safety_value = last_valid_target * ratio
+        safety_value = last_valid_target * rate
         usable_value = last_valid_target - safety_value
         trade_value = usable_value / count if count > 0 else 0
 
         # 결과 반환
         return {
             "count": count,                  # 보유 가능량
-            "target_value": last_valid_target,  # 다음 기준 금액
-            "safety_value": safety_value,    # 안전 금액
-            "usable_value": usable_value,    # 유효 금액
-            "trade_value": trade_value       # 회당 거래대금
+            "targetValue": last_valid_target,  # 다음 기준 금액
+            "safetyValue": safety_value,    # 안전 금액
+            "usableValue": usable_value,    # 유효 금액
+            "tradeValue": trade_value       # 회당 거래대금
         }
     
     

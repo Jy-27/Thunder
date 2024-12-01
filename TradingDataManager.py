@@ -14,7 +14,7 @@ from typing import (
 )
 from pprint import pprint
 from collections import defaultdict
-from MarketDataFetcher import SpotFetcher, FuturesFetcher
+from MarketDataFetcher import SpotMarket, FuturesMarket
 from Analysis import AnalysisManager
 from DataProcess import TradeStopper, OrderConstraint
 
@@ -25,7 +25,7 @@ import datetime
 import json
 
 
-class DataControlManager:
+class TradeManager:
     def __init__(
         self,
         ticker_instance,
@@ -91,6 +91,9 @@ class DataControlManager:
         self.final_message_received: DefaultDict[
             str, DefaultDict[str, List[List[Any]]]
         ] = defaultdict(lambda: defaultdict())
+        
+        self.account_balance_summary = {}
+        self.account_active_symbols = []
 
     # 오버라이딩
     async def close_position(self, symbol: str, market_price: float): ...
@@ -100,7 +103,7 @@ class DataControlManager:
     async def submit_close_order_signal(self, symbol: str): ...
 
     # Ticker 수집에 필요한 정보를 수신
-    async def __collect_filtered_ticker_data(self) -> Tuple:
+    async def _collect_filtered_ticker_data(self) -> Tuple:
         """
         1. 기능 : 기준값에 충족하는 ticker정보를 수신.
         2. 매개변수 : 해당없음.
@@ -134,7 +137,7 @@ class DataControlManager:
         2. 매개변수 : 해당없음.
         """
         mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
-        filtered_ticker_data = await self.__collect_filtered_ticker_data()
+        filtered_ticker_data = await self._collect_filtered_ticker_data()
         # 공통 필터링된 티커 요소를 리스트로 반환받음
         common_filtered_tickers = utils._find_common_elements(*filtered_ticker_data)
 
@@ -338,7 +341,7 @@ class DataControlManager:
             await utils._wait_time_sleep(time_unit="second", duration=1)
 
     # hour 또는 minute별 수신해야할 interval을 리스트화 정렬
-    def __generate_time_intervals(self):
+    def _generate_time_intervals(self):
         time_intervals: Dict[str, Dict] = {
             "minutes": {},  # 분 단위 타임라인
             "hours": {},  # 시간 단위 타임라인
@@ -382,7 +385,7 @@ class DataControlManager:
         return time_intervals
 
     # klline 매개변수에 들어갈 유효 limit
-    def __get_valid_kline_limit(self, interval: str) -> Dict:
+    def _get_valid_kline_limit(self, interval: str) -> Dict:
         # 상수 설정
         VALID_INTERVAL_UNITS = ["m", "h", "d", "w", "M"]
         MINUTES_PER_DAY = 1_440
@@ -407,14 +410,14 @@ class DataControlManager:
         return (max_days, max_limit)
 
     # kline 매개변수에 들어가는 limit을 day기준으로 개수를 계산한다.
-    def __get_kline_limit_by_days(self, interval: str, days: int) -> int:
+    def _get_kline_limit_by_days(self, interval: str, days: int) -> int:
         """
         1. 기능 : kline 매개변수에 들어갈 day 기간 만큼 interval의 limit값을 구한다.
         2. 매개변수
             1) interval : KLINE_INTERVALS 속성 참조
             2) day : 기간을 정한다.
         """
-        day, limit = self.__get_valid_kline_limit(interval=interval)
+        day, limit = self._get_valid_kline_limit(interval=interval)
         if day == 0:
             return 1000
         max_klines_per_day = (limit / day) * days
@@ -446,7 +449,7 @@ class DataControlManager:
         
         MAX_LIMIT = 1_000
         
-        day, limit = self.__get_valid_kline_limit(interval=interval)
+        day, limit = self._get_valid_kline_limit(interval=interval)
         if not start_date and end_date:
             return await self.market_instance.fetch_klines_limit(
                 symbol=symbol, interval=interval
@@ -503,7 +506,7 @@ class DataControlManager:
                 if interval.endswith("d"):
                     limit_ = 30
                 else:
-                    limit_ = self.__get_kline_limit_by_days(
+                    limit_ = self._get_kline_limit_by_days(
                         interval=interval, days=days
                     )
                 # Kline 데이터를 수집하고 self.kline_data에 업데이트
@@ -519,7 +522,7 @@ class DataControlManager:
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
 
-        interval_map = self.__generate_time_intervals()
+        interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 300
 
@@ -539,7 +542,7 @@ class DataControlManager:
                         ):
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self.__get_kline_limit_by_days(
+                                    limit_ = self._get_kline_limit_by_days(
                                         interval=interval, days=days
                                     )
                                     self.kline_data[ticker][interval] = (
@@ -552,7 +555,7 @@ class DataControlManager:
                         if time_unit == time_units[1] and current_time_minute == times:
                             for ticker in self.active_tickers:
                                 for interval in intervals:
-                                    limit_ = self.__get_kline_limit_by_days(
+                                    limit_ = self._get_kline_limit_by_days(
                                         interval=interval, days=days
                                     )
                                     self.kline_data[ticker][interval] = (
@@ -565,7 +568,7 @@ class DataControlManager:
         # return self.kline_data
 
     # WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
-    async def __transform_kline(
+    async def _transform_kline(
         self, raw_kline_data: dict
     ) -> List[Union[str, int, float]]:
         """
@@ -596,7 +599,7 @@ class DataControlManager:
         return transformed_kline
 
     # weboskcet data와 kline데이터를 결합한다.
-    async def __merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
+    async def _merge_kline_data(self, kline_message: Dict[str, Union[str, int, dict]]):
         """
         1. 기능 : websocket data와 kline data를 하나로 결합한다.
         2. 매개변수
@@ -612,7 +615,7 @@ class DataControlManager:
             raise ValueError(f"잘못된 값 입력됨")
 
         # 웹소켓으로 수신된 데이터를 변환
-        transformed_kline = await self.__transform_kline(kline_message)
+        transformed_kline = await self._transform_kline(kline_message)
 
         # 심볼 및 주기에 해당하는 데이터가 존재하는지 확인
         if isinstance(symbol, str) and isinstance(interval, str):
@@ -659,7 +662,7 @@ class DataControlManager:
                         if interval_data:
                             message = self.final_message_received[ticker][interval]
                             # print(f"{ticker}-{interval}병합")
-                            await self.__merge_kline_data(message)
+                            await self._merge_kline_data(message)
 
     # TEST ZONE = 검토대상 체크한다.
     async def analysis_loop(self):
@@ -695,26 +698,26 @@ class DataControlManager:
             await utils._wait_time_sleep(time_unit="second", duration=20)
 
 
-class SpotDataControl(DataControlManager):
+class SpotTrade(TradeManager):
     def __init__(self):
         super().__init__(
             SpotTickers(),
             SpotHandler(),
-            my_client.SpotOrderManager(),
-            SpotFetcher(),
+            my_client.SpotOrder(),
+            SpotMarket(),
             AnalysisManager(),
             TradeStopper(),
             OrderConstraint(),
         )
 
 
-class FuturesDataControl(DataControlManager):
+class FuturesTrade(TradeManager):
     def __init__(self):
         super().__init__(
             FuturesTickers(),
             FuturesHandler(),
-            my_client.FuturesOrderManager(),
-            FuturesFetcher(),
+            my_client.FuturesOrder(),
+            FuturesMarket(),
             AnalysisManager(),
             TradeStopper(),
             OrderConstraint(),
@@ -742,7 +745,7 @@ class FuturesDataControl(DataControlManager):
         calc_fund = self.constraint_instance.calc_fund(funds=total_funds)
 
         count = calc_fund.get("count")
-        trade_value = min(calc_fund.get("trade_value"), available_funds)
+        trade_value = min(calc_fund.get("tradeValue"), available_funds)
 
         is_active_symbols = symbol in self.account_active_symbols
         is_count_over = count <= len(self.account_active_symbols)
@@ -788,7 +791,7 @@ class FuturesDataControl(DataControlManager):
         )
         
         # api서버 과요청 방지
-        await utils._wait_time_sleep(time_unit='second', duration=2)
+        await utils._wait_time_sleep(time_unit='second', dun=2)
 
     # TEST ZONE
     # 포지션 종료 신호를 발송한다.
@@ -827,7 +830,7 @@ if __name__ == "__main__":
     os.system("clear")
 
     async def main_run():
-        obj = FuturesDataControl()
+        obj = FuturesTrade()
         await obj.fetch_active_positions()
 
         for key, data in obj.account_balance_summary.items():

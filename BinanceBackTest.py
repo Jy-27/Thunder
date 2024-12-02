@@ -92,49 +92,6 @@ class DataManager:
         self.indices_file = "indices_data.json"
         self.kline_data_file = "kline_data.json"
 
-    # 현물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
-    async def get_kilne_data(
-        self,
-        symbol: str,
-        intervals: Union[List[str], str],
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        market_type: str = "futures",
-    ) -> Dict[str, List]:
-        """
-        1. 기능 : symbol별 입력된 interval값 전체를 수신 및 반환한다.
-        2. 매개변수
-            1) symbol : 쌍거래 symbol
-            2) start_date : '2024-01-01 00:00:00'
-            3) end_date : '2024-01-02 00:00:00'
-            4) save_directory_path : 저장할 파일 위치 (파일명 or 전체 경로)
-            5) intervals : 수신하고자 하는 데이터의 interval 구간
-        """
-
-        # 매개변수 타입 통일 위하여 대문자로 변경함.
-        symbol = symbol.upper()
-        if isinstance(intervals, str):
-            # interval값을 대문자로 적용시 1분봉 '1m'과 1개월봉 '1M'이 겹쳐버린다. 주의.
-            intervals = [intervals]
-
-        # 현재 매개변수 입력값이 None일경우 속성값으로 대체 (별도 계산필요시 적용 위함.)
-        target_start_date: str = start_date or self.start_date
-        target_end_date = end_date or self.end_date
-
-        conv_start_date = utils._convert_to_datetime(target_start_date)
-        conv_end_date = utils._convert_to_datetime(target_end_date)
-        historical_data = {}
-
-        for interval in intervals:
-            historical_data[interval] = await SpotTrade().get_historical_kline_hour_min(
-                symbol=symbol,
-                interval=interval,
-                start_date=conv_start_date,
-                end_date=conv_end_date,
-            )
-
-        return historical_data
-
     # 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다. (오리지날 데이터)
     async def generate_kline_interval_data(
         self,
@@ -186,7 +143,6 @@ class DataManager:
                 )
 
         return historical_data
-
 
     # 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
     def generate_kline_closing_sync(
@@ -302,6 +258,43 @@ class DataManager:
 
         return processed_data
 
+    # kline_data의 특정 interval idx를 closing_sync_data 값으로 동기화 시킨다. 백테스트에 사용될 데이터에 적용됨
+    def sync_kline_data(self, idx: int, kline_data: dict, idx_mapping: list, sync_data: dict) -> Dict[str, Dict[str, np.ndarray[np.float64]]]:
+        """
+        1. 기능 : 백테스트에 적용시킬 kline_data의 특정 interval idx데이터를 closing_sync_data값으로 동기화 시킨다.
+        2. 매개변수
+            1) idx : 적용시킬 Index 값
+            2) kline_data : read_data_run함수의 [1] 반환값. >> kline_data
+            3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
+            4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
+        
+        
+        """
+        idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
+        for symbol, kline_data_symbol in kline_data.items():
+            for interval, kline_data_interval in kline_data_symbol.items():
+                idx_map = idx_map_data.get(interval)
+                
+                kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
+        return kline_data
+
+    def __convert_interval_to_minutes(self, minute:int, interval:str):
+        result = {'1m': 1,
+                  '3m': 3,
+                  '5m':5,
+                  '15m':15,
+                  '30m':30,
+                  '1h':60,
+                  '2h':120,
+                  '4h':240,
+                  '6h':360,
+                  '8h':480,
+                  '12h':720,
+                  '1d':1440,
+                  '3d':4320}
+        return result.get(interval) / minute
+
+
     # 연산이 용이하도록 interval값과 idx값을 이용하여 매핑값을 반환한다.
     def __map_intervals_to_indices(self, idx_values: List[int]) -> Dict[str, int]:
         """
@@ -345,6 +338,20 @@ class DataManager:
             for interval, nested_data in data.items():
                 result[interval] = np.array(nested_data, dtype=float)
         return result
+
+    # kline_data의 최하위 중첩 데이터를 np.array처리한다.
+    def convert_kline_data_array(self, kline_data: Dict) -> Dict[str, Dict[str, np.ndarray]]:
+        result = {}
+        for symbol, kline_data_symbol in kline_data.items():
+            if not isinstance(kline_data_symbol, dict) or not kline_data_symbol:
+                raise ValueError('kline data가 유효하지 않음.')
+            result[symbol] = {}
+            for interval, kline_data_interval in kline_data_symbol.items():
+                if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
+                    raise ValueError('kline data가 유효하지 않음.')
+                result[symbol][interval] = np.array(object=kline_data_interval, dtype=float)
+        return result                
+                
 
     # 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다. (최종 결과물 / 저장은 별도로)
     def get_matching_indices(self, kline_data: Dict) -> List[List[int]]:
@@ -407,22 +414,23 @@ class DataManager:
         # 길이가 하나뿐이라면, 값을 반환
         return unique_lengths.pop()
 
-    def get_real_time_segments(
-        self, end_idx: int, real_time_kilne: Dict, step: int = 4_320
+    # 데이터를 start_idx:end
+    def get_kline_closing_data_by_range(
+        self, end_idx: int, kline_data: Dict, step: int = 4_320
     ):
 
         result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
-        for symbol, real_data_symbol in real_time_kilne.items():
+        for symbol, kline_data_symbol in kline_data.items():
             result[symbol] = {}
-            for interval, real_data_interval in real_data_symbol.items():
+            for interval, kline_data_interval in kline_data_symbol.items():
                 start_idx = end_idx - step
                 if start_idx < 0:
                     start_idx = 0
-                result[symbol][interval] = real_data_interval[start_idx:end_idx]
+                result[symbol][interval] = kline_data_interval[start_idx:end_idx]
         return result
 
-    # 기간별 각 interval값을 raw데이터와 index값을 찾아 반환한다.동일한 형태로 반환한다.
-    def get_kline_data_by_range(
+    # 
+    def get_kline_interval_data_by_range(
         self,
         end_idx: int,
         kline_data: Dict,
@@ -438,7 +446,7 @@ class DataManager:
             3) idx_data : self.get_matching_indices() 연산값.
             4) step : 시작과 끝점간의 범위 (단위 : minutes)
         3.Memo
-            >>> real_time_data를 대상으로 하는게 아님.
+            >>> closing_sync_data를 대상으로 하는게 아님.
             >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
             >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
                     예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
@@ -446,13 +454,23 @@ class DataManager:
         """
         result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
 
+        idx_map: Dict[str, int] = self.__map_intervals_to_indices(
+                        idx_values=idx_data[end_idx]
+                    )
+        
+
         for symbol, kline_data_symbol in kline_data.items():
             result[symbol] = {}
             for interval, kline_data_interval in kline_data_symbol.items():
+                idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
                 # intervals 리스트에 없는 interval은 제외한다.
                 if not interval in self.intervals:
                     continue
-                start_idx = end_idx - step
+                if interval == self.intervals[0]:
+                    start_idx = end_idx - step
+                else:
+                    start_idx = end_idx - (step/idx_convert_map)
+                
                 if start_idx < 0:
                     start_idx = 0
 
@@ -468,6 +486,11 @@ class DataManager:
         1. 기능 : 위 함수를 사용하기 복잡하기에 통합 다운로드 기능을 제공함.
         2. 매개변수
             1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
+        3. 반환값
+            1) range_length_data : for _ in range(range_length_data)에 들어감.
+            2) kline_data : 각 interval별 데이터를 수집 및 dict형태로 반환
+            3) indices_data : kline_data 1분봉 기준으로 매칭되는 다른 interval data index
+            4) closing_sync_data : 1분봉 기준 각 interval별 closing data
         """
         # directory가 None일 경우 상위폴더 위치로 지정
         target_directory = os.path.join(
@@ -480,31 +503,31 @@ class DataManager:
         # Data 순차적 로드
         kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
         indices_data = self.get_matching_indices(kline_data=kline_data)
-        real_time_data = self.generate_kline_closing_sync(
+        closing_sync_data = self.generate_kline_closing_sync(
             indices_data=indices_data, kline_data=kline_data
         )
 
-        # real_time_data를 이용하여 데이터 길이 값 연산
-        range_length_data = self.get_range_length(kline_data_real=real_time_data)
+        # closing_sync_data를 이용하여 데이터 길이 값 연산
+        range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
 
         # 각 데이터들 저장할 path 지정
         kline_path = os.path.join(target_directory, self.kline_data_file)
         indices_path = os.path.join(target_directory, self.indices_file)
-        real_time_path = os.path.join(target_directory, self.kline_closing_sync_data)
+        closing_sync_data_path = os.path.join(target_directory, self.kline_closing_sync_data)
 
         # Data 저장
         utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
         utils._save_to_json(
             file_path=indices_path, new_data=indices_data, overwrite=True
         )
-        # utils._save_to_json(file_path=real_time_path, new_data=real_time_data_file, overwrite=True)
-        # real_time_path는 np.array타입이므로 별도 저장.
+        # utils._save_to_json(file_path=closing_sync_data_path, new_data=closing_sync_data_file, overwrite=True)
+        # closing_sync_data_path는 np.array타입이므로 별도 저장.
 
-        with open(real_time_path, "wb") as file:
-            pickle.dump(real_time_data, file)
+        with open(closing_sync_data_path, "wb") as file:
+            pickle.dump(closing_sync_data, file)
 
         # Tuple 형태로 자료 반환.
-        return (range_length_data, real_time_data)
+        return (range_length_data, kline_data, indices_data, closing_sync_data)
 
     # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
     async def read_data_run(self, download_if_missing: bool = False):
@@ -517,23 +540,34 @@ class DataManager:
         # 불러올 데이터의 초기부분 주소명 확보
         parent_folder = os.path.dirname(os.getcwd())
         # indices_path 주소 생성
-        real_time_path = os.path.join(
+        closing_sync_data_path = os.path.join(
             parent_folder, self.storeage, self.kline_closing_sync_data
         )
+        kline_data_path = os.path.join(parent_folder, self.storeage, self.kline_data_file)
+        indices_data_path = os.path.join(parent_folder, self.storeage, self.indices_file)
+        
 
         if download_if_missing:
             if not os.path.exists(parent_folder):
                 os.makedirs(parent_folder)
-            # if not os.path.exists(real_time_path):
+            # if not os.path.exists(closing_sync_data_path):
             return await self.download_data_run()
         else:
-            if not os.path.exists(path=real_time_path):
-                raise ValueError(f"path 정보가 유효하지 않음 - {real_time_path}")
-            with open(real_time_path, "rb") as file:
-                real_time_data = pickle.load(file)
+            if not os.path.exists(path=kline_data_path):
+                raise ValueError(f"path 정보가 유효하지 않음 - {kline_data_path}")
+            if not os.path.exists(path=indices_data_path):
+                raise ValueError(f"path 정보가 유효하지 않음 - {indices_data_path}")
+            if not os.path.exists(path=closing_sync_data_path):
+                raise ValueError(f"path 정보가 유효하지 않음 - {closing_sync_data_path}")
+            with open(closing_sync_data_path, "rb") as file:
+                closing_sync_data = pickle.load(file)
+            
+            range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
+            kline_data = utils._load_json(file_path=kline_data_path)
+            indices_data = utils._load_json(file_path=indices_data_path)
+            
 
-        range_length_data = self.get_range_length(kline_data_real=real_time_data)
-        return (range_length_data, real_time_data)
+        return (range_length_data, kline_data, indices_data, closing_sync_data)
 
 
 class OrderManager:
@@ -920,7 +954,48 @@ class WalletManager:
 
 #     def
 class WasteTypeCode:
-    ...
     """
     폐기 코드 집합소 / 전부 주석처리한다.
     """
+    # # 현물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
+    # async def get_kilne_data(
+    #     self,
+    #     symbol: str,
+    #     intervals: Union[List[str], str],
+    #     start_date: Optional[str] = None,
+    #     end_date: Optional[str] = None,
+    #     market_type: str = "futures",
+    # ) -> Dict[str, List]:
+    #     """
+    #     1. 기능 : symbol별 입력된 interval값 전체를 수신 및 반환한다.
+    #     2. 매개변수
+    #         1) symbol : 쌍거래 symbol
+    #         2) start_date : '2024-01-01 00:00:00'
+    #         3) end_date : '2024-01-02 00:00:00'
+    #         4) save_directory_path : 저장할 파일 위치 (파일명 or 전체 경로)
+    #         5) intervals : 수신하고자 하는 데이터의 interval 구간
+    #     """
+
+    #     # 매개변수 타입 통일 위하여 대문자로 변경함.
+    #     symbol = symbol.upper()
+    #     if isinstance(intervals, str):
+    #         # interval값을 대문자로 적용시 1분봉 '1m'과 1개월봉 '1M'이 겹쳐버린다. 주의.
+    #         intervals = [intervals]
+
+    #     # 현재 매개변수 입력값이 None일경우 속성값으로 대체 (별도 계산필요시 적용 위함.)
+    #     target_start_date: str = start_date or self.start_date
+    #     target_end_date = end_date or self.end_date
+
+    #     conv_start_date = utils._convert_to_datetime(target_start_date)
+    #     conv_end_date = utils._convert_to_datetime(target_end_date)
+    #     historical_data = {}
+
+    #     for interval in intervals:
+    #         historical_data[interval] = await SpotTrade().get_historical_kline_hour_min(
+    #             symbol=symbol,
+    #             interval=interval,
+    #             start_date=conv_start_date,
+    #             end_date=conv_end_date,
+    #         )
+
+    #     return historical_data

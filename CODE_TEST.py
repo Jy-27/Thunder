@@ -29,7 +29,7 @@ intervals = ["1m", "5m", "1h"]
 # intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-15 00:00:00"
+start_date = "2024-11-25 00:00:00"
 end_date = "2024-11-29 23:59:59"
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
@@ -43,10 +43,12 @@ obj_data = DataManager(
 )
 
 print(f"데이터 다운로드 시작 >> {datetime.now()}")
-data_length, real_time_data = asyncio.run(
-    obj_data.read_data_run(download_if_missing=True)
+range_length_data, kline_data, indices_data, closing_sync_data = asyncio.run(
+    obj_data.read_data_run(download_if_missing=False)
 )  # (download_if_missing=get_futures_kilne_datarue))
 print(f"데이터 다운로드(로딩) 완료 >> {datetime.now()}")
+
+kline_data = obj_data.convert_kline_data_array(kline_data=kline_data)
 
 
 trade_data = []
@@ -66,13 +68,14 @@ n = 0
 minutes = 288
 
 print(f"분석 시작 {datetime.now()}")
-for i in range(10, data_length, 1):
-    # 데이터를 기간별 slice
-    data = obj_data.get_real_time_segments(end_idx=i, real_time_kilne=real_time_data, step=minutes)
+for i in range(10, range_length_data-1, 1):
+    # 데이터를 기간별 slice하여 회수
+    kline_data = obj_data.sync_kline_data(idx=i, kline_data=kline_data, idx_mapping=indices_data, sync_data=closing_sync_data)
+
     for symbol in symbols:
 
         # 시나리오 1 검사.
-        case_1 = obj_analy.scenario_1(symbol=symbol, convert_data=data)
+        case_1 = obj_analy.scenario_1(symbol=symbol, convert_data=kline_data)
         """
         대단히 큰 오점이 있다. real_time_segments는 데이터를 1m 기준으로 모든 interval값을 실시간 반영처리하지만,
         scenrario에서 자료 검토시 연속성을 보기 때문에 1분이 아닌 다른 interval 데이터에서 연속성을 보는게 의미가 없다.
@@ -112,8 +115,8 @@ for i in range(10, data_length, 1):
                     # position=reset_position,
                     leverage=int(case_1[4] / 60),
                     balance=trade_balance,
-                    entry_price=data.get(symbol).get("1m")[-1][4],
-                    open_timestamp=data.get(symbol).get("1m")[-1][6],
+                    entry_price=kline_data.get(symbol).get("1m")[-1][4],
+                    open_timestamp=kline_data.get(symbol).get("1m")[-1][6],
                 )
             )
             # 주문 신호 발생시
@@ -135,7 +138,7 @@ for i in range(10, data_length, 1):
 
         # 포지션 종료 검사.
         # 현재가
-        current_price = float(data[symbol]["1m"][-1][4])
+        current_price = float(kline_data[symbol]["1m"][-1][4])
         # wallet 보유현황
         is_wallet = obj_process.trading_data.get(symbol)
         # print(is_wallet)
@@ -185,7 +188,7 @@ print("\n")
 print("==>> wallet info")
 pprint(obj_wallet.balance_info)
 utils._save_to_json(
-    file_path="/Users/cjupit/Documents/GitHub/DataStore/balance_info.json",
+    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/balance_info.json",
     new_data=obj_wallet.balance_info,
 )
 
@@ -193,7 +196,7 @@ print("\n")
 print("==>> balance info")
 pprint(obj_wallet.account_balances)
 utils._save_to_json(
-    file_path="/Users/cjupit/Documents/GitHub/DataStore/account_balances.json",
+    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/account_balances.json",
     new_data=obj_wallet.account_balances,
 )
 
@@ -204,7 +207,7 @@ for idx, data in enumerate(trade_data):
     print(f"No. {idx}")
     pprint(data)
 utils._save_to_json(
-    file_path="/Users/cjupit/Documents/GitHub/DataStore/trade_data.json",
+    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/trade_data.json",
     new_data=trade_data,
 )
 
@@ -300,7 +303,7 @@ utils._save_to_json(
 #                            end_date=end_date)
 
 #     print(f'데이터 다운로드 시작 >> {datetime.now()}')
-#     data_length, real_time_data = asyncio.run(obj_data.read_data_run(download_if_missing=False))
+#     data_length, closing_sync_data = asyncio.run(obj_data.read_data_run(download_if_missing=False))
 #     print(f'데이터 다운로드 완료 >> {datetime.now()}')
 
 #     seed_money = 100
@@ -313,7 +316,7 @@ utils._save_to_json(
 #     print(f'분석 시작 {datetime.now()}')
 
 #     for i in range(10, data_length, 1):
-#         data = obj_data.get_real_time_segments(end_idx=i, real_time_kilne=real_time_data)
+#         data = obj_data.get_sliced_segments(end_idx=i, real_time_kilne=closing_sync_data)
 #         args_list = [(symbol, data, obj_analy, obj_con, obj_order, obj_wallet, obj_process) for symbol in symbols]
 #         results = pool.map(process_symbol, args_list)
 

@@ -329,11 +329,11 @@ class AnalysisManager:
         kline_data_1m = convert_data.get(symbol).get(target_interval[0])
 
         # 종가 연속성 및 포지션 체크
-        price_bool, _, price_case, close_price_score = self.__get_trade_score(
+        price_bool, count, price_case, close_price_score = self.__get_trade_score(
             col_idx=4, kline_data_interval=kline_data_5m
         )
         # 거래대금 연속성 및 포지션 체크
-        value_bool, _, value_case_, value_score = self.__get_trade_score(
+        value_bool, count, value_case_, value_score = self.__get_trade_score(
             col_idx=10, kline_data_interval=kline_data_5m
         )
 
@@ -356,25 +356,25 @@ class AnalysisManager:
         time_ago_minute = -60
         time_ago_hour = -1
 
-        # 초기 데이터의 길이가 60이 넘지 않을경우 time_ago_minute 반영시 error발생. 이를 방지하기 위함.
-        if self.back_test and len(kline_data_1m) >= abs(
-            time_ago_minute + time_ago_hour
-        ):
-            """
-            real time data의 1h값 데이터는 1m과 길이가 같으므로 동일하게 -1 적용시 1분 전 데이터 반영됨.
-            그러므로 60분 전 데이터를 적용
-            """
-            target_end_idx = time_ago_minute
-        else:
-            target_end_idx = time_ago_hour
+        # # 초기 데이터의 길이가 60이 넘지 않을경우 time_ago_minute 반영시 error발생. 이를 방지하기 위함.
+        # if self.back_test and len(kline_data_1m) >= abs(
+        #     time_ago_minute + time_ago_hour
+        # ):
+        #     """
+        #     real time data의 1h값 데이터는 1m과 길이가 같으므로 동일하게 -1 적용시 1분 전 데이터 반영됨.
+        #     그러므로 60분 전 데이터를 적용
+        #     """
+        #     target_end_idx = time_ago_minute
+        # else:
+        #     target_end_idx = time_ago_hour
 
         # mode None이 아닐경우 계산을 시작한다.
         if mode:
             extreme_price = self.__get_column_extreme(
-                mode=mode, data=kline_data_1h[:target_end_idx], col_idx=4
+                mode=mode, data=kline_data_1h[:time_ago_hour], col_idx=4
             )
             time_diff = self.__get_index_by_value(
-                kline_data_interval=kline_data_1h[:target_end_idx],
+                kline_data_interval=kline_data_1h[:time_ago_hour],
                 threshold=extreme_price,
                 col_idx=4,
             )

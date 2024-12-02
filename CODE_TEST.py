@@ -72,10 +72,11 @@ for i in range(10, range_length_data-1, 1):
     # 데이터를 기간별 slice하여 회수
     kline_data = obj_data.sync_kline_data(idx=i, kline_data=kline_data, idx_mapping=indices_data, sync_data=closing_sync_data)
 
+    target_data = obj_data.get_kline_interval_data_by_range(end_idx=i, kline_data=kline_data, idx_data=indices_data)
     for symbol in symbols:
 
         # 시나리오 1 검사.
-        case_1 = obj_analy.scenario_1(symbol=symbol, convert_data=kline_data)
+        case_1 = obj_analy.scenario_1(symbol=symbol, convert_data=target_data)
         """
         대단히 큰 오점이 있다. real_time_segments는 데이터를 1m 기준으로 모든 interval값을 실시간 반영처리하지만,
         scenrario에서 자료 검토시 연속성을 보기 때문에 1분이 아닌 다른 interval 데이터에서 연속성을 보는게 의미가 없다.
@@ -115,8 +116,8 @@ for i in range(10, range_length_data-1, 1):
                     # position=reset_position,
                     leverage=int(case_1[4] / 60),
                     balance=trade_balance,
-                    entry_price=kline_data.get(symbol).get("1m")[-1][4],
-                    open_timestamp=kline_data.get(symbol).get("1m")[-1][6],
+                    entry_price=target_data.get(symbol).get("1m")[-1][4],
+                    open_timestamp=target_data.get(symbol).get("1m")[-1][6],
                 )
             )
             # 주문 신호 발생시
@@ -138,7 +139,7 @@ for i in range(10, range_length_data-1, 1):
 
         # 포지션 종료 검사.
         # 현재가
-        current_price = float(kline_data[symbol]["1m"][-1][4])
+        current_price = float(target_data[symbol]["1m"][-1][4])
         # wallet 보유현황
         is_wallet = obj_process.trading_data.get(symbol)
         # print(is_wallet)

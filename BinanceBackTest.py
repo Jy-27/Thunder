@@ -177,7 +177,7 @@ class DataManager:
                 # Target interval에 해당하는 데이터 복사
                 if interval == target_interval:
                     processed_data[symbol][interval] = np.array(
-                        object=kline_data_interval, dtype=float
+                        object=kline_data_interval, dtype=np.float32
                     )
                     continue
 
@@ -253,7 +253,7 @@ class DataManager:
 
                 # 리스트를 NumPy 배열로 변환
                 processed_data[symbol][interval] = np.array(
-                    object=processed_data[symbol][interval], dtype=float
+                    object=processed_data[symbol][interval], dtype=np.float32
                 )
 
         return processed_data
@@ -268,7 +268,7 @@ class DataManager:
             3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
             4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
         
-        
+        동작은 문제 없으나 너무 느림. 개선이 필요함.
         """
         idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
         for symbol, kline_data_symbol in kline_data.items():
@@ -278,7 +278,14 @@ class DataManager:
                 kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
         return kline_data
 
+    # 각 interval별 1minute 단위로 환산한다.
     def __convert_interval_to_minutes(self, minute:int, interval:str):
+        """
+        1. 기능 : 1muntes값을 각 interval별 값으로 환산한다.
+        2. 매개변수
+            1) minute : 타겟 시간 (분)
+            2) interval : 환산하고자 하는 interval 값        
+        """
         result = {'1m': 1,
                   '3m': 3,
                   '5m':5,
@@ -292,6 +299,8 @@ class DataManager:
                   '12h':720,
                   '1d':1440,
                   '3d':4320}
+        if not minute in result.keys():
+            raise ValueError(f'interval이 유효하지 않음 - {interval}')
         return result.get(interval) / minute
 
 
@@ -336,7 +345,7 @@ class DataManager:
         result = {}
         for _, data in kline_data.items():
             for interval, nested_data in data.items():
-                result[interval] = np.array(nested_data, dtype=float)
+                result[interval] = np.array(nested_data, dtype=np.float32)
         return result
 
     # kline_data의 최하위 중첩 데이터를 np.array처리한다.
@@ -349,7 +358,7 @@ class DataManager:
             for interval, kline_data_interval in kline_data_symbol.items():
                 if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
                     raise ValueError('kline data가 유효하지 않음.')
-                result[symbol][interval] = np.array(object=kline_data_interval, dtype=float)
+                result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float32)
         return result                
                 
 
@@ -429,54 +438,99 @@ class DataManager:
                 result[symbol][interval] = kline_data_interval[start_idx:end_idx]
         return result
 
-    # 
+    # # 
+    # def get_kline_interval_data_by_range(
+    #     self,
+    #     end_idx: int,
+    #     kline_data: Dict,
+    #     idx_data: List[List[int]],
+    #     step: int = 4_320,
+    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+    #     """
+    #     1. 기능 : 기간별 데이터를 추출한다.
+    #     2. 매개변수
+    #         1) start_idx : idx 0 ~ x까지 값을 입력
+    #         2) step : 데이터 기간(min : 4320
+    #             - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
+    #         3) idx_data : self.get_matching_indices() 연산값.
+    #         4) step : 시작과 끝점간의 범위 (단위 : minutes)
+    #     3.Memo
+    #         >>> closing_sync_data를 대상으로 하는게 아님.
+    #         >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
+    #         >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
+    #                 예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
+    #                 1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
+    #     """
+    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+
+    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(
+    #                     idx_values=idx_data[end_idx]
+    #                 )
+        
+
+    #     for symbol, kline_data_symbol in kline_data.items():
+    #         result[symbol] = {}
+    #         for interval, kline_data_interval in kline_data_symbol.items():
+    #             idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
+    #             # intervals 리스트에 없는 interval은 제외한다.
+    #             if not interval in self.intervals:
+    #                 continue
+    #             if interval == self.intervals[0]:
+    #                 start_idx = end_idx - step
+    #             else:
+    #                 start_idx = end_idx - (step/idx_convert_map)
+                
+    #             if start_idx < 0:
+    #                 start_idx = 0
+
+    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+
+    #     return result
+
     def get_kline_interval_data_by_range(
         self,
         end_idx: int,
-        kline_data: Dict,
+        kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
         idx_data: List[List[int]],
-        step: int = 4_320,
+        step: int = 4320,
     ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
         """
-        1. 기능 : 기간별 데이터를 추출한다.
-        2. 매개변수
-            1) start_idx : idx 0 ~ x까지 값을 입력
-            2) step : 데이터 기간(min : 4320
-                - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
-            3) idx_data : self.get_matching_indices() 연산값.
-            4) step : 시작과 끝점간의 범위 (단위 : minutes)
-        3.Memo
-            >>> closing_sync_data를 대상으로 하는게 아님.
-            >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
-            >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
-                    예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
-                    1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
+        개선된 버전: 비효율적인 반복문과 조건문 최적화
         """
         result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
 
-        idx_map: Dict[str, int] = self.__map_intervals_to_indices(
-                        idx_values=idx_data[end_idx]
-                    )
-        
+        # intervals를 집합으로 변환
+        interval_set = set(self.intervals)
+
+        # 사전 계산된 매핑 캐싱
+        idx_map: Dict[str, int] = self.__map_intervals_to_indices(idx_values=idx_data[end_idx])
+        idx_convert_map: Dict[str, int] = {
+            interval: self.__convert_interval_to_minutes(minute=step, interval=interval)
+            for interval in self.intervals
+        }
 
         for symbol, kline_data_symbol in kline_data.items():
             result[symbol] = {}
-            for interval, kline_data_interval in kline_data_symbol.items():
-                idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
-                # intervals 리스트에 없는 interval은 제외한다.
-                if not interval in self.intervals:
-                    continue
-                if interval == self.intervals[0]:
-                    start_idx = end_idx - step
-                else:
-                    start_idx = end_idx - (step/idx_convert_map)
-                
-                if start_idx < 0:
-                    start_idx = 0
 
+            # start_idx를 미리 계산하여 캐싱
+            start_idx_map = {}
+            for interval in self.intervals:
+                if interval == self.intervals[0]:
+                    start_idx_map[interval] = max(0, end_idx - step)
+                else:
+                    start_idx_map[interval] = max(0, end_idx - int(step / idx_convert_map.get(interval, 1)))
+
+            # 데이터를 처리
+            for interval, kline_data_interval in kline_data_symbol.items():
+                if interval not in interval_set:
+                    continue
+
+                start_idx = start_idx_map[interval]
                 result[symbol][interval] = kline_data_interval[start_idx:end_idx]
 
         return result
+
+
 
     # kline real_data 확보 관련 통합실행
     async def download_data_run(
@@ -933,7 +987,6 @@ class WalletManager:
         2. 매개변수
             1) symbol : 쌍거래 symbol
             2) current_price :현재가
-
         """
         wallet = self.account_balances.get(symbol)
         if wallet:

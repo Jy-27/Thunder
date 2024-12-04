@@ -10,6 +10,45 @@ from decimal import Decimal, ROUND_UP, ROUND_DOWN
 T = TypeVar("T")
 
 
+class DataContainer:
+    """
+    동적 데이터를 저장하고 관리한다. (변수명을 직접 등록하는게 아니라 함수로 생성함.)
+    """
+    def __init__(self):
+        """동적 데이터를 저장하고 관리하는 컨테이너."""
+        pass  # 딕셔너리 없이 속성만을 동적으로 관리
+
+    def set_data(self, data_name, data):
+        """
+        1. 기능 : 속성명을 지정하고 데이터를 저장한다.
+        2. 매개변수
+            1) data_name : 등록할 속성명
+            2) data : 저장할 data
+        """
+        # data_name이 숫자로 시작하는지 확인
+        if data_name[0].isdigit():
+            raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
+        
+        setattr(self, data_name, data)
+
+    def get_data(self, data_name):
+        """
+        1. 기능 : 저장된 속성에 대하여 데이터를 불러온다.
+        2. 매개변수
+            1) data_name : 불러올 속성명
+        """
+        if hasattr(self, data_name):
+            return getattr(self, data_name)
+        else:
+            raise AttributeError(f"No attribute named '{data_name}'")
+    
+    def get_all_data_names(self):
+        """
+        1. 기능 : 현재 저장된 모든 속성명(변수명)을 반환한다.
+        2. 반환값: 속성명 리스트
+        """
+        return list(self.__dict__.keys())
+
 # None발생시 Return 대응
 def _none_or(result: Optional[T]) -> Optional[T]:
     if not result:
@@ -300,24 +339,6 @@ def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
         print("JSON 파일을 파싱하는 데 실패했습니다.")
         return None
 
-
-# # 올림함수
-# def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
-#     """
-#     1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 올림 처리하는 함수.
-#     2. 매개변수
-#         1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
-#         2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
-#     """
-#     # 입력값을 Decimal로 변환 (타입 검증 및 변환 과정)
-#     try:
-#         value = Decimal(value)  # value를 Decimal로 변환
-#         step = Decimal(step)    # step을 Decimal로 변환
-#     except (ValueError, TypeError):
-#         raise ValueError("value와 step은 문자열(str) 또는 실수(float)로 변환 가능한 값이어야 합니다.")
-
-#     # Decimal의 quantize 메서드를 사용해 올림 처리
-#     return float(value.quantize(step, rounding=ROUND_UP))
 
 
 # 올림 함수

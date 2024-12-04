@@ -67,7 +67,7 @@ class AnalysisManager:
             result[symbol] = {}
             for interval, kline_data_interval in kline_data_symbol.items():
                 result[symbol][interval] = np.array(
-                    object=kline_data_interval, dtype=float
+                    object=kline_data_interval, dtype=np.float32
                 )
         return result
 

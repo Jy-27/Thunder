@@ -118,6 +118,35 @@ class TradeStopper:
         """모든 트레이딩 데이터를 삭제"""
         self.trading_data.clear()
 
+class IntervalManager:
+    def __init__(self):
+        # 속성을 초기화하지 않아도 동적 관리 가능
+        self.interval_1m = None
+        self.interval_3m = None
+        self.interval_5m = None
+        self.interval_15m = None
+        self.interval_30m = None
+        self.interval_1h = None
+        self.interval_2h = None
+        self.interval_4h = None
+        self.interval_6h = None
+        self.interval_8h = None
+        self.interval_12h = None
+        self.interval_1d = None
+        self.interval_3d = None
+        self.interval_1w = None
+        self.interval_1M = None
+
+    def add_interval(self, interval_name, data):
+        """동적으로 속성을 생성하고 데이터를 추가"""
+        setattr(self, interval_name, data)
+
+    def get_interval(self, interval_name):
+        """입력받은 이름과 매칭되는 속성 반환"""
+        if hasattr(self, interval_name):
+            return getattr(self, interval_name)
+        else:
+            raise AttributeError(f"No attribute named '{interval_name}'")
 
 class OrderConstraint:
     """ 주문시 제약사항을 생성한다. """

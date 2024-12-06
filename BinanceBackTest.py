@@ -177,7 +177,7 @@ class DataManager:
                 # Target interval에 해당하는 데이터 복사
                 if interval == target_interval:
                     processed_data[symbol][interval] = np.array(
-                        object=kline_data_interval, dtype=np.float32
+                        object=kline_data_interval, dtype=np.float64
                     )
                     continue
 
@@ -253,7 +253,7 @@ class DataManager:
 
                 # 리스트를 NumPy 배열로 변환
                 processed_data[symbol][interval] = np.array(
-                    object=processed_data[symbol][interval], dtype=np.float32
+                    object=processed_data[symbol][interval], dtype=np.float64
                 )
 
         return processed_data
@@ -345,7 +345,7 @@ class DataManager:
         result = {}
         for _, data in kline_data.items():
             for interval, nested_data in data.items():
-                result[interval] = np.array(nested_data, dtype=np.float32)
+                result[interval] = np.array(nested_data, dtype=np.float64)
         return result
 
     # kline_data의 최하위 중첩 데이터를 np.array처리한다.
@@ -358,7 +358,7 @@ class DataManager:
             for interval, kline_data_interval in kline_data_symbol.items():
                 if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
                     raise ValueError('kline data가 유효하지 않음.')
-                result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float32)
+                result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float64)
         return result                
                 
 

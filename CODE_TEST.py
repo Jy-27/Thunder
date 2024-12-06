@@ -29,7 +29,7 @@ symbols = [
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-1 00:00:00"
+start_date = "2024-11-20 00:00:00"
 end_date = "2024-11-29 23:59:59"
 
 print(f"instance 로딩 완료 >> {datetime.now()}")

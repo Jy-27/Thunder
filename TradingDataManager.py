@@ -634,11 +634,10 @@ class TradeManager:
                 if not self.validate_kline():
                     print('데이터 부족. continue')
                     continue
-                
-                try:
-                    # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
-                    kline_data_array = utils._convert_to_array(kline_data=self.kline_data)
-                except:
+
+                # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
+                kline_data_array = utils._convert_to_array(kline_data=self.kline_data)
+                if not kline_data_array[2]:
                     continue
                 
                 symbol_map, interval_map, container_data = utils._convert_to_container(kline_data_array)

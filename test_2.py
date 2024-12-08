@@ -29,8 +29,8 @@ symbols = [
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-1"
-end_date = "2024-12-7"
+start_date = "2024-5-1"
+end_date = "2024-8-7"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
@@ -69,7 +69,7 @@ seed_money = 1000
 # 가장 지갑 생성
 obj_wallet = WalletManager(initial_fund=seed_money)
 
-# 래핑 데이터를 이용하여 반복문 실행한다.
+래핑 데이터를 이용하여 반복문 실행한다.
 for idx, d in enumerate(data_c.get_data('map_1m')):
     for interval in intervals:
         maps_ = data_c.get_data(f'map_{interval}')[idx]
@@ -150,71 +150,71 @@ for idx, d in enumerate(data_c.get_data('map_1m')):
     
     
     
-    # 만약 wallet에 해당 symbol이 없다면..손절 검사 실행
-    if is_wallet is not None:
-        # 매도 가격 도달 여부 (bool)
-        is_stop = obj_process.get_trading_stop_signal(
-            symbol=symbol, current_price=price
-        )
-        # 만약 매도 가격 도달시 (True)
-        if is_stop and price >0:
-            # 지갑 금액 정보 업데이트
+#     # 만약 wallet에 해당 symbol이 없다면..손절 검사 실행
+#     if is_wallet is not None:
+#         # 매도 가격 도달 여부 (bool)
+#         is_stop = obj_process.get_trading_stop_signal(
+#             symbol=symbol, current_price=price
+#         )
+#         # 만약 매도 가격 도달시 (True)
+#         if is_stop and price >0:
+#             # 지갑 금액 정보 업데이트
             
-            # 종료 신호 생성
-            value = obj_order.generate_order_close_signal(
-                symbol=symbol,
-                current_price=price,
-                wallet_data=obj_wallet.account_balances,
-            )
+#             # 종료 신호 생성
+#             value = obj_order.generate_order_close_signal(
+#                 symbol=symbol,
+#                 current_price=price,
+#                 wallet_data=obj_wallet.account_balances,
+#             )
             
-            # wallet에 보유정보 삭제 및 손익비용 연산 반환.
-            _, pnl_value = obj_wallet.remove_funds(symbol=symbol)
-            # 매도 가격 도달시 종료하는 함수의 데이터 기록 제거.
-            obj_process.remove_trading_data(symbol)
-            # 계좌정보 별도 저장.
-            trade_data.append(obj_wallet.account_balances.get(symbol))
-            trade_data.append(obj_wallet.balance_info)
+#             # wallet에 보유정보 삭제 및 손익비용 연산 반환.
+#             _, pnl_value = obj_wallet.remove_funds(symbol=symbol)
+#             # 매도 가격 도달시 종료하는 함수의 데이터 기록 제거.
+#             obj_process.remove_trading_data(symbol)
+#             # 계좌정보 별도 저장.
+#             trade_data.append(obj_wallet.account_balances.get(symbol))
+#             trade_data.append(obj_wallet.balance_info)
 
-            # if pnl_value < 0:
-                # pprint(obj_wallet.balance_info)
+#             # if pnl_value < 0:
+#                 # pprint(obj_wallet.balance_info)
                 
-            if not pnl_data.get(symbol):
-                pnl_data[symbol] = float(pnl_value)
-                pnl_count[symbol] = 0
-            else:
-                pnl_data[symbol] += float(pnl_value)
-                pnl_count[symbol] += 1
-    # break
-#실시간 변동이 보고싶다면 이곳에.
-# utils._std_print(f'{i} / {range_length_data}')
-# utils._std_print(round(obj_wallet.get_wallet_status(symbol=symbol, current_price=price)['total_assets'],3))
+#             if not pnl_data.get(symbol):
+#                 pnl_data[symbol] = float(pnl_value)
+#                 pnl_count[symbol] = 0
+#             else:
+#                 pnl_data[symbol] += float(pnl_value)
+#                 pnl_count[symbol] += 1
+#     # break
+# #실시간 변동이 보고싶다면 이곳에.
+# # utils._std_print(f'{i} / {range_length_data}')
+# # utils._std_print(round(obj_wallet.get_wallet_status(symbol=symbol, current_price=price)['total_assets'],3))
 
-# utils._std_print(obj_wallet.balance_info['total_assets'])
-print(f"분석 종료 {datetime.now()}")
+# # utils._std_print(obj_wallet.balance_info['total_assets'])
+# print(f"분석 종료 {datetime.now()}")
 
-print("\n")
-print("==>> wallet info")
-pprint(obj_wallet.balance_info)
-utils._save_to_json(
-    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/balance_info.json",
-    new_data=obj_wallet.balance_info,
-)
+# print("\n")
+# print("==>> wallet info")
+# pprint(obj_wallet.balance_info)
+# utils._save_to_json(
+#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/balance_info.json",
+#     new_data=obj_wallet.balance_info,
+# )
 
-print("\n")
-print("==>> balance info")
-pprint(obj_wallet.account_balances)
-utils._save_to_json(
-    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/account_balances.json",
-    new_data=obj_wallet.account_balances,
-)
+# print("\n")
+# print("==>> balance info")
+# pprint(obj_wallet.account_balances)
+# utils._save_to_json(
+#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/account_balances.json",
+#     new_data=obj_wallet.account_balances,
+# )
 
-print("\n")
-print("==>> PNL info")
+# print("\n")
+# print("==>> PNL info")
 
-for idx, data in enumerate(trade_data):
-    print(f"No. {idx}")
-    pprint(data)
-utils._save_to_json(
-    file_path=f"{os.path.dirname(os.getcwd())}/DataStore/trade_data.json",
-    new_data=trade_data,
-)
+# for idx, data in enumerate(trade_data):
+#     print(f"No. {idx}")
+#     pprint(data)
+# utils._save_to_json(
+#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/trade_data.json",
+#     new_data=trade_data,
+# )

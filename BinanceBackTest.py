@@ -494,6 +494,7 @@ class OrderManager:
         )
 
         margin = (get_max_trade_qty * entry_price) / target_leverage
+        fee_cost = entry_price * leverage * balance * fee
         break_event_price = entry_price * (1 + fee)
 
         # position을 문자형으로 변환함. {0:None, 1:'long', 2':'short'}
@@ -511,6 +512,7 @@ class OrderManager:
             "breakEventPrice": break_event_price,
             "leverage": target_leverage,
             "liq.Price": None,
+            "fee_cost":fee_cost
         }
 
         if get_max_trade_qty < get_min_trade_qty:
@@ -541,6 +543,7 @@ class OrderManager:
             "breakEventPrice": break_event_price,
             "leverage": target_leverage,
             "liq.Price": liq_price,
+            "fee_cost":fee_cost,
             "memo": None,
         }
         return (True, result)
@@ -595,9 +598,9 @@ class OrderManager:
             position=position,
         )  # 실현된 손익
         transaction_fee = current_price * quantity * fee  # 거래 수수료
-        total_value = (margin + realized_pnl) - transaction_fee  # 총 반환 가치
+        total_value = (margin + realized_pnl)  # 총 반환 가치
 
-        return total_value
+        return total_value, transaction_fee
 
     @staticmethod
     def get_calc_pnl(
@@ -701,15 +704,15 @@ class WalletManager:
         margin = order_signal.get("margin")
         if margin is None:
             raise ValueError(f"주문 정보가 유효하지 않음.")
-
+        self.balance_info['locked_funds']['number_of_stocks'] +=1
         self.account_balances[symbol] = order_signal
-        self.balance_info["available_funds"] -= margin * (1 - self.fee)
-        self.__update_locked_funds
+        self.balance_info["available_funds"] -= margin# * (1 + self.fee)
+        self.__update_locked_funds(fee_cost=order_signal['fee_cost'])
         return (self.balance_info, margin)
 
     # 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
     def remove_funds(
-        self, symbol: str
+        self, symbol: str, order_signal
     ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
         """
         1. 기능 : 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
@@ -741,11 +744,11 @@ class WalletManager:
         del self.account_balances[symbol]
 
         # wallet정보를 업데이트 한다.
-        self.__update_locked_funds
+        self.__update_locked_funds(fee_cost=order_signal[1])
         return (self.balance_info, pnl_value)
 
     # 계좌 정보를 업데이트한다.
-    def __update_locked_funds(self):
+    def __update_locked_funds(self, fee_cost):
         """
         1. 기능 : 계좌정보를 현재가격을 반영하여 업데이트한다.
         2. 매개변수 : 해당없음.
@@ -766,6 +769,7 @@ class WalletManager:
             quantity = symbol_data.get("quantity")
             position = symbol_data.get("position")
             margin = symbol_data.get("margin")
+            # fee = margin * margin
 
             # 데이터에 문제가 발생할 경우 stop처리 한다. 하나라도 이상 데이터가 나올 수 없다.
             if None in (entry_price, current_price, quantity, position, margin):
@@ -793,7 +797,7 @@ class WalletManager:
         self.balance_info["locked_funds"]["profit_and_loss"] = profit_and_loss
         self.balance_info["locked_funds"]["maintenance_margin"] = maintenance_margin
         self.balance_info["locked_funds"]["profit_margin_ratio"] = profit_margin_ratio
-        self.balance_info["total_assets"] = total_assets
+        self.balance_info["total_assets"] = total_assets - fee_cost
 
         return self.balance_info
 
@@ -820,7 +824,7 @@ class WalletManager:
     ) -> Dict[str, float]:
         # wallet에 대해 symbol정보 없을때에 대하여 대비 되어 있음 (pass 처리)
         self.__update_current_price(symbol=symbol, current_price=current_price)
-        self.__update_locked_funds()
+        self.__update_locked_funds(fee_cost=0)
         return self.balance_info
 
 

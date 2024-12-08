@@ -105,8 +105,11 @@ def _convert_to_container(kline_data):
     
             target_data = kline_data[symbol][interval]
             dummy_data.append(target_data)
-        
-        dummy_data = np.array(dummy_data)
+        try:
+            dummy_data = np.array(dummy_data)
+        except Exception as e:
+            print(f'error - {e}')
+            return 0, 0, False
         container_data.set_data(data_name = f'interval_{interval}', data=dummy_data)
     return map_symbol, map_interval, container_data
 

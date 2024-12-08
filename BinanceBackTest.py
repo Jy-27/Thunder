@@ -99,7 +99,7 @@ class DataManager:
         self.parent_directory = os.path.dirname(os.getcwd())
 
     # 장기간 kline data수집을 위한 date간격을 생성하여 timestamp형태로 반환한다.
-    def generate_timestamp_ranges(
+    def __generate_timestamp_ranges(
         self, interval: str, start_date: str, end_date: str
     ) -> List[List[int]]:
         if start_date is None:
@@ -186,7 +186,7 @@ class DataManager:
             4) end_date : 종료 날짜 (년-월-일 만 넣을것.)
             5) save : 저장여부
         3. 추가설명
-            self.generate_timestamp_ranges가 함수내에 호출됨.        
+            self.__generate_timestamp_ranges가 함수내에 호출됨.        
         """
         
         # 기본값 설정
@@ -212,7 +212,7 @@ class DataManager:
 
             for interval in intervals:
                 aggregated_results[symbol][interval] = {}
-                timestamp_ranges = self.generate_timestamp_ranges(
+                timestamp_ranges = self.__generate_timestamp_ranges(
                     interval=interval, start_date=start_date, end_date=end_date
                 )
 
@@ -347,7 +347,7 @@ class DataManager:
         return output_data
 
     # generate_kline_closing_sync index 자료를 생성한다.
-    def get_indices_data(self, data_container, lookback_days: int = 2):
+    def get_indices_data(self, data_container, lookback_days: int = 2, save: bool= False):
         """
         1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
         2. 매개변수
@@ -403,6 +403,10 @@ class DataManager:
                     # (series_index, interval_range) 추가
                     indices_data.append((series_index, interval_range))
             data_container.set_data(data_name=f'map_{interval}', data=indices_data)
+        
+        if save:
+            path = os.path.join(self.parent_directory, self.storeage, indices_file)
+            utils._save_to_json(indices_data)
         return indices_data
     
         # original code
@@ -429,6 +433,14 @@ class DataManager:
         #     data_container.set_data(data_name=f'map_{interval}', data=indices_data)
         # return indices_data
 
+    # Data Manager 함수를 일괄 실행 및 정리한다.
+    async def data_manager_run(self, save:bool=False):
+        kline_data = await self.generate_kline_interval_data(save=save)
+        kline_data_array = utils._convert_to_array(kline_data=kline_data)
+        closing_sync = self.generate_kline_closing_sync(kline_data=kline_data_array, save=True)
+        data_container = utils._convert_to_container(kline_data=closing_sync)
+        indices_data = self.get_indices_data(data_container=data_container, lookback_days=2, save=True)
+        return kline_data_array, closing_sync, indices_data
 
 class OrderManager:
 
@@ -632,14 +644,14 @@ class OrderManager:
         """
         position_type = position_type.upper()
 
-        if leverage <= 0:
-            raise ValueError("Leverage must be greater than 0.")
-        if quantity <= 0:
-            raise ValueError("Position size must be greater than 0.")
-        if margin_balance <= 0:
-            raise ValueError("Margin balance must be greater than 0.")
-        if position_type not in ["LONG", "SHORT"]:
-            raise ValueError("Position type must be 'long' or 'short'.")
+        # if leverage <= 0:
+        #     raise ValueError("Leverage must be greater than 0.")
+        # if quantity <= 0:
+        #     raise ValueError("Position size must be greater than 0.")
+        # if margin_balance <= 0:
+        #     raise ValueError("Margin balance must be greater than 0.")
+        # if position_type not in ["LONG", "SHORT"]:
+        #     raise ValueError("Position type must be 'long' or 'short'.")
 
         # 초기 증거금 계산
         initial_margin = quantity / leverage
@@ -713,6 +725,7 @@ class WalletManager:
         quantity = target_data.get("quantity")
         position = target_data.get("position")
         margin = target_data.get("margin")
+        leverage = target_data.get('leverage')
         if None in (entry_price, current_price, quantity, position, margin):
             raise ValueError("데이터가 유효하지 않음.")
 
@@ -722,7 +735,7 @@ class WalletManager:
             quantity=quantity,
             position=position,
         )
-        fund = pnl_value + margin
+        fund = pnl_value + (margin * leverage)
 
         self.balance_info["available_funds"] += fund
         del self.account_balances[symbol]

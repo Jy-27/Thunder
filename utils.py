@@ -94,7 +94,7 @@ def _convert_to_container(kline_data):
     
     symbols = list(kline_data.keys())
     intervals = list(kline_data[symbols[0]].keys())
-    
+    print('START')
     for idx_i, interval in enumerate(intervals):
         map_interval[interval] = idx_i
     
@@ -105,7 +105,7 @@ def _convert_to_container(kline_data):
     
             target_data = kline_data[symbol][interval]
             dummy_data.append(target_data)
-    
+        
         dummy_data = np.array(dummy_data)
         container_data.set_data(data_name = f'interval_{interval}', data=dummy_data)
     return map_symbol, map_interval, container_data

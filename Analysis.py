@@ -71,12 +71,17 @@ class AnalysisManager:
     interval데이터 분리 및 조회를 용이하기 위함.    
     """
     
-    def case_1(self, kline_data_lv3: Dict):
+    def case_1_data_length(self, kline_data_lv3: Dict):
         """
-        1. 기능 : 연속 상승 또는 하락을 음수 / 양수로 표시한다.
+        1. 기능 : 데이터 길이 정보를 저장한다.
         2. 매개변수
             1) kline_data_v3 : interval data
+            
+        3. 추가설명
+            >> 각 case검토건중 이부는 좌표값만 연산된다. 이때 기준잡기 위하여 데이터길이를 연산한다.
+            index값 확인이 필요하다면 길이 -1 하면 된다.
         """
+        self.case_1.append(len(kline_data_lv3))
 
     def case_2_candle_length(self, kline_data_lv3: Dict):
         """
@@ -126,7 +131,6 @@ class AnalysisManager:
             if np.all(trend[start:end] == -1)
         ]
 
-        # 6. 결과 저장
         self.case_3.append((increase_positions, decrease_positions))
 
     # 가장 마지막값이 이전값의 누적 합계보다 몇개의 데이터보다 큰지 연산한다.
@@ -136,6 +140,8 @@ class AnalysisManager:
         2. 매개변수
             1) kline_data : interval data
             2) col : 연산하고 싶은 컬럼값
+            
+            
         """
         col_data = kline_data_lv3[:, col]
         rev_cumsum = np.cumsum(col_data[::-1])[::-1]
@@ -172,7 +178,35 @@ class AnalysisManager:
         adj_neg_count = neg_count - 1
         
         # 조건에 따른 반환
-        self.case_5.append(max(adj_neg_count, 0) if neg_count > 0 else len(kline_data_lv3))
+        self.case_5.append(max(adj_neg_count, 0) if neg_count > 0 else 0)
+
+    def scenario_1(self):
+        target_diff = 3
+        interval_5m = 2
+
+        is_case_5 = self.case_5[interval_5m] > 5
+            
+        case_3_data_increase = self.case_3[interval_5m][0]
+        case_3_data_decrease = self.case_3[interval_5m][1]
+        
+        # 데이터가 없을경우 False를 반환한다.
+        if not case_3_data_increase or not case_3_data_decrease:
+            return (False, 0, 0)
+        
+        target_data_max_idx = self.case_1[interval_5m]-1
+        if case_3_data_increase[-1][-1] == target_data_max_idx:
+            diff_data = np.diff(case_3_data_increase)[-1][0]
+            is_case_3 = (True, 1, diff_data)
+        elif case_3_data_decrease[-1][-1] == target_data_max_idx:
+            diff_data = np.diff(case_3_data_increase)[-1][0]
+            is_case_3 = (True, 2, diff_data)
+        else:
+            is_case_3 = (False, 0, 0)
+                
+        if is_case_5 and is_case_3[0] and is_case_3[2]>=target_diff:
+            return is_case_3
+        else:
+            return (False, 0, 0)
 
 class Disposer:
         # kline 데이터의 자료를 리터럴 변환

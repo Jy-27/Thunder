@@ -50,16 +50,16 @@ class TradeManager:
             "1m",
             "3m",
             "5m",
-            "15m",
-            "30m",
+            # "15m",
+            # "30m",
             "1h",
-            "2h",
-            "4h",
-            "6h",
-            "8h",
-            "12h",
-            "1d",
-            "3d",
+            # "2h",
+            # "4h",
+            # "6h",
+            # "8h",
+            # "12h",
+            # "1d",
+            # "3d",
             # "1w",
             # "1M",
         ]
@@ -609,37 +609,92 @@ class TradeManager:
                             await self._merge_kline_data(message)
 
     # TEST ZONE = 검토대상 체크한다.
+    
+    def validate_kline(self):
+        symbols_key = (self.kline_data.keys())
+        
+        is_symbol = set(symbols_key) == set(self.active_tickers)
+        
+        if not is_symbol:
+            return False
+        
+        for symbol, kline_data_symbol in self.kline_data.items():
+            is_interval = set(kline_data_symbol.keys()) == set(self.KLINE_INTERVALS)
+            if not is_interval:
+                return False
+        return True
+            
+    
     async def analysis_loop(self):
         target_interval = "5m"
+        await asyncio.sleep(20)
         while True:
             async with self.lock:
-                self.analysis_instance.update_data(
-                    kline_data=self.kline_data,
-                    intervals=self.KLINE_INTERVALS,
-                    tickers=self.active_tickers,
-                )
-                for ticker in self.analysis_instance.tickers:
-                    is_kline_data = self.analysis_instance._validate_kline_data(ticker)
-                    if not is_kline_data:
-                        continue
-                    case_1 = self.analysis_instance.case1_conditions(ticker)
-                    # DEBUG
-                    if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
-                        print(f"{ticker} - {case_1}")
-
-                        order_position = case_1[0]
-                        order_leverage = case_1[3]
-                        if order_leverage is None or order_leverage < 3:
-                            # order_leverage = 5
-                            continue
-
+                # kline update중 데이터가 부실할경우 continue
+                if not self.validate_kline():
+                    print('데이터 부족. continue')
+                    continue
+                
+                try:
+                    # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
+                    kline_data_array = utils._convert_to_array(kline_data=self.kline_data)
+                except:
+                    continue
+                
+                symbol_map, interval_map, container_data = utils._convert_to_container(kline_data_array)
+                for symbol, idx_s in symbol_map.items():
+                    for interval in interval_map.keys():
+                        get_data = container_data.get_data(f'interval_{interval}')[idx_s]
+                        self.analysis_instance.case_1_data_length(kline_data_lv3=get_data)
+                        self.analysis_instance.case_2_candle_length(kline_data_lv3=get_data)
+                        self.analysis_instance.case_3_continuous_trend_position(kline_data_lv3=get_data)
+                        self.analysis_instance.case_4_process_neg_counts(kline_data_lv3=get_data, col=7)
+                        self.analysis_instance.case_5_diff_neg_counts(kline_data_lv3=get_data, col1=1, col2=4)
+                
+                    scenario_1 = self.analysis_instance.scenario_1()
+                    print(scenario_1)
+                    self.analysis_instance.reset_cases()
+                    
+                    if scenario_1:
                         await self.submit_open_order_signal(
-                            symbol=ticker,
-                            position=order_position,
-                            leverage=order_leverage,
+                            symbol=symbol,
+                            position=scenario_1[1],
+                            leverage=scenario_1[2],
                         )
                         # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="second", duration=20)
+    # original code
+    # async def analysis_loop(self):
+    #     target_interval = "5m"
+    #     while True:
+    #         async with self.lock:
+    #             self.analysis_instance.update_data(
+    #                 kline_data=self.kline_data,
+    #                 intervals=self.KLINE_INTERVALS,
+    #                 tickers=self.active_tickers,
+    #             )
+    #             for ticker in self.analysis_instance.tickers:
+    #                 is_kline_data = self.analysis_instance._validate_kline_data(ticker)
+    #                 if not is_kline_data:
+    #                     continue
+    #                 case_1 = self.analysis_instance.case1_conditions(ticker)
+    #                 # DEBUG
+    #                 if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
+    #                     print(f"{ticker} - {case_1}")
+
+    #                     order_position = case_1[0]
+    #                     order_leverage = case_1[3]
+    #                     if order_leverage is None or order_leverage < 3:
+    #                         # order_leverage = 5
+    #                         continue
+
+    #                     await self.submit_open_order_signal(
+    #                         symbol=ticker,
+    #                         position=order_position,
+    #                         leverage=order_leverage,
+    #                     )
+    #                     # self.save_to_json(file_path=path, new_data=result)
+    #         await utils._wait_time_sleep(time_unit="second", duration=20)
 
 
 class SpotTrade(TradeManager):

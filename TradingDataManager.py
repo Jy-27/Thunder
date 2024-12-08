@@ -25,6 +25,7 @@ import datetime
 import json
 
 
+
 class TradeManager:
     def __init__(
         self,
@@ -430,63 +431,6 @@ class TradeManager:
 
         return int(max_klines_per_day)
 
-    # kline minute 또는 hour의 장시간 대량 데이터 수집
-    async def get_historical_kline_hour_min(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: Optional[Union[str, datetime.datetime]] = None,
-        end_date: Optional[Union[str, datetime.datetime]] = None,
-    ):
-        """
-        1. 기능 : kline 기간별 데이터를 minute 또는 hour interval기준으로 수신 및 반환
-        2. 매개변수
-            1) symbol : 조회하고자 하는 쌍거래 심볼
-            2) interval : KLINE_INTERVALS 속성 참조
-            3) start_date : '2024-01-01' 또는 datetime.datetime형태 자료
-            3) end_data : '2024-01-01' 또는 datetime.datetime형태 자료
-        """
-        
-        MAX_LIMIT = 1_000
-        
-        day, limit = self._get_valid_kline_limit(interval=interval)
-        if not start_date and end_date:
-            return await self.market_instance.fetch_klines_limit(
-                symbol=symbol, interval=interval
-            )
-        elif start_date and not end_date:
-            return await self.market_instance.fetch_kllines_date(
-                symbol=symbol, interval=interval, start_date=start_date
-            )
-
-        elif start_date and end_date:
-            historicla_kline_data = []
-            start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
-            end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
-
-            if start_timestamp > end_timestamp:
-                raise ValueError(f"start_date는 end_date보다 클 수 없음.")
-
-            
-            
-            while True:
-                data = await self.market_instance.fetch_klines_date(
-                    symbol=symbol, interval=interval, start_date=start_date
-                )
-                if day > 1:
-                    start_date = utils._convert_to_datetime(
-                        date=start_date
-                    ) + datetime.timedelta(days=day)
-                else:
-                    start_date = utils._convert_to_datetime(
-                        date=start_date
-                    ) + datetime.timedelta(minutes=MAX_LIMIT)
-                historicla_kline_data.extend(data)
-                if data[-1][6] > end_timestamp:
-                    break
-
-            return historicla_kline_data
-
     # kline전체를 days기준 범위로 업데이트한다.
     async def update_all_klines(self, days: int = 1):
         """
@@ -524,7 +468,7 @@ class TradeManager:
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
-        KLINE_LMIT: Final[int] = 300
+        KLINE_LMIT: Final[int] = 300 
 
         while True:
             await utils._wait_until_exact_time(time_unit="minute")

@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import sys
+import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -66,6 +67,48 @@ def _str_to_list(data: Union[list, str], to_upper: bool = False) -> list:
 
     else:
         raise ValueError(f"type 입력오류: '{type(data)}'는 지원되지 않는 타입입니다.")
+
+# dict의 중첩된 값을 np.array화 한다.
+def _convert_to_array(kline_data:dict):
+    result = {}
+    
+    for symbol, kline_data_symbol in kline_data.items():
+        result[symbol] = {}
+        for interval, kline_data_interval in kline_data_symbol.items():
+            result[symbol][interval] = np.array(object=kline_data_interval, dtype=float)
+    return result
+
+# kline_data를 container 자료형으로 반환한다.
+def _convert_to_container(kline_data):
+    """
+    1. 기능 : np.array를 적용한 kline_data를 container데이터로 분류한다.
+    2. 매개변수
+        1) np.array를 적용한 kline_data
+    3. 추가설명
+        >> backtest할 경우 generate_kline_closing_sync처리한 데이터를 반영할것.
+    """
+    container_data = DataContainer()
+    
+    map_symbol = {}
+    map_interval = {}
+    
+    symbols = list(kline_data.keys())
+    intervals = list(kline_data[symbols[0]].keys())
+    
+    for idx_i, interval in enumerate(intervals):
+        map_interval[interval] = idx_i
+    
+        dummy_data = []
+        
+        for idx_s, symbol in enumerate(symbols):
+            map_symbol[symbol] = idx_s
+    
+            target_data = kline_data[symbol][interval]
+            dummy_data.append(target_data)
+    
+        dummy_data = np.array(dummy_data)
+        container_data.set_data(data_name = f'interval_{interval}', data=dummy_data)
+    return map_symbol, map_interval, container_data
 
 
 # 리터럴 값으로 파싱
@@ -429,3 +472,15 @@ def _std_print(message: str):
     sys.stdout.write("\033[K")  # 현재 줄의 내용을 지움
     sys.stdout.write(f"\r{message}")  # 커서를 줄의 시작으로 이동 후 메시지 출력
     sys.stdout.flush()
+    
+def _convert_kline_data_array(kline_data: Dict) -> Dict[str, Dict[str, np.ndarray]]:
+    result = {}
+    for symbol, kline_data_symbol in kline_data.items():
+        if not isinstance(kline_data_symbol, dict) or not kline_data_symbol:
+            raise ValueError('kline data가 유효하지 않음.')
+        result[symbol] = {}
+        for interval, kline_data_interval in kline_data_symbol.items():
+            if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
+                raise ValueError('kline data가 유효하지 않음.')
+            result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float64)
+    return result 

@@ -12,6 +12,7 @@ from typing import Dict, List, Union, Any, Optional, Tuple
 import utils
 import datetime
 from BinanceTradeClient import FuturesOrder, SpotOrder
+from MarketDataFetcher import FuturesMarket, SpotMarket
 
 """
 1. 목적
@@ -83,552 +84,357 @@ class DataManager:
         self.start_date: str = start_date
         self.end_date: str = end_date
 
-        # kline data수집을 위한 instance
-        self.ins_spot = SpotTrade()
-        self.ins_futures = FuturesTrade()
+        # 가상 신호발생시 quantity 계산을 위한 호출
+        self.ins_trade_spot = SpotTrade()
+        self.ins_trade_futures = FuturesTrade()
+
+        # kline 데이터 수신을 위한 호출
+        self.ins_market_spot = SpotMarket()
+        self.ins_market_futures = FuturesMarket()
 
         self.storeage = "DataStore"
         self.kline_closing_sync_data = "closing_sync_data.pkl"
         self.indices_file = "indices_data.json"
         self.kline_data_file = "kline_data.json"
+        self.parent_directory = os.path.dirname(os.getcwd())
 
-    # 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다. (오리지날 데이터)
-    async def generate_kline_interval_data(
-        self,
-        symbols: Optional[Union[str, list]] = None,
-        intervals: Optional[Union[List[str], str]] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-    ) -> Dict[str, Dict[str, List[List[Union[str, int]]]]]:
-        """
-        1. 기능 : 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다.
-        2. 매개변수
-            1) symbol : 쌍거래 symbol
-            2) start_date : '2024-01-01 00:00:00'
-            3) end_date : '2024-01-02 00:59:59'  << 59로 끝낼것. 아니면 Error
-            4) save_directory_path : 저장할 파일 위치 (파일명 or 전체 경로)
-            5) intervals : 수신하고자 하는 데이터의 interval 구간
-        """
+    # 장기간 kline data수집을 위한 date간격을 생성하여 timestamp형태로 반환한다.
+    def generate_timestamp_ranges(
+        self, interval: str, start_date: str, end_date: str
+    ) -> List[List[int]]:
+        if start_date is None:
+            start_date = self.start_date
+        if end_date is None:
+            end_date = self.end_date
 
-        # target_symbols 타입힌트 오류 방지용
-        symbols = symbols or []
-        if isinstance(symbols, str):
-            symbols = [symbols]
-
-        # 현재 매개변수 입력값이 None일경우 속성값으로 대체 (별도 계산필요시 적용 위함.)
-        target_symbols = symbols or self.symbols
-        # symbol을 대문자로 통일
-        target_symbols = [symbol.upper() for symbol in symbols]
-        target_start_date = start_date or self.start_date
-        target_end_date = end_date or self.end_date
-        target_interval = intervals or self.intervals
-
-        if isinstance(target_interval, str):
-            # interval값을 대문자로 적용시 1분봉 '1m'과 1개월봉 '1M'이 겹쳐버린다. 주의.
-            target_interval = [target_interval]
-
-        conv_start_date = utils._convert_to_datetime(target_start_date)
-        conv_end_date = utils._convert_to_datetime(target_end_date)
-        historical_data: Dict = {}
-        for symbol in target_symbols:
-            historical_data[symbol] = {}
-            for interval in target_interval:
-                historical_data[symbol][
-                    interval
-                ] = await FuturesTrade().get_historical_kline_hour_min(
-                    symbol=symbol,
-                    interval=interval,
-                    start_date=conv_start_date,
-                    end_date=conv_end_date,
-                )
-
-        return historical_data
-
-    # 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
-    def generate_kline_closing_sync(
-        self,
-        indices_data: List[List[int]],
-        kline_data: Dict[str, Dict[str, List[Union[Any]]]],
-    ):
-        """
-        1. 기능 : 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
-        2. 매개변수
-            1) indices_data : get_matching_indices() 함수 데이터
-            2) kline_data : generate_kline_interval_data() 함수 데이터
-        3. 리얼데이터 생성기로 백테스트 연산시 본 함수의 결과물을 대입할 것.
-        """
-
-        # 실시간 반영할 interval값. 일반적으로 1분봉 추천
-        target_interval = self.intervals[0]
-        # 데이터 생성 후 반환할 초기 데이터
-        processed_data: Dict = {}
-
-        # Dict 최상위 중첩 데이터 조회
-        for symbol, kline_data_symbol in kline_data.items():
-            # symbol key 생성
-            processed_data[symbol] = {}
-
-            # >>> Target interval data 조회 <<<
-            target_interval_data = kline_data_symbol.get(target_interval)
-
-            for interval, kline_data_interval in kline_data_symbol.items():
-                processed_data[symbol][interval] = []
-
-                # Target interval에 해당하는 데이터 복사
-                if interval == target_interval:
-                    processed_data[symbol][interval] = np.array(
-                        object=kline_data_interval, dtype=np.float64
-                    )
-                    continue
-
-                # target data가 None인 경우 처리 (예: 빈 리스트로 대체)
-                if target_interval_data is None:
-                    raise ValueError(f"target interval 데이터가 비어있음.")
-
-                # tarket data를 순차적으로 조회
-                for idx, current_data in enumerate(target_interval_data):
-                    # 인덱스 매핑
-                    idx_map: Dict[str, int] = self.__map_intervals_to_indices(
-                        idx_values=indices_data[idx]
-                    )
-
-                    # Interval Kline에서 open/close 값 조회
-                    mapped_idx = idx_map.get(interval)
-                    if mapped_idx is None:
-                        continue  # 유효하지 않은 인덱스는 건너뛰기
-
-                    open_timestamp = kline_data_interval[mapped_idx][0]
-                    close_timestamp = kline_data_interval[mapped_idx][6]
-
-                    # 새로운 Kline 데이터 구성
-                    new_kline = [
-                        open_timestamp,  # Open Time
-                        float(current_data[1]),  # Open
-                        float(current_data[2]),  # High
-                        float(current_data[3]),  # Low
-                        float(current_data[4]),  # Close
-                        float(current_data[5]),  # Volume
-                        close_timestamp,  # Close Time
-                        float(current_data[7]),  # Quote Asset Volume
-                        float(current_data[8]),  # Number of Trades
-                        float(current_data[9]),  # Taker Buy Base Asset Volume
-                        float(current_data[10]),  # Taker Buy Quote Asset Volume
-                        float(current_data[11]),  # Ignore
-                    ]
-
-                    # 데이터 추가 처리
-                    if idx == 0:
-                        processed_data[symbol][interval].append(new_kline)
-                    else:
-                        previous_kline = processed_data[symbol][interval][-1]
-                        prev_open_timestamp = previous_kline[0]
-
-                        # 이전 데이터를 업데이트하거나 새로운 데이터를 추가
-                        if prev_open_timestamp == open_timestamp:
-                            updated_kline = [
-                                open_timestamp,  # Open Time
-                                previous_kline[1],  # Open
-                                max(previous_kline[2], float(current_data[2])),  # High
-                                min(previous_kline[3], float(current_data[3])),  # Low
-                                float(current_data[4]),  # Close
-                                previous_kline[5] + float(current_data[5]),  # Volume
-                                previous_kline[6],  # Close Time
-                                previous_kline[7]
-                                + float(current_data[7]),  # Quote Asset Volume
-                                previous_kline[8]
-                                + float(current_data[8]),  # Number of Trades
-                                previous_kline[9]
-                                + float(current_data[9]),  # Taker Buy Base Asset Volume
-                                previous_kline[10]
-                                + float(
-                                    current_data[10]
-                                ),  # Taker Buy Quote Asset Volume
-                                0,  # Ignore
-                            ]
-                            processed_data[symbol][interval].append(
-                                updated_kline
-                            )  # 마지막 항목 업데이트
-                        else:
-                            processed_data[symbol][interval].append(new_kline)
-
-                # 리스트를 NumPy 배열로 변환
-                processed_data[symbol][interval] = np.array(
-                    object=processed_data[symbol][interval], dtype=np.float64
-                )
-
-        return processed_data
-
-    # kline_data의 특정 interval idx를 closing_sync_data 값으로 동기화 시킨다. 백테스트에 사용될 데이터에 적용됨
-    def sync_kline_data(self, idx: int, kline_data: dict, idx_mapping: list, sync_data: dict) -> Dict[str, Dict[str, np.ndarray[np.float64]]]:
-        """
-        1. 기능 : 백테스트에 적용시킬 kline_data의 특정 interval idx데이터를 closing_sync_data값으로 동기화 시킨다.
-        2. 매개변수
-            1) idx : 적용시킬 Index 값
-            2) kline_data : read_data_run함수의 [1] 반환값. >> kline_data
-            3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
-            4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
-        
-        동작은 문제 없으나 너무 느림. 개선이 필요함.
-        """
-        idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
-        for symbol, kline_data_symbol in kline_data.items():
-            for interval, kline_data_interval in kline_data_symbol.items():
-                idx_map = idx_map_data.get(interval)
-                
-                kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
-        return kline_data
-
-    # 각 interval별 1minute 단위로 환산한다.
-    def __convert_interval_to_minutes(self, minute:int, interval:str):
-        """
-        1. 기능 : 1muntes값을 각 interval별 값으로 환산한다.
-        2. 매개변수
-            1) minute : 타겟 시간 (분)
-            2) interval : 환산하고자 하는 interval 값        
-        """
-        result = {'1m': 1,
-                  '3m': 3,
-                  '5m':5,
-                  '15m':15,
-                  '30m':30,
-                  '1h':60,
-                  '2h':120,
-                  '4h':240,
-                  '6h':360,
-                  '8h':480,
-                  '12h':720,
-                  '1d':1440,
-                  '3d':4320}
-        if not minute in result.keys():
-            raise ValueError(f'interval이 유효하지 않음 - {interval}')
-        return result.get(interval) / minute
-
-
-    # 연산이 용이하도록 interval값과 idx값을 이용하여 매핑값을 반환한다.
-    def __map_intervals_to_indices(self, idx_values: List[int]) -> Dict[str, int]:
-        """
-        1. 기능 : interval과 idx데이터를 연산이 용이하도록 매핑한다.
-        2. 매개변수
-            1) idx_values : 각 구간별 idx 정보
-        """
-        mapped_intervals = {}
-        for i, interval in enumerate(self.intervals):
-            mapped_intervals[interval] = idx_values[i]
-        return mapped_intervals
-
-    # dict 타입 데이터의 key값을 불러온다.
-    def __extract_intervals(self, kline_data: Dict) -> List[str]:
-        """
-        1. 기능 : dict 데이터의 최상위 key값을 추출하여 list타입으로 변환 및 반환한다.
-        2. 매개변수 : dict데이터
-        """
-        return list(kline_data.keys())
-
-    # timestemp값을 반환한다.
-    def __extract_timestamps(self, nested_kline: Union[List, np.ndarray]):
-        """
-        1. 기능 : kline데이터의 최하위 중첩 내용의 timestamp를 반환한다.
-        2. 매개변수
-            1) nested_kline : kline 최하위 중첩데이터
-        """
-        open_timestamp = nested_kline[0]
-        close_timestamp = nested_kline[6]
-        return (open_timestamp, close_timestamp)
-
-    # 최상위 key값을 제거하고 중첩된 dict값을 반환한다.
-    def __convert_dict_to_array(self, kline_data: Dict) -> Dict[str, np.ndarray]:
-        """
-        1. 기능 : dict의 1차 중첩 내용을 반환한다.
-        2. 매개변수
-            1) kline_data : 원본 kline data
-        """
-        result = {}
-        for _, data in kline_data.items():
-            for interval, nested_data in data.items():
-                result[interval] = np.array(nested_data, dtype=np.float64)
-        return result
-
-    # kline_data의 최하위 중첩 데이터를 np.array처리한다.
-    def convert_kline_data_array(self, kline_data: Dict) -> Dict[str, Dict[str, np.ndarray]]:
-        result = {}
-        for symbol, kline_data_symbol in kline_data.items():
-            if not isinstance(kline_data_symbol, dict) or not kline_data_symbol:
-                raise ValueError('kline data가 유효하지 않음.')
-            result[symbol] = {}
-            for interval, kline_data_interval in kline_data_symbol.items():
-                if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
-                    raise ValueError('kline data가 유효하지 않음.')
-                result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float64)
-        return result                
-                
-
-    # 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다. (최종 결과물 / 저장은 별도로)
-    def get_matching_indices(self, kline_data: Dict) -> List[List[int]]:
-        """
-        1. 기능 : 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다.
-        2. 매개변수
-            1) kline_data : 원본 kline data 또는 self.generate_kline_interval_data() 함수값
-        """
-        array_data = self.__convert_dict_to_array(kline_data=kline_data)
-        intervals = self.__extract_intervals(array_data)
-        matching_indices = []
-
-        for idx, base_entry in enumerate(array_data[intervals[0]]):
-            match_row = [idx]
-            open_time, close_time = self.__extract_timestamps(base_entry)
-
-            for interval in intervals[1:]:
-                interval_data = array_data.get(interval)
-                if interval_data is None:
-                    # match_row.append(None)
-                    continue
-
-                # 조건을 만족하는 인덱스 찾기
-                condition_indices = np.where(
-                    (interval_data[:, 0] <= open_time)
-                    & (interval_data[:, 6] >= close_time)
-                )[0]
-
-                if condition_indices.size == 0:
-                    # match_row.append(None)
-                    continue
-                else:
-                    match_row.append(int(condition_indices[0]))
-
-            # if None in match_row:
-            #     continue
-            matching_indices.append(match_row)
-            # utils._std_print(match_row)
-
-        return matching_indices
-
-    # 더미 데이터를 순환시킬때 for문의 range값을 계산한다.
-    def get_range_length(self, kline_data_real: Dict) -> int:
-        """
-        1. 기능 : 더미 데이터를 for 문에 동작할때 range값을 계산한다.
-        2. 매개변수
-            1) kline_data
-        """
-        unique_lengths = set()
-
-        for _, kline_data_symbol in kline_data_real.items():
-            for _, kline_data_interval in kline_data_symbol.items():
-                unique_lengths.add(len(kline_data_interval) - 1)
-                # 길이가 두 개 이상이면 에러 발생
-                if len(unique_lengths) > 1:
-                    raise ValueError(
-                        f"Interval 데이터 길이가 일치하지 않음. 기초 데이터 삭제 요망 : {unique_lengths}"
-                    )
-
-        # 길이가 하나뿐이라면, 값을 반환
-        return unique_lengths.pop()
-
-    # 데이터를 start_idx:end
-    def get_kline_closing_data_by_range(
-        self, end_idx: int, kline_data: Dict, step: int = 4_320
-    ):
-
-        result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
-        for symbol, kline_data_symbol in kline_data.items():
-            result[symbol] = {}
-            for interval, kline_data_interval in kline_data_symbol.items():
-                start_idx = end_idx - step
-                if start_idx < 0:
-                    start_idx = 0
-                result[symbol][interval] = kline_data_interval[start_idx:end_idx]
-        return result
-
-    # # 
-    # def get_kline_interval_data_by_range(
-    #     self,
-    #     end_idx: int,
-    #     kline_data: Dict,
-    #     idx_data: List[List[int]],
-    #     step: int = 4_320,
-    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
-    #     """
-    #     1. 기능 : 기간별 데이터를 추출한다.
-    #     2. 매개변수
-    #         1) start_idx : idx 0 ~ x까지 값을 입력
-    #         2) step : 데이터 기간(min : 4320
-    #             - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
-    #         3) idx_data : self.get_matching_indices() 연산값.
-    #         4) step : 시작과 끝점간의 범위 (단위 : minutes)
-    #     3.Memo
-    #         >>> closing_sync_data를 대상으로 하는게 아님.
-    #         >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
-    #         >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
-    #                 예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
-    #                 1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
-    #     """
-    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
-
-    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(
-    #                     idx_values=idx_data[end_idx]
-    #                 )
-        
-
-    #     for symbol, kline_data_symbol in kline_data.items():
-    #         result[symbol] = {}
-    #         for interval, kline_data_interval in kline_data_symbol.items():
-    #             idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
-    #             # intervals 리스트에 없는 interval은 제외한다.
-    #             if not interval in self.intervals:
-    #                 continue
-    #             if interval == self.intervals[0]:
-    #                 start_idx = end_idx - step
-    #             else:
-    #                 start_idx = end_idx - (step/idx_convert_map)
-                
-    #             if start_idx < 0:
-    #                 start_idx = 0
-
-    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
-
-    #     return result
-
-    def get_kline_interval_data_by_range(
-        self,
-        end_idx: int,
-        kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
-        idx_data: List[List[int]],
-        step: int = 4320,
-    ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
-        """
-        개선된 버전: 비효율적인 반복문과 조건문 최적화
-        """
-        result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
-
-        # intervals를 집합으로 변환
-        interval_set = set(self.intervals)
-
-        # 사전 계산된 매핑 캐싱
-        idx_map: Dict[str, int] = self.__map_intervals_to_indices(idx_values=idx_data[end_idx])
-        idx_convert_map: Dict[str, int] = {
-            interval: self.__convert_interval_to_minutes(minute=step, interval=interval)
-            for interval in self.intervals
+        interval_to_milliseconds = {
+            "1m": 60000,
+            "3m": 180000,
+            "5m": 300000,
+            "15m": 900000,
+            "30m": 1800000,
+            "1h": 3600000,
+            "2h": 7200000,
+            "4h": 14400000,
+            "6h": 21600000,
+            "8h": 28800000,
+            "12h": 43200000,
+            "1d": 86400000,
+            "3d": 259200000,
         }
 
-        for symbol, kline_data_symbol in kline_data.items():
-            result[symbol] = {}
+        # 시작 및 종료 날짜 문자열 처리
+        start_date = start_date + " 00:00:00"
+        end_date = end_date + " 23:59:59"
 
-            # start_idx를 미리 계산하여 캐싱
-            start_idx_map = {}
-            for interval in self.intervals:
-                if interval == self.intervals[0]:
-                    start_idx_map[interval] = max(0, end_idx - step)
+        # interval에 따른 밀리초 단위 스텝 가져오기
+        interval_step = interval_to_milliseconds.get(interval)
+
+        # Limit 값은 1,000이나 유연한 대처를 위해 999 적용
+        MAX_LIMIT = 1_000
+
+        # 시작 타임스탬프
+        start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
+        # interval 및 MAX_LIMIT 적용으로 계산된 최대 종료 타임스탬프
+        max_possible_end_timestamp = start_timestamp + (interval_step * MAX_LIMIT) - 1
+        # 지정된 종료 타임스탬프
+        end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
+
+        # 최대 종료 타임스탬프가 지정된 종료 타임스탬프를 초과하지 않을 경우
+        if max_possible_end_timestamp >= end_timestamp:
+            return [[start_timestamp, end_timestamp]]
+        else:
+            # 초기 데이터 설정
+            initial_range = [start_timestamp, max_possible_end_timestamp]
+            timestamp_ranges = [initial_range]
+
+            # 반복문으로 추가 데이터 생성
+            while True:
+                # 다음 시작 및 종료 타임스탬프 계산
+                next_start_timestamp = timestamp_ranges[-1][1] + 1
+                next_end_timestamp = (
+                    next_start_timestamp + (interval_step * MAX_LIMIT) - 1
+                )
+
+                # 다음 종료 타임스탬프가 지정된 종료 타임스탬프를 초과할 경우
+                if next_end_timestamp >= end_timestamp:
+                    final_range = [next_start_timestamp, end_timestamp]
+                    timestamp_ranges.append(final_range)
+                    return timestamp_ranges
+
+                # 그렇지 않을 경우 범위 추가 후 반복
                 else:
-                    start_idx_map[interval] = max(0, end_idx - int(step / idx_convert_map.get(interval, 1)))
-
-            # 데이터를 처리
-            for interval, kline_data_interval in kline_data_symbol.items():
-                if interval not in interval_set:
+                    new_range = [next_start_timestamp, next_end_timestamp]
+                    timestamp_ranges.append(new_range)
                     continue
 
-                start_idx = start_idx_map[interval]
-                result[symbol][interval] = kline_data_interval[start_idx:end_idx]
-
-        return result
-
-
-
-    # kline real_data 확보 관련 통합실행
-    async def download_data_run(
-        self, directory: Optional[str] = None
-    ) -> Tuple[int, Dict]:
+    # 각 symbol별 interval별 지정된 기간동안의 kline_data를 수신 후 dict타입으로 묶어 반환한다.
+    async def generate_kline_interval_data(
+        self,
+        symbols: Union[str, list, None] = None,
+        intervals: Union[str, list, None] = None,
+        start_date: Union[str, None] = None,
+        end_date: Union[str, None] = None,
+        save: bool = False,
+    ):
         """
-        1. 기능 : 위 함수를 사용하기 복잡하기에 통합 다운로드 기능을 제공함.
+        1. 기능 : 장기간 kline data를 수집한다.
         2. 매개변수
-            1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
-        3. 반환값
-            1) range_length_data : for _ in range(range_length_data)에 들어감.
-            2) kline_data : 각 interval별 데이터를 수집 및 dict형태로 반환
-            3) indices_data : kline_data 1분봉 기준으로 매칭되는 다른 interval data index
-            4) closing_sync_data : 1분봉 기준 각 interval별 closing data
+            1) symbols : 쌍거래 심볼 리스트
+            2) intervals : interval 리스트
+            3) start_date : 시작 날짜 (년-월-일 만 넣을것.)
+            4) end_date : 종료 날짜 (년-월-일 만 넣을것.)
+            5) save : 저장여부
+        3. 추가설명
+            self.generate_timestamp_ranges가 함수내에 호출됨.        
         """
-        # directory가 None일 경우 상위폴더 위치로 지정
-        target_directory = os.path.join(
-            directory or os.path.dirname(os.getcwd()), self.storeage
-        )
-
-        if not os.path.exists(target_directory):
-            os.makedirs(target_directory)
-
-        # Data 순차적 로드
-        kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
-        indices_data = self.get_matching_indices(kline_data=kline_data)
-        closing_sync_data = self.generate_kline_closing_sync(
-            indices_data=indices_data, kline_data=kline_data
-        )
-
-        # closing_sync_data를 이용하여 데이터 길이 값 연산
-        range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
-
-        # 각 데이터들 저장할 path 지정
-        kline_path = os.path.join(target_directory, self.kline_data_file)
-        indices_path = os.path.join(target_directory, self.indices_file)
-        closing_sync_data_path = os.path.join(target_directory, self.kline_closing_sync_data)
-
-        # Data 저장
-        utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
-        utils._save_to_json(
-            file_path=indices_path, new_data=indices_data, overwrite=True
-        )
-        # utils._save_to_json(file_path=closing_sync_data_path, new_data=closing_sync_data_file, overwrite=True)
-        # closing_sync_data_path는 np.array타입이므로 별도 저장.
-
-        with open(closing_sync_data_path, "wb") as file:
-            pickle.dump(closing_sync_data, file)
-
-        # Tuple 형태로 자료 반환.
-        return (range_length_data, kline_data, indices_data, closing_sync_data)
-
-    # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
-    async def read_data_run(self, download_if_missing: bool = False):
-        """
-        1. 기능 : 본 class의 기능을 사용하기 용이하도록 통합적용. 데이터를 불러오는 함수이며, 데이터가 미존재시 신규 다운로드 하는 기능 추가.
-        2. 매개변수
-            1) download_if_missing : True일 경우 파일없을시 신규 다운로드.
-        """
-
-        # 불러올 데이터의 초기부분 주소명 확보
-        parent_folder = os.path.dirname(os.getcwd())
-        # indices_path 주소 생성
-        closing_sync_data_path = os.path.join(
-            parent_folder, self.storeage, self.kline_closing_sync_data
-        )
-        kline_data_path = os.path.join(parent_folder, self.storeage, self.kline_data_file)
-        indices_data_path = os.path.join(parent_folder, self.storeage, self.indices_file)
         
+        # 기본값 설정
+        if symbols is None:
+            symbols = self.symbols
+        if intervals is None:
+            intervals = self.intervals
+        if start_date is None:
+            start_date = self.start_date
+        if end_date is None:
+            end_date = self.end_date
 
-        if download_if_missing:
-            if not os.path.exists(parent_folder):
-                os.makedirs(parent_folder)
-            # if not os.path.exists(closing_sync_data_path):
-            return await self.download_data_run()
-        else:
-            if not os.path.exists(path=kline_data_path):
-                raise ValueError(f"path 정보가 유효하지 않음 - {kline_data_path}")
-            if not os.path.exists(path=indices_data_path):
-                raise ValueError(f"path 정보가 유효하지 않음 - {indices_data_path}")
-            if not os.path.exists(path=closing_sync_data_path):
-                raise ValueError(f"path 정보가 유효하지 않음 - {closing_sync_data_path}")
-            with open(closing_sync_data_path, "rb") as file:
-                closing_sync_data = pickle.load(file)
-            
-            range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
-            kline_data = utils._load_json(file_path=kline_data_path)
-            indices_data = utils._load_json(file_path=indices_data_path)
-            
+        # API 호출 제한 설정
+        MAX_API_CALLS_PER_MINUTE = 1150
+        API_LIMIT_RESET_TIME = 60  # 초 단위
 
-        return (range_length_data, kline_data, indices_data, closing_sync_data)
+        api_call_count = 0
+        start_time = datetime.datetime.now()
+        aggregated_results = {}
+
+        for symbol in symbols:
+            aggregated_results[symbol] = {}
+
+            for interval in intervals:
+                aggregated_results[symbol][interval] = {}
+                timestamp_ranges = self.generate_timestamp_ranges(
+                    interval=interval, start_date=start_date, end_date=end_date
+                )
+
+                collected_data = []
+                for timestamps in timestamp_ranges:
+                    # 타임스탬프를 문자열로 변환
+                    start_timestamp_str = utils._convert_to_datetime(timestamps[0])
+                    end_timestamp_str = utils._convert_to_datetime(timestamps[1])
+
+                    # Kline 데이터 수집
+                    kline_data = await self.ins_market_futures.fetch_klines_date(
+                        symbol=symbol,
+                        interval=interval,
+                        start_date=start_timestamp_str,
+                        end_date=end_timestamp_str,
+                    )
+                    collected_data.extend(kline_data)
+
+                # API 호출 간 간격 조정
+                await asyncio.sleep(0.2)
+                aggregated_results[symbol][interval] = collected_data
+
+        if save:
+            path = os.path.join(
+                self.parent_directory, self.storeage, self.kline_data_file
+            )
+            utils._save_to_json(
+                file_path=path, new_data=aggregated_results, overwrite=True
+            )
+        return aggregated_results
+
+    # 1분봉 종가 가격을 각 interval에 반영한 테스트용 더미 데이터를 생성한다.
+    def generate_kline_closing_sync(self, kline_data: Dict, save: bool = False):
+        """
+        1. 기능 : 백테스트시 데이터의 흐름을 구현하기 위하여 1분봉의 누적데이터를 반영 및 1분봉의 길이와 맞춘다.
+        2. 매개변수
+            1) kline_data : kline_data 를 numpy.array화 하여 적용
+            2) save : 생성된 데이터 저장여부.
+        
+        
+        """
+        # 심볼 및 interval 값을 리스트로 변환
+        symbols_list = list(kline_data.keys())
+        intervals_list = list(kline_data[symbols_list[0]].keys())
+
+        # np.arange시 전체 shift처리위하여 dummy data를 추가함.
+        dummy_data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        # 최종 반환 데이터를 초기화
+        output_data = {}
+
+        for symbol, kline_data_symbol in kline_data.items():
+            # 최종 반환 데이터에 심볼별 키 초기화
+            output_data[symbol] = {}
+
+            # 가장 작은 단위 interval 데이터를 기준으로 기준 데이터를 생성
+            reference_data = kline_data[symbol][intervals_list[0]]
+
+            for interval, kline_data_interval in kline_data_symbol.items():
+                if interval == intervals_list[0]:
+                    # np.arange길이 맞추기 위해 dummy data 삽입
+                    new_row = np.insert(reference_data, 0, dummy_data, axis=0)#reference_data.insert(0, dummy_data)
+                    output_data[symbol][interval] = new_row
+                    continue
+
+                combined_data = []
+                output_data[symbol][interval] = {}
+
+                for idx, reference_entry in enumerate(reference_data):
+                    target_open_timestamp = reference_entry[0]
+                    target_close_timestamp = reference_entry[6]
+
+                    # 기준 조건에 맞는 데이터 검색
+                    condition = np.where(
+                        (kline_data_interval[:, 0] <= target_open_timestamp)
+                        & (kline_data_interval[:, 6] >= target_close_timestamp)
+                    )[0]
+
+                    if len(condition) != 1:
+                        print(f"{symbol} - {interval} - {condition}")
+
+                    reference_open_timestamp = kline_data_interval[condition, 0][0]
+                    reference_close_timestamp = kline_data_interval[condition, 6][0]
+
+                    if len(combined_data) == 0 or not np.array_equal(
+                        combined_data[-1][0], reference_open_timestamp
+                    ):
+                        new_entry = [
+                            reference_open_timestamp,
+                            reference_entry[1],
+                            reference_entry[2],
+                            reference_entry[3],
+                            reference_entry[4],
+                            reference_entry[5],
+                            reference_close_timestamp,
+                            reference_entry[7],
+                            reference_entry[8],
+                            reference_entry[9],
+                            reference_entry[10],
+                            0,
+                        ]
+                    elif np.array_equal(reference_data[6], reference_close_timestamp):
+                        new_entry = kline_data_interval
+                    else:
+                        previous_entry = combined_data[-1]
+                        new_entry = [
+                            reference_open_timestamp,
+                            previous_entry[1],
+                            max(previous_entry[2], reference_entry[2]),
+                            min(previous_entry[3], reference_entry[3]),
+                            reference_entry[4],
+                            previous_entry[5] + reference_entry[5],
+                            reference_close_timestamp,
+                            previous_entry[7] + reference_entry[7],
+                            previous_entry[8] + reference_entry[8],
+                            previous_entry[9] + reference_entry[9],
+                            previous_entry[10] + reference_entry[10],
+                            0,
+                        ]
+                    combined_data.append(new_entry)
+                
+                combined_data.insert(0, dummy_data)
+                output_data[symbol][interval] = np.array(
+                    object=combined_data, dtype=float
+                )
+        if save:
+            path = os.path.join(
+                self.parent_directory, self.storeage, self.kline_closing_sync_data
+            )
+            with open(file=path, mode="wb") as file:
+                pickle.dump(output_data, file)
+        return output_data
+
+    # generate_kline_closing_sync index 자료를 생성한다.
+    def get_indices_data(self, data_container, lookback_days: int = 2):
+        """
+        1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
+        2. 매개변수
+            1) data_container : utils모듈에서 사용중인 container data
+            2) lookback_days : index 데이터를 생성한 기간을 정한다.
+        3. 추가설명 
+            data_container는 utils에서 호출한 instance를 사용한다. params에 적용하면 해당 변수는 전체 적용된다.
+            백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
+        """        
+        # 하루의 총 분
+        minutes_in_a_day = 1440
+
+        # interval에 따른 간격(분) 정의
+        interval_to_minutes = {
+            '1m': 1,
+            '3m': 3,
+            '5m': 5,
+            '15m': 15,
+            '30m': 30,
+            '1h': 60,
+            '2h': 120,
+            '4h': 240,
+            '6h': 360,
+            '8h': 480,
+            '12h': 720,
+            '1d': 1440,
+        }
+
+        indices_data = []
+        
+        data_container_name = data_container.get_all_data_names()
+        intervals = [interval.split("_")[1] for interval in data_container_name]
+        
+        
+        for interval in intervals:
+            indices_data = []
+        # 데이터에서 각 인덱스 처리
+            for current_index, data_point in enumerate(data_container.get_data(data_name=f'interval_{interval}')[0]):
+                for series_index in range(len(data_container.get_data(data_name=f'interval_{interval}'))):
+                    # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
+                    start_index = current_index - minutes_in_a_day * lookback_days
+                    start_index = (start_index // interval_to_minutes.get(interval)) * interval_to_minutes.get(interval)
+                    if start_index < 0:
+                        start_index = 0
+
+                    # np.arange 생성
+                    interval_range = np.arange(start_index, current_index, interval_to_minutes.get(interval))
+
+                    # current_index가 마지막 인덱스보다 크면 추가
+                    if current_index not in interval_range:
+                        interval_range = np.append(interval_range, current_index)
+
+                    # (series_index, interval_range) 추가
+                    indices_data.append((series_index, interval_range))
+            data_container.set_data(data_name=f'map_{interval}', data=indices_data)
+        return indices_data
+    
+        # original code
+        # for interval in intervals:
+        #     indices_data = []
+        # # 데이터에서 각 인덱스 처리
+        #     for current_index, data_point in enumerate(data_container.get_data(data_name=f'interval_{interval}')[0]):
+        #         for series_index in range(len(data_container.get_data(data_name=f'interval_{interval}'))):
+        #             # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
+        #             start_index = current_index - minutes_in_a_day * lookback_days
+        #             start_index = (start_index // interval_to_minutes.get(interval)) * interval_to_minutes.get(interval)
+        #             if start_index < 0:
+        #                 start_index = 0
+
+        #             # np.arange 생성
+        #             interval_range = np.arange(start_index, current_index, interval_to_minutes.get(interval))
+
+        #             # current_index가 마지막 인덱스보다 크면 추가
+        #             if current_index not in interval_range:
+        #                 interval_range = np.append(interval_range, current_index)
+
+        #             # (series_index, interval_range) 추가
+        #             indices_data.append((series_index, interval_range))
+        #     data_container.set_data(data_name=f'map_{interval}', data=indices_data)
+        # return indices_data
 
 
 class OrderManager:
 
     def __init__(self):
-        self.ins_futures_client = FuturesOrder()
-        self.ins_spot_client = SpotOrder()
+        self.ins_trade_futures_client = FuturesOrder()
+        self.ins_trade_spot_client = SpotOrder()
         self.ins_trade_stopper = DataProcess.TradeStopper()
         self.market_type = ["FUTURES", "SPOT"]
         self.MAX_LEVERAGE = 30
@@ -655,9 +461,9 @@ class OrderManager:
             raise ValueError(f"market type 입력 오류 - {market}")
 
         if market == self.market_type[0]:
-            ins_obj = self.ins_futures_client
+            ins_obj = self.ins_trade_futures_client
         else:
-            ins_obj = self.ins_spot_client
+            ins_obj = self.ins_trade_spot_client
 
         # position stopper 초기값 설정
         # self.ins_trade_stopper(symbol=symbol, position=position, entry_price=entry_price)
@@ -1010,6 +816,7 @@ class WasteTypeCode:
     """
     폐기 코드 집합소 / 전부 주석처리한다.
     """
+
     # # 현물시장의 symbol별 입력된 interval값 전체를 수신 및 반환한다.
     # async def get_kilne_data(
     #     self,
@@ -1052,3 +859,518 @@ class WasteTypeCode:
     #         )
 
     #     return historical_data
+
+    # 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다. (오리지날 데이터)
+    # async def generate_kline_interval_data(
+    #     self,
+    #     symbols: Optional[Union[str, list]] = None,
+    #     intervals: Optional[Union[List[str], str]] = None,
+    #     start_date: Optional[str] = None,
+    #     end_date: Optional[str] = None,
+    # ) -> Dict[str, Dict[str, List[List[Union[str, int]]]]]:
+    #     """
+    #     1. 기능 : 시장의 interval 값 전체를 수신하여 websocket 편집 데이터와 동일한 형태로 반환한다.
+    #     2. 매개변수
+    #         1) symbol : 쌍거래 symbol
+    #         2) start_date : '2024-01-01 00:00:00'
+    #         3) end_date : '2024-01-02 00:59:59'  << 59로 끝낼것. 아니면 Error
+    #         4) save_directory_path : 저장할 파일 위치 (파일명 or 전체 경로)
+    #         5) intervals : 수신하고자 하는 데이터의 interval 구간
+    #     """
+
+    #     # target_symbols 타입힌트 오류 방지용
+    #     symbols = symbols or []
+    #     if isinstance(symbols, str):
+    #         symbols = [symbols]
+
+    #     # 현재 매개변수 입력값이 None일경우 속성값으로 대체 (별도 계산필요시 적용 위함.)
+    #     target_symbols = symbols or self.symbols
+    #     # symbol을 대문자로 통일
+    #     target_symbols = [symbol.upper() for symbol in symbols]
+    #     target_start_date = start_date or self.start_date
+    #     target_end_date = end_date or self.end_date
+    #     target_interval = intervals or self.intervals
+
+    #     if isinstance(target_interval, str):
+    #         # interval값을 대문자로 적용시 1분봉 '1m'과 1개월봉 '1M'이 겹쳐버린다. 주의.
+    #         target_interval = [target_interval]
+
+    #     conv_start_date = utils._convert_to_datetime(target_start_date)
+    #     conv_end_date = utils._convert_to_datetime(target_end_date)
+    #     historical_data: Dict = {}
+    #     for symbol in target_symbols:
+    #         historical_data[symbol] = {}
+    #         for interval in target_interval:
+    #             historical_data[symbol][
+    #                 interval
+    #             ] = await FuturesTrade().get_historical_kline_hour_min(
+    #                 symbol=symbol,
+    #                 interval=interval,
+    #                 start_date=conv_start_date,
+    #                 end_date=conv_end_date,
+    #             )
+
+    #     return historical_data
+
+    # 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
+    # def generate_kline_closing_sync(
+    #     self,
+    #     indices_data: List[List[int]],
+    #     kline_data: Dict[str, Dict[str, List[Union[Any]]]],
+    # ):
+    #     """
+    #     1. 기능 : 1분봉 데이터를 기반으로, 가장 마지막 값을 누적 계산하여 다른 interval 데이터들을 생성하고, 이를 1분봉과 동일한 길이로 맞춘다
+    #     2. 매개변수
+    #         1) indices_data : get_matching_indices() 함수 데이터
+    #         2) kline_data : generate_kline_interval_data() 함수 데이터
+    #     3. 리얼데이터 생성기로 백테스트 연산시 본 함수의 결과물을 대입할 것.
+    #     """
+
+    #     # 실시간 반영할 interval값. 일반적으로 1분봉 추천
+    #     target_interval = self.intervals[0]
+    #     # 데이터 생성 후 반환할 초기 데이터
+    #     processed_data: Dict = {}
+
+    #     # Dict 최상위 중첩 데이터 조회
+    #     for symbol, kline_data_symbol in kline_data.items():
+    #         # symbol key 생성
+    #         processed_data[symbol] = {}
+
+    #         # >>> Target interval data 조회 <<<
+    #         target_interval_data = kline_data_symbol.get(target_interval)
+
+    #         for interval, kline_data_interval in kline_data_symbol.items():
+    #             processed_data[symbol][interval] = []
+
+    #             # Target interval에 해당하는 데이터 복사
+    #             if interval == target_interval:
+    #                 processed_data[symbol][interval] = np.array(
+    #                     object=kline_data_interval, dtype=np.float64
+    #                 )
+    #                 continue
+
+    #             # target data가 None인 경우 처리 (예: 빈 리스트로 대체)
+    #             if target_interval_data is None:
+    #                 raise ValueError(f"target interval 데이터가 비어있음.")
+
+    #             # tarket data를 순차적으로 조회
+    #             for idx, current_data in enumerate(target_interval_data):
+    #                 # 인덱스 매핑
+    #                 idx_map: Dict[str, int] = self.__map_intervals_to_indices(
+    #                     idx_values=indices_data[idx]
+    #                 )
+
+    #                 # Interval Kline에서 open/close 값 조회
+    #                 mapped_idx = idx_map.get(interval)
+    #                 if mapped_idx is None:
+    #                     continue  # 유효하지 않은 인덱스는 건너뛰기
+
+    #                 open_timestamp = kline_data_interval[mapped_idx][0]
+    #                 close_timestamp = kline_data_interval[mapped_idx][6]
+
+    #                 # 새로운 Kline 데이터 구성
+    #                 new_kline = [
+    #                     open_timestamp,  # Open Time
+    #                     float(current_data[1]),  # Open
+    #                     float(current_data[2]),  # High
+    #                     float(current_data[3]),  # Low
+    #                     float(current_data[4]),  # Close
+    #                     float(current_data[5]),  # Volume
+    #                     close_timestamp,  # Close Time
+    #                     float(current_data[7]),  # Quote Asset Volume
+    #                     float(current_data[8]),  # Number of Trades
+    #                     float(current_data[9]),  # Taker Buy Base Asset Volume
+    #                     float(current_data[10]),  # Taker Buy Quote Asset Volume
+    #                     float(current_data[11]),  # Ignore
+    #                 ]
+
+    #                 # 데이터 추가 처리
+    #                 if idx == 0:
+    #                     processed_data[symbol][interval].append(new_kline)
+    #                 else:
+    #                     previous_kline = processed_data[symbol][interval][-1]
+    #                     prev_open_timestamp = previous_kline[0]
+
+    #                     # 이전 데이터를 업데이트하거나 새로운 데이터를 추가
+    #                     if prev_open_timestamp == open_timestamp:
+    #                         updated_kline = [
+    #                             open_timestamp,  # Open Time
+    #                             previous_kline[1],  # Open
+    #                             max(previous_kline[2], float(current_data[2])),  # High
+    #                             min(previous_kline[3], float(current_data[3])),  # Low
+    #                             float(current_data[4]),  # Close
+    #                             previous_kline[5] + float(current_data[5]),  # Volume
+    #                             previous_kline[6],  # Close Time
+    #                             previous_kline[7]
+    #                             + float(current_data[7]),  # Quote Asset Volume
+    #                             previous_kline[8]
+    #                             + float(current_data[8]),  # Number of Trades
+    #                             previous_kline[9]
+    #                             + float(current_data[9]),  # Taker Buy Base Asset Volume
+    #                             previous_kline[10]
+    #                             + float(
+    #                                 current_data[10]
+    #                             ),  # Taker Buy Quote Asset Volume
+    #                             0,  # Ignore
+    #                         ]
+    #                         processed_data[symbol][interval].append(
+    #                             updated_kline
+    #                         )  # 마지막 항목 업데이트
+    #                     else:
+    #                         processed_data[symbol][interval].append(new_kline)
+
+    #             # 리스트를 NumPy 배열로 변환
+    #             processed_data[symbol][interval] = np.array(
+    #                 object=processed_data[symbol][interval], dtype=np.float64
+    #             )
+
+    #     return processed_data
+
+    # kline_data의 특정 interval idx를 closing_sync_data 값으로 동기화 시킨다. 백테스트에 사용될 데이터에 적용됨
+    def sync_kline_data(
+        self, idx: int, kline_data: dict, idx_mapping: list, sync_data: dict
+    ) -> Dict[str, Dict[str, np.ndarray[np.float64]]]:
+        """
+        1. 기능 : 백테스트에 적용시킬 kline_data의 특정 interval idx데이터를 closing_sync_data값으로 동기화 시킨다.
+        2. 매개변수
+            1) idx : 적용시킬 Index 값
+            2) kline_data : read_data_run함수의 [1] 반환값. >> kline_data
+            3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
+            4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
+
+        동작은 문제 없으나 너무 느림. 개선이 필요함.
+        """
+        idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
+        for symbol, kline_data_symbol in kline_data.items():
+            for interval, kline_data_interval in kline_data_symbol.items():
+                idx_map = idx_map_data.get(interval)
+
+                kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
+        return kline_data
+
+    # 각 interval별 1minute 단위로 환산한다.
+    def __convert_interval_to_minutes(self, minute: int, interval: str):
+        """
+        1. 기능 : 1muntes값을 각 interval별 값으로 환산한다.
+        2. 매개변수
+            1) minute : 타겟 시간 (분)
+            2) interval : 환산하고자 하는 interval 값
+        """
+        result = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "8h": 480,
+            "12h": 720,
+            "1d": 1440,
+            "3d": 4320,
+        }
+        if not minute in result.keys():
+            raise ValueError(f"interval이 유효하지 않음 - {interval}")
+        return result.get(interval) / minute
+
+    # 연산이 용이하도록 interval값과 idx값을 이용하여 매핑값을 반환한다.
+    def __map_intervals_to_indices(self, idx_values: List[int]) -> Dict[str, int]:
+        """
+        1. 기능 : interval과 idx데이터를 연산이 용이하도록 매핑한다.
+        2. 매개변수
+            1) idx_values : 각 구간별 idx 정보
+        """
+        mapped_intervals = {}
+        for i, interval in enumerate(self.intervals):
+            mapped_intervals[interval] = idx_values[i]
+        return mapped_intervals
+
+    # dict 타입 데이터의 key값을 불러온다.
+    def __extract_intervals(self, kline_data: Dict) -> List[str]:
+        """
+        1. 기능 : dict 데이터의 최상위 key값을 추출하여 list타입으로 변환 및 반환한다.
+        2. 매개변수 : dict데이터
+        """
+        return list(kline_data.keys())
+
+    # timestemp값을 반환한다.
+    def __extract_timestamps(self, nested_kline: Union[List, np.ndarray]):
+        """
+        1. 기능 : kline데이터의 최하위 중첩 내용의 timestamp를 반환한다.
+        2. 매개변수
+            1) nested_kline : kline 최하위 중첩데이터
+        """
+        open_timestamp = nested_kline[0]
+        close_timestamp = nested_kline[6]
+        return (open_timestamp, close_timestamp)
+
+    # 최상위 key값을 제거하고 중첩된 dict값을 반환한다.
+    def __convert_dict_to_array(self, kline_data: Dict) -> Dict[str, np.ndarray]:
+        """
+        1. 기능 : dict의 1차 중첩 내용을 반환한다.
+        2. 매개변수
+            1) kline_data : 원본 kline data
+        """
+        result = {}
+        for _, data in kline_data.items():
+            for interval, nested_data in data.items():
+                result[interval] = np.array(nested_data, dtype=np.float64)
+        return result
+
+    # 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다. (최종 결과물 / 저장은 별도로)
+    def get_matching_indices(self, kline_data: Dict) -> List[List[int]]:
+        """
+        1. 기능 : 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다.
+        2. 매개변수
+            1) kline_data : 원본 kline data 또는 self.generate_kline_interval_data() 함수값
+        """
+        array_data = self.__convert_dict_to_array(kline_data=kline_data)
+        intervals = self.__extract_intervals(array_data)
+        matching_indices = []
+
+        for idx, base_entry in enumerate(array_data[intervals[0]]):
+            match_row = [idx]
+            open_time, close_time = self.__extract_timestamps(base_entry)
+
+            for interval in intervals[1:]:
+                interval_data = array_data.get(interval)
+                if interval_data is None:
+                    # match_row.append(None)
+                    continue
+
+                # 조건을 만족하는 인덱스 찾기
+                condition_indices = np.where(
+                    (interval_data[:, 0] <= open_time)
+                    & (interval_data[:, 6] >= close_time)
+                )[0]
+
+                if condition_indices.size == 0:
+                    # match_row.append(None)
+                    continue
+                else:
+                    match_row.append(int(condition_indices[0]))
+
+            # if None in match_row:
+            #     continue
+            matching_indices.append(match_row)
+            # utils._std_print(match_row)
+
+        return matching_indices
+
+    # 더미 데이터를 순환시킬때 for문의 range값을 계산한다.
+    def get_range_length(self, kline_data_real: Dict) -> int:
+        """
+        1. 기능 : 더미 데이터를 for 문에 동작할때 range값을 계산한다.
+        2. 매개변수
+            1) kline_data
+        """
+        unique_lengths = set()
+
+        for _, kline_data_symbol in kline_data_real.items():
+            for _, kline_data_interval in kline_data_symbol.items():
+                unique_lengths.add(len(kline_data_interval) - 1)
+                # 길이가 두 개 이상이면 에러 발생
+                if len(unique_lengths) > 1:
+                    raise ValueError(
+                        f"Interval 데이터 길이가 일치하지 않음. 기초 데이터 삭제 요망 : {unique_lengths}"
+                    )
+
+        # 길이가 하나뿐이라면, 값을 반환
+        return unique_lengths.pop()
+
+    # 데이터를 start_idx:end
+    def get_kline_closing_data_by_range(
+        self, end_idx: int, kline_data: Dict, step: int = 4_320
+    ):
+
+        result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+        for symbol, kline_data_symbol in kline_data.items():
+            result[symbol] = {}
+            for interval, kline_data_interval in kline_data_symbol.items():
+                start_idx = end_idx - step
+                if start_idx < 0:
+                    start_idx = 0
+                result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+        return result
+
+    # #
+    # def get_kline_interval_data_by_range(
+    #     self,
+    #     end_idx: int,
+    #     kline_data: Dict,
+    #     idx_data: List[List[int]],
+    #     step: int = 4_320,
+    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+    #     """
+    #     1. 기능 : 기간별 데이터를 추출한다.
+    #     2. 매개변수
+    #         1) start_idx : idx 0 ~ x까지 값을 입력
+    #         2) step : 데이터 기간(min : 4320
+    #             - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
+    #         3) idx_data : self.get_matching_indices() 연산값.
+    #         4) step : 시작과 끝점간의 범위 (단위 : minutes)
+    #     3.Memo
+    #         >>> closing_sync_data를 대상으로 하는게 아님.
+    #         >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
+    #         >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
+    #                 예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
+    #                 1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
+    #     """
+    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+
+    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(
+    #                     idx_values=idx_data[end_idx]
+    #                 )
+
+    #     for symbol, kline_data_symbol in kline_data.items():
+    #         result[symbol] = {}
+    #         for interval, kline_data_interval in kline_data_symbol.items():
+    #             idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
+    #             # intervals 리스트에 없는 interval은 제외한다.
+    #             if not interval in self.intervals:
+    #                 continue
+    #             if interval == self.intervals[0]:
+    #                 start_idx = end_idx - step
+    #             else:
+    #                 start_idx = end_idx - (step/idx_convert_map)
+
+    #             if start_idx < 0:
+    #                 start_idx = 0
+
+    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+
+    #     return result
+
+    # def get_kline_interval_data_by_range(
+    #     self,
+    #     end_idx: int,
+    #     kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
+    #     idx_data: List[List[int]],
+    #     step: int = 4320,
+    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+    #     """
+    #     개선된 버전: 비효율적인 반복문과 조건문 최적화
+    #     """
+    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+
+    #     # intervals를 집합으로 변환
+    #     interval_set = set(self.intervals)
+
+    #     # 사전 계산된 매핑 캐싱
+    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(idx_values=idx_data[end_idx])
+    #     idx_convert_map: Dict[str, int] = {
+    #         interval: self.__convert_interval_to_minutes(minute=step, interval=interval)
+    #         for interval in self.intervals
+    #     }
+
+    #     for symbol, kline_data_symbol in kline_data.items():
+    #         result[symbol] = {}
+
+    #         # start_idx를 미리 계산하여 캐싱
+    #         start_idx_map = {}
+    #         for interval in self.intervals:
+    #             if interval == self.intervals[0]:
+    #                 start_idx_map[interval] = max(0, end_idx - step)
+    #             else:
+    #                 start_idx_map[interval] = max(0, end_idx - int(step / idx_convert_map.get(interval, 1)))
+
+    #         # 데이터를 처리
+    #         for interval, kline_data_interval in kline_data_symbol.items():
+    #             if interval not in interval_set:
+    #                 continue
+
+    #             start_idx = start_idx_map[interval]
+    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+
+    #     return result
+
+    # # kline real_data 확보 관련 통합실행
+    # async def download_data_run(
+    #     self, directory: Optional[str] = None
+    # ) -> Tuple[int, Dict]:
+    #     """
+    #     1. 기능 : 위 함수를 사용하기 복잡하기에 통합 다운로드 기능을 제공함.
+    #     2. 매개변수
+    #         1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
+    #     3. 반환값
+    #         1) range_length_data : for _ in range(range_length_data)에 들어감.
+    #         2) kline_data : 각 interval별 데이터를 수집 및 dict형태로 반환
+    #         3) indices_data : kline_data 1분봉 기준으로 매칭되는 다른 interval data index
+    #         4) closing_sync_data : 1분봉 기준 각 interval별 closing data
+    #     """
+    #     # directory가 None일 경우 상위폴더 위치로 지정
+    #     target_directory = os.path.join(
+    #         directory or os.path.dirname(os.getcwd()), self.storeage
+    #     )
+
+    #     if not os.path.exists(target_directory):
+    #         os.makedirs(target_directory)
+
+    #     # Data 순차적 로드
+    #     kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
+    #     indices_data = self.get_matching_indices(kline_data=kline_data)
+    #     closing_sync_data = self.generate_kline_closing_sync(
+    #         indices_data=indices_data, kline_data=kline_data
+    #     )
+
+    #     # closing_sync_data를 이용하여 데이터 길이 값 연산
+    #     range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
+
+    #     # 각 데이터들 저장할 path 지정
+    #     kline_path = os.path.join(target_directory, self.kline_data_file)
+    #     indices_path = os.path.join(target_directory, self.indices_file)
+    #     closing_sync_data_path = os.path.join(target_directory, self.kline_closing_sync_data)
+
+    #     # Data 저장
+    #     utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
+    #     utils._save_to_json(
+    #         file_path=indices_path, new_data=indices_data, overwrite=True
+    #     )
+    #     # utils._save_to_json(file_path=closing_sync_data_path, new_data=closing_sync_data_file, overwrite=True)
+    #     # closing_sync_data_path는 np.array타입이므로 별도 저장.
+
+    #     with open(closing_sync_data_path, "wb") as file:
+    #         pickle.dump(closing_sync_data, file)
+
+    #     # Tuple 형태로 자료 반환.
+    #     return (range_length_data, kline_data, indices_data, closing_sync_data)
+
+    # # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
+    # async def read_data_run(self, download_if_missing: bool = False):
+    #     """
+    #     1. 기능 : 본 class의 기능을 사용하기 용이하도록 통합적용. 데이터를 불러오는 함수이며, 데이터가 미존재시 신규 다운로드 하는 기능 추가.
+    #     2. 매개변수
+    #         1) download_if_missing : True일 경우 파일없을시 신규 다운로드.
+    #     """
+
+    #     # 불러올 데이터의 초기부분 주소명 확보
+    #     parent_folder = os.path.dirname(os.getcwd())
+    #     # indices_path 주소 생성
+    #     closing_sync_data_path = os.path.join(
+    #         parent_folder, self.storeage, self.kline_closing_sync_data
+    #     )
+    #     kline_data_path = os.path.join(parent_folder, self.storeage, self.kline_data_file)
+    #     indices_data_path = os.path.join(parent_folder, self.storeage, self.indices_file)
+
+    #     if download_if_missing:
+    #         if not os.path.exists(parent_folder):
+    #             os.makedirs(parent_folder)
+    #         # if not os.path.exists(closing_sync_data_path):
+    #         return await self.download_data_run()
+    #     else:
+    #         if not os.path.exists(path=kline_data_path):
+    #             raise ValueError(f"path 정보가 유효하지 않음 - {kline_data_path}")
+    #         if not os.path.exists(path=indices_data_path):
+    #             raise ValueError(f"path 정보가 유효하지 않음 - {indices_data_path}")
+    #         if not os.path.exists(path=closing_sync_data_path):
+    #             raise ValueError(f"path 정보가 유효하지 않음 - {closing_sync_data_path}")
+    #         with open(closing_sync_data_path, "rb") as file:
+    #             closing_sync_data = pickle.load(file)
+
+    #         range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
+    #         kline_data = utils._load_json(file_path=kline_data_path)
+    #         indices_data = utils._load_json(file_path=indices_data_path)
+
+    #     return (range_length_data, kline_data, indices_data, closing_sync_data)

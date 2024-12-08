@@ -45,7 +45,137 @@ class AnalysisManager:
         ]
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
 
-    # kline 데이터의 자료를 리터럴 변환
+        # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
+        self.case_1 = []
+        self.case_2 = []
+        self.case_3 = []
+        self.case_4 = []
+        self.case_5 = []
+        self.case_6 = []
+        self.case_7 = []
+        self.case_8 = []
+        self.case_9 = []
+        self.case_10 = []
+        self.case_11 = []
+        self.case_12 = []
+        self.case_13 = []
+        self.case_14 = []
+    
+    # def set_data_length(self, kline_data_v3)
+    def reset_cases(self):
+        for i in range(1, 15):
+            getattr(self, f"case_{i}").clear()
+    
+    """
+    case들을 속성값에 저장시 반드시 tuple or list로 한번 감싼 후 추가할 것.
+    interval데이터 분리 및 조회를 용이하기 위함.    
+    """
+    
+    def case_1(self, kline_data_lv3: Dict):
+        """
+        1. 기능 : 연속 상승 또는 하락을 음수 / 양수로 표시한다.
+        2. 매개변수
+            1) kline_data_v3 : interval data
+        """
+
+    def case_2_candle_length(self, kline_data_lv3: Dict):
+        """
+        1. 기능 : 캔들 길이를 벡터 분석한다.
+        2. 매개변수
+            1) kline_data_v3 : interval data
+        """
+        open_prices = kline_data_lv3[:, 1]
+        high_prices = kline_data_lv3[:, 2]
+        low_prices = kline_data_lv3[:, 3]
+        close_prices = kline_data_lv3[:, 4]
+
+        # 캔들 길이 계산
+        upper_wick_lengths = np.abs(high_prices - np.maximum(open_prices, close_prices))
+        lower_wick_lengths = np.abs(low_prices - np.minimum(open_prices, close_prices))
+        body_lengths = np.abs(open_prices - close_prices)
+        total_lengths = np.abs(high_prices - low_prices)
+        # 윗꼬리 길이, 아래꼬리 길이, 몸통길이, 전체 길이.
+        self.case_2.append((np.column_stack((upper_wick_lengths, lower_wick_lengths, body_lengths, total_lengths))))
+
+    def case_3_continuous_trend_position(self, kline_data_lv3: np.ndarray, col:int=4):
+        """
+        kline_data_lv3가 numpy 배열일 때, 연속 증가와 감소 구간의 위치를 찾습니다.
+        """
+        # 1. 가격 데이터 (예: close 가격이 4번째 열이라고 가정)
+        data = kline_data_lv3[:, col]
+
+        # 2. 데이터의 변화 계산
+        diff = np.diff(data)
+        trend = np.sign(diff)  # 증가: 1, 감소: -1, 동일: 0
+
+        # 3. 변화 탐지 (증가/감소 방향이 바뀌는 지점)
+        trend_change = np.diff(trend)
+        split_indices = np.where(trend_change != 0)[0] + 1
+
+        # 4. 연속 구간의 시작과 끝 인덱스
+        segment_starts = np.r_[0, split_indices]
+        segment_ends = np.r_[split_indices, len(data) - 1]
+
+        # 5. 증가/감소 구간 필터링
+        increase_positions = [
+            (start, end) for start, end in zip(segment_starts, segment_ends)
+            if np.all(trend[start:end] == 1)
+        ]
+        decrease_positions = [
+            (start, end) for start, end in zip(segment_starts, segment_ends)
+            if np.all(trend[start:end] == -1)
+        ]
+
+        # 6. 결과 저장
+        self.case_3.append((increase_positions, decrease_positions))
+
+    # 가장 마지막값이 이전값의 누적 합계보다 몇개의 데이터보다 큰지 연산한다.
+    def case_4_process_neg_counts(self, kline_data_lv3: np.ndarray, col: int):
+        """
+        1. 기능 : 마지막 데이터의 값이 앞의 데이터의 누계합계보다 얼마나 큰지 연산한다.
+        2. 매개변수
+            1) kline_data : interval data
+            2) col : 연산하고 싶은 컬럼값
+        """
+        col_data = kline_data_lv3[:, col]
+        rev_cumsum = np.cumsum(col_data[::-1])[::-1]
+        results = rev_cumsum - (col_data[-1] * 2)
+        neg_count = np.sum(results < 0)
+        adj_neg_count = neg_count - 1
+        self.case_4.append((max(adj_neg_count, 0) if neg_count > 0 else len(kline_data_lv3)))
+
+    # 두 값의 차이내고 이전 값의 누적 합계보다 몇개의 데이터보다 큰지 연산한다.
+    def case_5_diff_neg_counts(self, kline_data_lv3: np.ndarray, col1: int, col2: int):
+        """
+        두 컬럼의 차이 절대값을 기준으로 음수 개수를 계산하고 조건에 따라 반환.
+
+        조건:
+        1. 보정된 음수 개수 < 0이면 0 반환
+        2. 음수 개수 == 0이면 데이터 길이를 반환
+
+        :param data: 2D numpy 배열
+        :param col1: 첫 번째 컬럼 인덱스
+        :param col2: 두 번째 컬럼 인덱스
+        :return: 보정된 음수 개수 또는 조건에 따른 값
+        """
+        # 두 컬럼의 차이의 절대값 계산
+        abs_diff = np.abs(kline_data_lv3[:, col1] - kline_data_lv3[:, col2])
+        
+        # 누적합을 뒤에서부터 계산
+        rev_cumsum = np.cumsum(abs_diff[::-1])[::-1]
+        results = rev_cumsum - (abs_diff[-1] * 2)
+        
+        # 음수 개수 계산
+        neg_count = np.sum(results < 0)
+        
+        # 보정값 -1 적용
+        adj_neg_count = neg_count - 1
+        
+        # 조건에 따른 반환
+        self.case_5.append(max(adj_neg_count, 0) if neg_count > 0 else len(kline_data_lv3))
+
+class Disposer:
+        # kline 데이터의 자료를 리터럴 변환
 
     # 첫번째, 필수사항
     # 검토할 데이터를 연산이 용이하도록 np.array처리한다.
@@ -232,7 +362,7 @@ class AnalysisManager:
         column_values = kline_data_interval[:, col_idx]
         n = len(column_values)
         if n < 3:
-            return 0, 0, 0
+            return 0, 0, 0, 0
 
         # 1. 포지션 결정
         last_value = column_values[-1]
@@ -306,27 +436,28 @@ class AnalysisManager:
 
     def scenario_1(
         self,
-        symbol: str,
-        convert_data: Dict[str, Dict[str, NDArray[np.float64]]] = None,
+        # symbol: str,
+        kline_data_5m, kline_data_1h
+        # convert_data: Dict[str, Dict[str, NDArray[np.float64]]] = None,
     ):
         """'
-        1. 5분봉 close 가격 연속 3회 상승 or 하락
+        1. 5분봉 close 가격 연속 3회 상승 or 하락 
         2. 5분봉 상승금액 연속 3회 이상 상승 or 하락
         3. 5분봉 거래대금 연속 3회 이상 상승 or 하락
         4. [:-1]hour max or min값 초과시
         5. candle 꼬리 합 비율 40% 미만시
         """
-        if convert_data is None:
-            convert_data = self.kline_data
+        # if convert_data is None:
+        #     convert_data = self.kline_data
         target_interval = ["1m", "5m", "1h"]
-        for interval in target_interval:
-            if not interval in self.intervals:
-                raise ValueError(f"kline 데이터에 {interval}데이터가 없음.")
+        # for interval in target_interval:
+        #     if not interval in self.intervals:
+        #         raise ValueError(f"kline 데이터에 {interval}데이터가 없음.")
 
         # kline data를 interval별로 변수 지정
-        kline_data_5m = convert_data.get(symbol).get(target_interval[1])
-        kline_data_1h = convert_data.get(symbol).get(target_interval[2])
-        kline_data_1m = convert_data.get(symbol).get(target_interval[0])
+        # kline_data_5m = convert_data.get(symbol).get(target_interval[1])
+        # kline_data_1h = convert_data.get(symbol).get(target_interval[2])
+        # kline_data_1m = convert_data.get(symbol).get(target_interval[0])
 
         # 종가 연속성 및 포지션 체크
         price_bool, count, price_case, close_price_score = self.__get_trade_score(

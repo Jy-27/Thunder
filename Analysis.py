@@ -60,23 +60,23 @@ class AnalysisManager:
         self.case_12 = []
         self.case_13 = []
         self.case_14 = []
-    
+
     # def set_data_length(self, kline_data_v3)
     def reset_cases(self):
         for i in range(1, 15):
             getattr(self, f"case_{i}").clear()
-    
+
     """
     case들을 속성값에 저장시 반드시 tuple or list로 한번 감싼 후 추가할 것.
     interval데이터 분리 및 조회를 용이하기 위함.    
     """
-    
+
     def case_1_data_length(self, kline_data_lv3: Dict):
         """
         1. 기능 : 데이터 길이 정보를 저장한다.
         2. 매개변수
             1) kline_data_v3 : interval data
-            
+
         3. 추가설명
             >> 각 case검토건중 이부는 좌표값만 연산된다. 이때 기준잡기 위하여 데이터길이를 연산한다.
             index값 확인이 필요하다면 길이 -1 하면 된다.
@@ -100,9 +100,22 @@ class AnalysisManager:
         body_lengths = np.abs(open_prices - close_prices)
         total_lengths = np.abs(high_prices - low_prices)
         # 윗꼬리 길이, 아래꼬리 길이, 몸통길이, 전체 길이.
-        self.case_2.append((np.column_stack((upper_wick_lengths, lower_wick_lengths, body_lengths, total_lengths))))
+        self.case_2.append(
+            (
+                np.column_stack(
+                    (
+                        upper_wick_lengths,
+                        lower_wick_lengths,
+                        body_lengths,
+                        total_lengths,
+                    )
+                )
+            )
+        )
 
-    def case_3_continuous_trend_position(self, kline_data_lv3: np.ndarray, col:int=4):
+    def case_3_continuous_trend_position(
+        self, kline_data_lv3: np.ndarray, col: int = 4
+    ):
         """
         kline_data_lv3가 numpy 배열일 때, 연속 증가와 감소 구간의 위치를 찾습니다.
         """
@@ -123,11 +136,13 @@ class AnalysisManager:
 
         # 5. 증가/감소 구간 필터링
         increase_positions = [
-            (start, end) for start, end in zip(segment_starts, segment_ends)
+            (start, end)
+            for start, end in zip(segment_starts, segment_ends)
             if np.all(trend[start:end] == 1)
         ]
         decrease_positions = [
-            (start, end) for start, end in zip(segment_starts, segment_ends)
+            (start, end)
+            for start, end in zip(segment_starts, segment_ends)
             if np.all(trend[start:end] == -1)
         ]
 
@@ -140,15 +155,17 @@ class AnalysisManager:
         2. 매개변수
             1) kline_data : interval data
             2) col : 연산하고 싶은 컬럼값
-            
-            
+
+
         """
         col_data = kline_data_lv3[:, col]
         rev_cumsum = np.cumsum(col_data[::-1])[::-1]
         results = rev_cumsum - (col_data[-1] * 2)
         neg_count = np.sum(results < 0)
         adj_neg_count = neg_count - 1
-        self.case_4.append((max(adj_neg_count, 0) if neg_count > 0 else len(kline_data_lv3)))
+        self.case_4.append(
+            (max(adj_neg_count, 0) if neg_count > 0 else len(kline_data_lv3))
+        )
 
     # 두 값의 차이내고 이전 값의 누적 합계보다 몇개의 데이터보다 큰지 연산한다.
     def case_5_diff_neg_counts(self, kline_data_lv3: np.ndarray, col1: int, col2: int):
@@ -166,34 +183,35 @@ class AnalysisManager:
         """
         # 두 컬럼의 차이의 절대값 계산
         abs_diff = np.abs(kline_data_lv3[:, col1] - kline_data_lv3[:, col2])
-        
+
         # 누적합을 뒤에서부터 계산
         rev_cumsum = np.cumsum(abs_diff[::-1])[::-1]
         results = rev_cumsum - (abs_diff[-1] * 2)
-        
+
         # 음수 개수 계산
         neg_count = np.sum(results < 0)
-        
+
         # 보정값 -1 적용
         adj_neg_count = neg_count - 1
-        
+
         # 조건에 따른 반환
         self.case_5.append(max(adj_neg_count, 0) if neg_count > 0 else 0)
 
     def scenario_1(self):
+
         target_diff = 3
         interval_5m = 2
 
         is_case_5 = self.case_5[interval_5m] > 5
-            
+
         case_3_data_increase = self.case_3[interval_5m][0]
         case_3_data_decrease = self.case_3[interval_5m][1]
-        
+
         # 데이터가 없을경우 False를 반환한다.
         if not case_3_data_increase or not case_3_data_decrease:
             return (False, 0, 0)
-        
-        target_data_max_idx = self.case_1[interval_5m]-1
+
+        target_data_max_idx = self.case_1[interval_5m] - 1
         if case_3_data_increase[-1][-1] == target_data_max_idx:
             diff_data = np.diff(case_3_data_increase)[-1][0]
             is_case_3 = (True, 1, diff_data)
@@ -202,14 +220,20 @@ class AnalysisManager:
             is_case_3 = (True, 2, diff_data)
         else:
             is_case_3 = (False, 0, 0)
-                
-        if is_case_5 and is_case_3[0] and is_case_3[2]>=target_diff:
+
+        if (
+            is_case_5
+            and is_case_3[0]
+            and is_case_3[2] >= target_diff
+            and self.case_4[0] > 5
+        ):
             return is_case_3
         else:
             return (False, 0, 0)
 
+
 class Disposer:
-        # kline 데이터의 자료를 리터럴 변환
+    # kline 데이터의 자료를 리터럴 변환
 
     # 첫번째, 필수사항
     # 검토할 데이터를 연산이 용이하도록 np.array처리한다.
@@ -366,7 +390,7 @@ class Disposer:
         3. 반환값 내용 상세 - (A, B, C)
             1) position >> {1:'LONG', 2:'SHORT', 0:None}
             2) position_count >> 상승 하락 연속성
-            3) trend 
+            3) trend
                 1 >> 점점 증가
                 2 >> 점점 감소
             4) streack_count : 최고점 또는 최저점이 몇시간 전인지 체크
@@ -432,7 +456,7 @@ class Disposer:
                 if decreasing_streak > 0
                 else column_values[-1:]
             )
-            
+
         # 2. 변화 계산
         differences = []
         for i in range(len(relevant_values) - 1):
@@ -465,17 +489,17 @@ class Disposer:
             trend = 0
             streak_count = 0
 
-
         return (position, position_count, trend, streak_count)
 
     def scenario_1(
         self,
         # symbol: str,
-        kline_data_5m, kline_data_1h
+        kline_data_5m,
+        kline_data_1h,
         # convert_data: Dict[str, Dict[str, NDArray[np.float64]]] = None,
     ):
         """'
-        1. 5분봉 close 가격 연속 3회 상승 or 하락 
+        1. 5분봉 close 가격 연속 3회 상승 or 하락
         2. 5분봉 상승금액 연속 3회 이상 상승 or 하락
         3. 5분봉 거래대금 연속 3회 이상 상승 or 하락
         4. [:-1]hour max or min값 초과시
@@ -504,6 +528,15 @@ class Disposer:
 
         # mode 초기값 None으로 처리하여 연속성 데이터 검토시 (0, 0)결과에 대비한다.
         mode = None
+
+        # #positiosn 반전
+        # if price_bool == 1:
+        #     position_signal = 2
+        # elif price_bool == 2:
+        #     position_signal = 1
+        # else:
+        #     position_signal = 0
+
         position_signal = price_bool
         if price_bool == 1 and value_bool == 1:
             # interval 동안 high값 찾기위함.

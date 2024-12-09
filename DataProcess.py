@@ -4,23 +4,29 @@ from functools import lru_cache
 
 class InvalidPositionError(ValueError):
     """Position 값 오류 예외"""
+
     pass
 
 
 class InvalidDataError(ValueError):
     """기초 데이터 오류 예외"""
+
     pass
+
 
 class InvalidParameterError(ValueError):
     """파라미터 변수값 입력 오류 예외"""
+
     pass
-    
+
+
 class TradeStopper:
     """
     Spot 마켓 또는 Futures 마켓에서 주문에 의한 매입(포지션 open) 시
     매각(포지션 off)가격을 현재 가격을 반영하여 실시간으로 지정해준다.
     """
-    def __init__(self, profit_ratio: float=0.015, risk_ratio: float=0.85):
+
+    def __init__(self, profit_ratio: float = 0.015, risk_ratio: float = 0.85):
         self.profit_ratio = profit_ratio
         self.risk_ratio = risk_ratio
         self.trading_data: Dict[str, Dict[str, Union[str, float]]] = {}
@@ -39,7 +45,9 @@ class TradeStopper:
 
     def __validate_key_existence(self, symbol: str, key: str) -> bool:
         symbol = symbol.upper()
-        return self.__validate_data_existence(symbol) and key in self.trading_data[symbol]
+        return (
+            self.__validate_data_existence(symbol) and key in self.trading_data[symbol]
+        )
 
     def __calculate_target_price(
         self, entry_price: float, reference_price: float, position: str
@@ -58,7 +66,7 @@ class TradeStopper:
             )
             return dead_line_price * (1 + self.profit_ratio)
         else:
-            raise InvalidParameterError(f'position입력오류 : {position}')
+            raise InvalidParameterError(f"position입력오류 : {position}")
 
     def remove_trading_data(self, symbol: str) -> None:
         symbol = symbol.upper()
@@ -97,7 +105,7 @@ class TradeStopper:
         self.trading_data[symbol]["referencePrice"] = reference_price
 
         # Target price 계산
-        target_price:float = self.__calculate_target_price(
+        target_price: float = self.__calculate_target_price(
             entry_price=entry_price, reference_price=reference_price, position=position
         )
         self.trading_data[symbol]["targetPrice"] = target_price
@@ -117,6 +125,7 @@ class TradeStopper:
     def clear_all_trading_data(self) -> None:
         """모든 트레이딩 데이터를 삭제"""
         self.trading_data.clear()
+
 
 class IntervalManager:
     def __init__(self):
@@ -148,19 +157,19 @@ class IntervalManager:
         else:
             raise AttributeError(f"No attribute named '{interval_name}'")
 
+
 class OrderConstraint:
-    """ 주문시 제약사항을 생성한다. """
-    
+    """주문시 제약사항을 생성한다."""
+
     # def __init__ (self):
     #     self.target_count_min = 1
     #     self.target_count_max = 10
-        
+
     #     self.account_amp_min = 10
     #     self.account_step = 5
-        
+
     #     self.safety_account_ratio = 0.32
-    
-    
+
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
     def calc_fund(self, funds: float, rate: float = 0.35) -> dict:
         """
@@ -174,23 +183,23 @@ class OrderConstraint:
             dict: 계산 결과를 담은 딕셔너리.
         """
         # 자금이 10 미만일 경우 초기값 반환
-        
+
         init_safety_value = round(10 * rate, 3)
         init_usable_value = 10 - init_safety_value
         init_trade_value = min(6, init_usable_value)
-        
+
         if funds < 10:
             return {
-                "count": 1,            # 보유 가능량
-                "targetValue": 10,     # 다음 기준 금액
-                "safetyValue": init_safety_value,     # 안전 금액
-                "usableValue": init_usable_value,     # 유효 금액
-                "tradeValue": init_trade_value       # 회당 거래대금
+                "count": 1,  # 보유 가능량
+                "targetValue": 10,  # 다음 기준 금액
+                "safetyValue": init_safety_value,  # 안전 금액
+                "usableValue": init_usable_value,  # 유효 금액
+                "tradeValue": init_trade_value,  # 회당 거래대금
             }
 
         steps = [2, 3]  # 증가 단계
-        target = 5      # 초기 목표 금액
-        count = 0       # 보유 가능량
+        target = 5  # 초기 목표 금액
+        count = 0  # 보유 가능량
         last_valid_target = 0  # 초과 이전의 유효한 목표 금액
 
         # 증가율 순환
@@ -209,44 +218,24 @@ class OrderConstraint:
 
         # 결과 반환
         return {
-            "count": count,                  # 보유 가능량
+            "count": count,  # 보유 가능량
             "targetValue": last_valid_target,  # 다음 기준 금액
-            "safetyValue": safety_value,    # 안전 금액
-            "usableValue": usable_value,    # 유효 금액
-            "tradeValue": trade_value       # 회당 거래대금
+            "safetyValue": safety_value,  # 안전 금액
+            "usableValue": usable_value,  # 유효 금액
+            "tradeValue": trade_value,  # 회당 거래대금
         }
-    
-    
-    
-    
-    
+
     # # 거래가능횟수를 제한한다. 필요한가?
     # def get_transaction_capacity(self)
-    
-    
+
     # # 현재 보유금액에 다른 계산식을 만든다.
     # def calc_holding_limit(self)
-    
-    
+
     # # 회당 주문금액 계산
     # def calc_max_trade_amount(self)
-    
-    
+
     # total_balance_ =
-    # available_balance_ = 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    # available_balance_ =
 
 
 if __name__ == "__main__":
@@ -256,7 +245,9 @@ if __name__ == "__main__":
     position = "long"
     entry_price = 90.32
 
-    obj.initialize_trading_data(symbol=symbol, position=position, entry_price=entry_price)
+    obj.initialize_trading_data(
+        symbol=symbol, position=position, entry_price=entry_price
+    )
 
     print(obj.get_trading_stop_signal(symbol=symbol, current_price=90.0))
     print(obj.get_trading_stop_signal(symbol=symbol, current_price=92.0))

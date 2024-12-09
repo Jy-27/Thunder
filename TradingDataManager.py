@@ -25,7 +25,6 @@ import datetime
 import json
 
 
-
 class TradeManager:
     def __init__(
         self,
@@ -92,7 +91,7 @@ class TradeManager:
         self.final_message_received: DefaultDict[
             str, DefaultDict[str, List[List[Any]]]
         ] = defaultdict(lambda: defaultdict())
-        
+
         self.account_balance_summary = {}
         self.account_active_symbols = []
 
@@ -164,7 +163,7 @@ class TradeManager:
             try:
                 # 필수 티커를 업데이트
                 self.active_tickers = await self.fetch_essential_tickers()
-                
+
                 # print(
                 #     f"tickers - {len(self.active_tickers)}종 update! {datetime.datetime.now()}"
                 # )
@@ -400,7 +399,7 @@ class TradeManager:
             raise ValueError(f"유효하지 않은 interval입니다: {interval}")
 
         # 분 단위로 interval 변환
-        interval_minutes = interval_value * {"m": 1, "h": 60, "d":1440}[interval_unit]
+        interval_minutes = interval_value * {"m": 1, "h": 60, "d": 1440}[interval_unit]
 
         # 최대 수집 가능 일 수 및 제한 계산
         intervals_per_day = MINUTES_PER_DAY / interval_minutes
@@ -450,9 +449,7 @@ class TradeManager:
                 if interval.endswith("d"):
                     limit_ = 30
                 else:
-                    limit_ = self._get_kline_limit_by_days(
-                        interval=interval, days=days
-                    )
+                    limit_ = self._get_kline_limit_by_days(interval=interval, days=days)
                 # Kline 데이터를 수집하고 self.kline_data에 업데이트
                 self.kline_data[ticker][interval] = (
                     await self.market_instance.fetch_klines_limit(
@@ -468,7 +465,7 @@ class TradeManager:
 
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
-        KLINE_LMIT: Final[int] = 300 
+        KLINE_LMIT: Final[int] = 300
 
         while True:
             await utils._wait_until_exact_time(time_unit="minute")
@@ -609,22 +606,21 @@ class TradeManager:
                             await self._merge_kline_data(message)
 
     # TEST ZONE = 검토대상 체크한다.
-    
+
     def validate_kline(self):
-        symbols_key = (self.kline_data.keys())
-        
+        symbols_key = self.kline_data.keys()
+
         is_symbol = set(symbols_key) == set(self.active_tickers)
-        
+
         if not is_symbol:
             return False
-        
+
         for symbol, kline_data_symbol in self.kline_data.items():
             is_interval = set(kline_data_symbol.keys()) == set(self.KLINE_INTERVALS)
             if not is_interval:
                 return False
         return True
-            
-    
+
     async def analysis_loop(self):
         target_interval = "5m"
         await asyncio.sleep(20)
@@ -632,28 +628,42 @@ class TradeManager:
             async with self.lock:
                 # kline update중 데이터가 부실할경우 continue
                 if not self.validate_kline():
-                    print('데이터 부족. continue')
+                    print("데이터 부족. continue")
                     continue
 
                 # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
                 kline_data_array = utils._convert_to_array(kline_data=self.kline_data)
                 if not kline_data_array[2]:
                     continue
-                
-                symbol_map, interval_map, container_data = utils._convert_to_container(kline_data_array)
+
+                symbol_map, interval_map, container_data = utils._convert_to_container(
+                    kline_data_array
+                )
                 for symbol, idx_s in symbol_map.items():
                     for interval in interval_map.keys():
-                        get_data = container_data.get_data(f'interval_{interval}')[idx_s]
-                        self.analysis_instance.case_1_data_length(kline_data_lv3=get_data)
-                        self.analysis_instance.case_2_candle_length(kline_data_lv3=get_data)
-                        self.analysis_instance.case_3_continuous_trend_position(kline_data_lv3=get_data)
-                        self.analysis_instance.case_4_process_neg_counts(kline_data_lv3=get_data, col=7)
-                        self.analysis_instance.case_5_diff_neg_counts(kline_data_lv3=get_data, col1=1, col2=4)
-                
+                        get_data = container_data.get_data(f"interval_{interval}")[
+                            idx_s
+                        ]
+                        self.analysis_instance.case_1_data_length(
+                            kline_data_lv3=get_data
+                        )
+                        self.analysis_instance.case_2_candle_length(
+                            kline_data_lv3=get_data
+                        )
+                        self.analysis_instance.case_3_continuous_trend_position(
+                            kline_data_lv3=get_data
+                        )
+                        self.analysis_instance.case_4_process_neg_counts(
+                            kline_data_lv3=get_data, col=7
+                        )
+                        self.analysis_instance.case_5_diff_neg_counts(
+                            kline_data_lv3=get_data, col1=1, col2=4
+                        )
+
                     scenario_1 = self.analysis_instance.scenario_1()
                     print(scenario_1)
                     self.analysis_instance.reset_cases()
-                    
+
                     if scenario_1:
                         await self.submit_open_order_signal(
                             symbol=symbol,
@@ -662,6 +672,7 @@ class TradeManager:
                         )
                         # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="second", duration=20)
+
     # original code
     # async def analysis_loop(self):
     #     target_interval = "5m"
@@ -787,9 +798,9 @@ class FuturesTrade(TradeManager):
         self.process_instance.initialize_trading_data(
             symbol=symbol, position=order_side, entry_price=entry_price
         )
-        
+
         # api서버 과요청 방지
-        await utils._wait_time_sleep(time_unit='second', dun=2)
+        await utils._wait_time_sleep(time_unit="second", dun=2)
 
     # TEST ZONE
     # 포지션 종료 신호를 발송한다.
@@ -819,7 +830,8 @@ class FuturesTrade(TradeManager):
             )
             await self.fetch_active_positions()
         # api서버 과요청 방지
-        await utils._wait_time_sleep(time_unit='second', duration=2)
+        await utils._wait_time_sleep(time_unit="second", duration=2)
+
 
 if __name__ == "__main__":
 

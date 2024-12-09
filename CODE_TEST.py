@@ -53,26 +53,33 @@ kline_data = obj_data.convert_kline_data_array(kline_data=kline_data)
 
 trade_data = []
 
-#손익비용 저장할 변수
+# 손익비용 저장할 변수
 pnl_data = defaultdict(float)
 pnl_count = defaultdict(int)
 
-#초기 투자 자본
+# 초기 투자 자본
 seed_money = 1000
 
 # 가장 지갑 생성
 obj_wallet = WalletManager(initial_fund=seed_money)
 
 n = 0
-# 데이터 간격 지정. 
+# 데이터 간격 지정.
 minutes = 288
 
 print(f"분석 시작 {datetime.now()}")
 for i in range(10, range_length_data, 1):
     # 해당 index값을 closing_sync_data index값으로 업데이트
-    kline_data = obj_data.sync_kline_data(idx=i, kline_data=kline_data, idx_mapping=indices_data, sync_data=closing_sync_data)
+    kline_data = obj_data.sync_kline_data(
+        idx=i,
+        kline_data=kline_data,
+        idx_mapping=indices_data,
+        sync_data=closing_sync_data,
+    )
     # 필요한 범위만 추출해서 반환.
-    target_data = obj_data.get_kline_interval_data_by_range(end_idx=i, kline_data=kline_data, idx_data=indices_data)
+    target_data = obj_data.get_kline_interval_data_by_range(
+        end_idx=i, kline_data=kline_data, idx_data=indices_data
+    )
     for symbol in symbols:
 
         # 시나리오 1 검사.
@@ -86,18 +93,18 @@ for i in range(10, range_length_data, 1):
         trade_count = constraint.get("count")
         # 회당 지정 거래가능 대금 지정
         trade_balance = constraint.get("tradeValue")
-        
+
         if (
             case_1[1] > 0
-            and case_1[2] >2
-            and case_1[3] >1
+            and case_1[2] > 2
+            and case_1[3] > 1
             # and case_1[4]
             and not obj_wallet.account_balances.get(symbol)
         ):
-            #debug code
+            # debug code
             # reset_position = 2 if case_1[1]==1 else 1
-            
-            #주문 신호 발생기
+
+            # 주문 신호 발생기
             status, order_signal_open = asyncio.run(
                 obj_order.generate_order_open_signal(
                     symbol=symbol,
@@ -133,7 +140,7 @@ for i in range(10, range_length_data, 1):
         is_wallet = obj_process.trading_data.get(symbol)
         # print(is_wallet)
         obj_wallet.get_wallet_status(symbol=symbol, current_price=current_price)
-        
+
         # 만약 wallet에 해당 symbol이 없다면..
         if is_wallet is not None:
             # 매도 가격 도달 여부 (bool)
@@ -143,14 +150,14 @@ for i in range(10, range_length_data, 1):
             # 만약 매도 가격 도달시 (True)
             if is_stop:
                 # 지갑 금액 정보 업데이트
-                
+
                 # 종료 신호 생성
                 value = obj_order.generate_order_close_signal(
                     symbol=symbol,
                     current_price=current_price,
                     wallet_data=obj_wallet.account_balances,
                 )
-                
+
                 # wallet에 보유정보 삭제 및 손익비용 연산 반환.
                 _, pnl_value = obj_wallet.remove_funds(symbol=symbol)
                 # 매도 가격 도달시 종료하는 함수의 데이터 기록 제거.
@@ -160,16 +167,16 @@ for i in range(10, range_length_data, 1):
                 trade_data.append(obj_wallet.balance_info)
 
                 # if pnl_value < 0:
-                    # pprint(obj_wallet.balance_info)
-                    
+                # pprint(obj_wallet.balance_info)
+
                 if not pnl_data.get(symbol):
                     pnl_data[symbol] = float(pnl_value)
                     pnl_count[symbol] = 0
                 else:
                     pnl_data[symbol] += float(pnl_value)
                     pnl_count[symbol] += 1
-    #실시간 변동이 보고싶다면 이곳에.
-    utils._std_print(f'{i} / {range_length_data}')
+    # 실시간 변동이 보고싶다면 이곳에.
+    utils._std_print(f"{i} / {range_length_data}")
     # utils._std_print(round(obj_wallet.get_wallet_status(symbol=symbol, current_price=current_price)['total_assets'],3))
 
     # utils._std_print(obj_wallet.balance_info['total_assets'])
@@ -324,10 +331,10 @@ utils._save_to_json(
 #     for i in range(10, range_length_data, 1):
 #         # kline_data = obj_data.sync_kline_data(idx=i, kline_data=kline_data, idx_mapping=indices_data, sync_data=closing_sync_data)
 #         # target_data = obj_data.get_kline_interval_data_by_range(end_idx=i, kline_data=kline_data, idx_data=indices_data)
-#         target_data = 
+#         target_data =
 #         # 멀티프로세싱을 위한 인자 준비
 #         args_list = [(symbol, target_data, obj_analy, obj_con, obj_order, obj_wallet, obj_process) for symbol in symbols]
-        
+
 #         # 멀티프로세싱을 통해 분석 수행
 #         results = pool.map(process_symbol, args_list)
 
@@ -336,7 +343,7 @@ utils._save_to_json(
 #             for item in result:
 #                 pprint(item)
 #         utils._std_print(f'{i} / {range_length_data}')
-        
+
 #     pool.close()
 #     pool.join()
 

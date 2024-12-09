@@ -320,7 +320,7 @@ class SpotOrder(BinanceOrderManager):
         usdt_balance = account_info.get("USDT")
         if usdt_balance is None:
             return None
-        return float(usdt_balance.get('free', 0))
+        return float(usdt_balance.get("free", 0))
 
     # 계좌 정보를 수신 후 지갑 전체 USDT 가치를 반환한다.
     async def get_total_wallet_balance(self) -> Optional[float]:
@@ -331,23 +331,22 @@ class SpotOrder(BinanceOrderManager):
         account_info = await self.get_account_balance()
         if not isinstance(account_info, dict) or not account_info:
             return None
-        
+
         total_balance = 0
-        balance_categories = ['free', 'locked']
-        
+        balance_categories = ["free", "locked"]
+
         for asset, balances in account_info.items():
-            if asset == 'USDT':
+            if asset == "USDT":
                 for category in balance_categories:
                     total_balance += balances.get(category)
             else:
-                symbol = asset + 'USDT'
+                symbol = asset + "USDT"
                 ticker_data = await self.spot_api.fetch_ticker_price(symbol=symbol)
-                asset_price = float(ticker_data.get('price', 0))
+                asset_price = float(ticker_data.get("price", 0))
                 for category in balance_categories:
                     asset_value = float(balances.get(category)) * asset_price
                     total_balance += asset_value
         return float(total_balance)
-
 
 
 class FuturesOrder(BinanceOrderManager):
@@ -687,19 +686,19 @@ class FuturesOrder(BinanceOrderManager):
         return float(total_wallet_balance)
 
 
-
-
-
 if __name__ == "__main__":
     import nest_asyncio
+
     nest_asyncio.apply()
     spot_obj = SpotOrder()
     futures_obj = FuturesOrder()
 
     target_symbol = "xrpusdt"
-    spot_data = asyncio.run(spot_obj.fetch_order_status(target_symbol))  # symbol=target_symbol)
-    futures_data = asyncio.run(futures_obj.fetch_order_status(
-        target_symbol
-    ))  # symbol=target_symbol)
+    spot_data = asyncio.run(
+        spot_obj.fetch_order_status(target_symbol)
+    )  # symbol=target_symbol)
+    futures_data = asyncio.run(
+        futures_obj.fetch_order_status(target_symbol)
+    )  # symbol=target_symbol)
 
     max_lever = asyncio.run(futures_obj.get_max_leverage(symbol="adausdt"))

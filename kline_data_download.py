@@ -12,7 +12,6 @@ current_path = os.getcwd()
 PARENT_DIR = os.path.dirname(current_path)
 
 
-
 import os
 
 # 현재 파일의 경로
@@ -25,30 +24,29 @@ print("현재 경로:", current_path)
 print("상위 폴더 경로:", parent_path)
 
 
-
-
 MAIN_FOLDER_NAME = "DataStore"
 NESTED_FOLDER_NAME = "KlineData"  # 오타 수정
 
 folder_path = os.path.join(PARENT_DIR, MAIN_FOLDER_NAME)
-print(f'저장위치 {folder_path}')
+print(f"저장위치 {folder_path}")
 OHLCV_INTERVALS: Final[list] = [
-        "1m",
-        "3m",
-        "5m",
-        # "15m",
-        # "30m",
-        "1h",
-        # "2h",
-        # "4h",
-        # "6h",
-        # "8h",
-        "12h",
-        "1d",
-        "3d",
-        # "1w",
-        # "1M",
-    ]
+    "1m",
+    "3m",
+    "5m",
+    # "15m",
+    # "30m",
+    "1h",
+    # "2h",
+    # "4h",
+    # "6h",
+    # "8h",
+    "12h",
+    "1d",
+    "3d",
+    # "1w",
+    # "1M",
+]
+
 
 def create_folder(path: str):  # 함수명 오타 수정
     if not os.path.isdir(path):
@@ -78,9 +76,17 @@ if __name__ == "__main__":
     obj_spot = SpotDataControl()
     # intervals = [interval for interval in obj.KLINE_INTERVALS[:9]]
     intervals = OHLCV_INTERVALS
-    tickers = ["btcusdt", "xrpusdt", "ethusdt", "dogeusdt", "solusdt", "trxusdt", "adausdt"]
+    tickers = [
+        "btcusdt",
+        "xrpusdt",
+        "ethusdt",
+        "dogeusdt",
+        "solusdt",
+        "trxusdt",
+        "adausdt",
+    ]
 
-    directory = ['spot', 'futures']
+    directory = ["spot", "futures"]
 
     end_date = utils._convert_to_datetime("2024-11-23 12:00:00")
     start_date = utils._convert_to_datetime("2024-8-1 00:00:00")
@@ -99,5 +105,3 @@ if __name__ == "__main__":
         print(f"{ticker} 수신 완료")
         json_dump(file_name=f"{ticker.upper()}.json", data=data)
     print("Futures END")
-    
-    

@@ -186,9 +186,9 @@ class DataManager:
             4) end_date : 종료 날짜 (년-월-일 만 넣을것.)
             5) save : 저장여부
         3. 추가설명
-            self.__generate_timestamp_ranges가 함수내에 호출됨.        
+            self.__generate_timestamp_ranges가 함수내에 호출됨.
         """
-        
+
         # 기본값 설정
         if symbols is None:
             symbols = self.symbols
@@ -251,8 +251,8 @@ class DataManager:
         2. 매개변수
             1) kline_data : kline_data 를 numpy.array화 하여 적용
             2) save : 생성된 데이터 저장여부.
-        
-        
+
+
         """
         # 심볼 및 interval 값을 리스트로 변환
         symbols_list = list(kline_data.keys())
@@ -274,7 +274,9 @@ class DataManager:
             for interval, kline_data_interval in kline_data_symbol.items():
                 if interval == intervals_list[0]:
                     # np.arange길이 맞추기 위해 dummy data 삽입
-                    new_row = np.insert(reference_data, 0, dummy_data, axis=0)#reference_data.insert(0, dummy_data)
+                    new_row = np.insert(
+                        reference_data, 0, dummy_data, axis=0
+                    )  # reference_data.insert(0, dummy_data)
                     output_data[symbol][interval] = new_row
                     continue
 
@@ -333,7 +335,7 @@ class DataManager:
                             0,
                         ]
                     combined_data.append(new_entry)
-                
+
                 combined_data.insert(0, dummy_data)
                 output_data[symbol][interval] = np.array(
                     object=combined_data, dtype=float
@@ -347,54 +349,63 @@ class DataManager:
         return output_data
 
     # generate_kline_closing_sync index 자료를 생성한다.
-    def get_indices_data(self, data_container, lookback_days: int = 2, save: bool= False):
+    def get_indices_data(
+        self, data_container, lookback_days: int = 2, save: bool = False
+    ):
         """
         1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
         2. 매개변수
             1) data_container : utils모듈에서 사용중인 container data
             2) lookback_days : index 데이터를 생성한 기간을 정한다.
-        3. 추가설명 
+        3. 추가설명
             data_container는 utils에서 호출한 instance를 사용한다. params에 적용하면 해당 변수는 전체 적용된다.
             백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
-        """        
+        """
         # 하루의 총 분
         minutes_in_a_day = 1440
 
         # interval에 따른 간격(분) 정의
         interval_to_minutes = {
-            '1m': 1,
-            '3m': 3,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '2h': 120,
-            '4h': 240,
-            '6h': 360,
-            '8h': 480,
-            '12h': 720,
-            '1d': 1440,
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "8h": 480,
+            "12h": 720,
+            "1d": 1440,
         }
 
         indices_data = []
-        
+
         data_container_name = data_container.get_all_data_names()
         intervals = [interval.split("_")[1] for interval in data_container_name]
-        
-        
+
         for interval in intervals:
             indices_data = []
-        # 데이터에서 각 인덱스 처리
-            for current_index, data_point in enumerate(data_container.get_data(data_name=f'interval_{interval}')[0]):
-                for series_index in range(len(data_container.get_data(data_name=f'interval_{interval}'))):
+            # 데이터에서 각 인덱스 처리
+            for current_index, data_point in enumerate(
+                data_container.get_data(data_name=f"interval_{interval}")[0]
+            ):
+                for series_index in range(
+                    len(data_container.get_data(data_name=f"interval_{interval}"))
+                ):
                     # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
                     start_index = current_index - minutes_in_a_day * lookback_days
-                    start_index = (start_index // interval_to_minutes.get(interval)) * interval_to_minutes.get(interval)
+                    start_index = (
+                        start_index // interval_to_minutes.get(interval)
+                    ) * interval_to_minutes.get(interval)
                     if start_index < 0:
                         start_index = 0
 
                     # np.arange 생성
-                    interval_range = np.arange(start_index, current_index, interval_to_minutes.get(interval))
+                    interval_range = np.arange(
+                        start_index, current_index, interval_to_minutes.get(interval)
+                    )
 
                     # current_index가 마지막 인덱스보다 크면 추가
                     if current_index not in interval_range:
@@ -402,13 +413,13 @@ class DataManager:
 
                     # (series_index, interval_range) 추가
                     indices_data.append((series_index, interval_range))
-            data_container.set_data(data_name=f'map_{interval}', data=indices_data)
-        
+            data_container.set_data(data_name=f"map_{interval}", data=indices_data)
+
         if save:
             path = os.path.join(self.parent_directory, self.storeage, indices_file)
             utils._save_to_json(indices_data)
         return indices_data
-    
+
         # original code
         # for interval in intervals:
         #     indices_data = []
@@ -434,13 +445,18 @@ class DataManager:
         # return indices_data
 
     # Data Manager 함수를 일괄 실행 및 정리한다.
-    async def data_manager_run(self, save:bool=False):
+    async def data_manager_run(self, save: bool = False):
         kline_data = await self.generate_kline_interval_data(save=save)
         kline_data_array = utils._convert_to_array(kline_data=kline_data)
-        closing_sync = self.generate_kline_closing_sync(kline_data=kline_data_array, save=True)
+        closing_sync = self.generate_kline_closing_sync(
+            kline_data=kline_data_array, save=True
+        )
         data_container = utils._convert_to_container(kline_data=closing_sync)
-        indices_data = self.get_indices_data(data_container=data_container, lookback_days=2, save=True)
+        indices_data = self.get_indices_data(
+            data_container=data_container, lookback_days=2, save=True
+        )
         return kline_data_array, closing_sync, indices_data
+
 
 class OrderManager:
 
@@ -512,7 +528,7 @@ class OrderManager:
             "breakEventPrice": break_event_price,
             "leverage": target_leverage,
             "liq.Price": None,
-            "fee_cost":fee_cost
+            "fee_cost": fee_cost,
         }
 
         if get_max_trade_qty < get_min_trade_qty:
@@ -543,7 +559,7 @@ class OrderManager:
             "breakEventPrice": break_event_price,
             "leverage": target_leverage,
             "liq.Price": liq_price,
-            "fee_cost":fee_cost,
+            "fee_cost": fee_cost,
             "memo": None,
         }
         return (True, result)
@@ -598,9 +614,12 @@ class OrderManager:
             position=position,
         )  # 실현된 손익
         transaction_fee = current_price * quantity * fee  # 거래 수수료
-        total_value = (margin + realized_pnl)  # 총 반환 가치
+        total_value = margin + realized_pnl  # 총 반환 가치
 
-        return total_value, transaction_fee
+        return (
+            total_value,
+            transaction_fee,
+        )
 
     @staticmethod
     def get_calc_pnl(
@@ -704,21 +723,23 @@ class WalletManager:
         margin = order_signal.get("margin")
         if margin is None:
             raise ValueError(f"주문 정보가 유효하지 않음.")
-        self.balance_info['locked_funds']['number_of_stocks'] +=1
+        # self.balance_info['locked_funds']['number_of_stocks'] +=1
         self.account_balances[symbol] = order_signal
-        self.balance_info["available_funds"] -= margin# * (1 + self.fee)
-        self.__update_locked_funds(fee_cost=order_signal['fee_cost'])
+        self.balance_info["available_funds"] -= margin + order_signal.get("fee_cost")
+        self.__update_locked_funds()
         return (self.balance_info, margin)
 
     # 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
     def remove_funds(
-        self, symbol: str, order_signal
+        self, symbol: str
     ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
         """
         1. 기능 : 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
         2. 매개변수
             1) symbol : 쌍거래 symbol
         """
+
+        self.__update_locked_funds()
         target_data = self.account_balances.get(symbol)
         if target_data is None:
             raise ValueError("데이터가 유효하지 않음.")
@@ -728,7 +749,8 @@ class WalletManager:
         quantity = target_data.get("quantity")
         position = target_data.get("position")
         margin = target_data.get("margin")
-        leverage = target_data.get('leverage')
+        leverage = target_data.get("leverage")
+        fee = current_price * quantity * self.fee
         if None in (entry_price, current_price, quantity, position, margin):
             raise ValueError("데이터가 유효하지 않음.")
 
@@ -738,17 +760,17 @@ class WalletManager:
             quantity=quantity,
             position=position,
         )
-        fund = pnl_value + (margin * leverage)
+        fund = pnl_value + margin
 
-        self.balance_info["available_funds"] += fund
+        self.balance_info["available_funds"] += fund - fee
         del self.account_balances[symbol]
 
         # wallet정보를 업데이트 한다.
-        self.__update_locked_funds(fee_cost=order_signal[1])
+        self.__update_locked_funds()
         return (self.balance_info, pnl_value)
 
     # 계좌 정보를 업데이트한다.
-    def __update_locked_funds(self, fee_cost):
+    def __update_locked_funds(self):
         """
         1. 기능 : 계좌정보를 현재가격을 반영하여 업데이트한다.
         2. 매개변수 : 해당없음.
@@ -760,6 +782,18 @@ class WalletManager:
 
         # 업데이트 할 내용 없을경우 함수 종료
         if self.account_balances == {}:
+            available_funds = self.balance_info.get("available_funds")
+            # total_assets = available_funds
+            self.balance_info = {
+                "available_funds": available_funds,
+                "locked_funds": {
+                    "number_of_stocks": 0,
+                    "profit_and_loss": 0,
+                    "maintenance_margin": 0,
+                    "profit_margin_ratio": 0,
+                },
+                "total_assets": available_funds,
+            }
             return self.balance_info
 
         # account_balaces의 정보를 기준으로 연산에 필요한 정보를 수집한다.
@@ -769,7 +803,7 @@ class WalletManager:
             quantity = symbol_data.get("quantity")
             position = symbol_data.get("position")
             margin = symbol_data.get("margin")
-            # fee = margin * margin
+            fee_cost = symbol_data.get("fee_cost")
 
             # 데이터에 문제가 발생할 경우 stop처리 한다. 하나라도 이상 데이터가 나올 수 없다.
             if None in (entry_price, current_price, quantity, position, margin):
@@ -797,7 +831,7 @@ class WalletManager:
         self.balance_info["locked_funds"]["profit_and_loss"] = profit_and_loss
         self.balance_info["locked_funds"]["maintenance_margin"] = maintenance_margin
         self.balance_info["locked_funds"]["profit_margin_ratio"] = profit_margin_ratio
-        self.balance_info["total_assets"] = total_assets - fee_cost
+        self.balance_info["total_assets"] = total_assets
 
         return self.balance_info
 
@@ -824,7 +858,7 @@ class WalletManager:
     ) -> Dict[str, float]:
         # wallet에 대해 symbol정보 없을때에 대하여 대비 되어 있음 (pass 처리)
         self.__update_current_price(symbol=symbol, current_price=current_price)
-        self.__update_locked_funds(fee_cost=0)
+        self.__update_locked_funds()
         return self.balance_info
 
 

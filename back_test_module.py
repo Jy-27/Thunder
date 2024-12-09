@@ -3,6 +3,7 @@ import utils
 import Analysis
 from typing import Dict, List, Union, Any, Optional
 import time
+
 # from Analysis import AnalysisManager
 
 
@@ -15,15 +16,16 @@ def update_data(kline_path: str, index_path: str):
     index_data = utils._load_json(file_path=index_path)
     return (kline_data, index_data)
 
+
 # 임시생성 함수
 def signal(analy_data):
     if analy_data[2] and analy_data[4]:
-        position = 'LONG' if analy_data[0]==1 else 'SHORT'
+        position = "LONG" if analy_data[0] == 1 else "SHORT"
         leverage = analy_data[3]
-        return {'position':position,
-                'leverage':leverage}
+        return {"position": position, "leverage": leverage}
     else:
         return False
+
 
 class DataManager:
     def __init__(self, kline_data, index_data):
@@ -194,13 +196,13 @@ class TradeStopper:
     ) -> bool:
         if not self.__trade_status(trade_history=trade_history):
             return False
-        
+
         current_price = float(nested_kline_data[4])
         current_position = trade_history[-1].get("position")
         # Reference price 업데이트
         if not self.reference_price:
             self.reference_price = current_price
-            
+
         if current_position in ["LONG", "BUY"]:
             self.reference_price = max(self.reference_price, current_price)
         elif current_position in ["SHORT", "SELL"]:
@@ -239,7 +241,7 @@ class Wallet:
         self.total_balance: float = 0
         self.profit_to_loss_ratio: float = 0
         self.safety_ratio: float = 0.35
-        self.available_value: float = initial_capital * (1-self.safety_ratio)
+        self.available_value: float = initial_capital * (1 - self.safety_ratio)
 
     # 청산시 오류발생, 시스템 멈춤
     def __vaildate_balance(self):
@@ -268,7 +270,7 @@ class Wallet:
         self.free = self.free - USDT
         self.lock += value
         self.total_balance = self.__cals_total_balance()
-        self.available_value=self.__cals_available_value()
+        self.available_value = self.__cals_available_value()
         self.profit_to_loss_ratio = self.__cals_profit_to_loss_ratio()
         self.__vaildate_balance()
 
@@ -283,14 +285,12 @@ class Wallet:
         self.__cals_profit_to_loss_ratio()
 
     # 실시간 wallet의 lock을 업데이트 한다.
-    def realtime_wallet_update(self, curreutn_price:float, trade_history:dict):
+    def realtime_wallet_update(self, curreutn_price: float, trade_history: dict):
         last_trade_history = trade_history[-1]
-        leverage = last_trade_history.get('leverage')
-        quantity = last_trade_history.get('quantity')
+        leverage = last_trade_history.get("leverage")
+        quantity = last_trade_history.get("quantity")
         return (current_price * quantity) / leverage
-        
-        
-        
+
     # 계좌정보 반환
     def get_account_balance(self):
         return {
@@ -325,31 +325,32 @@ if __name__ == "__main__":
     for i in range(len(index_data) - 1):
         get_data = data_obj.get_kline_data_by_range(end_index=i)
         # print('DEBUG 1=========')
-        if not get_data.get('3d'):
+        if not get_data.get("3d"):
             continue
         # print('DEBUG 2')
-        
+
         # 데이터 분석 tool
         analy_data = analy_obj.case2_conditions(ticker_data=get_data)
         open_signal = signal(analy_data=analy_data)
-        
+
         # utils._std_print(analy_data)
         # 1분봉 마지막 데이터 (최신데이터 대체적용)
         nested_kline_data = get_data.get("1m")[-1]
-        current_price = float(nested_kline_data[4])     # 이상 무
+        current_price = float(nested_kline_data[4])  # 이상 무
         # 시나리오 true면
-        
+
         trade_history = signal_obj.get_trade_history()
         if trade_history and trade_history[-1].get("tradeStatus"):
-            wallet_obj.realtime_wallet_update(curreutn_price=nested_kline_data[4],
-                                              trade_history=trade_history)
-        
+            wallet_obj.realtime_wallet_update(
+                curreutn_price=nested_kline_data[4], trade_history=trade_history
+            )
+
         if isinstance(open_signal, dict):
             trade_history = signal_obj.get_trade_history()
             if trade_history and trade_history[-1]["tradeStatus"]:
                 continue
-            position = open_signal.get('position')
-            leverage = open_signal.get('leverage')
+            position = open_signal.get("position")
+            leverage = open_signal.get("leverage")
 
             quantity = (leverage * wallet_obj.available_value) / current_price
             signal_obj.submit_trade_open_signal(
@@ -362,14 +363,16 @@ if __name__ == "__main__":
             # signal_obj.dump_to_json(file_path=path_trade_history)
 
         trade_history = signal_obj.get_trade_history()
-                
+
         if trade_history:
             close_signal = stopper_obj.generate_close_signal_scenario1(
                 nested_kline_data=nested_kline_data, trade_history=trade_history
             )
             # print(close_signal)
             if close_signal:
-                signal_obj.submit_trade_close_signal(nested_kline_data=nested_kline_data)
+                signal_obj.submit_trade_close_signal(
+                    nested_kline_data=nested_kline_data
+                )
                 last_trade_history = signal_obj.get_trade_history()[-1]
 
                 leverage = last_trade_history.get("leverage")

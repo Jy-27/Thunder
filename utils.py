@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
+from pprint import pformat
 
 T = TypeVar("T")
 
@@ -15,6 +16,7 @@ class DataContainer:
     """
     동적 데이터를 저장하고 관리한다. (변수명을 직접 등록하는게 아니라 함수로 생성함.)
     """
+
     def __init__(self):
         """동적 데이터를 저장하고 관리하는 컨테이너."""
         pass  # 딕셔너리 없이 속성만을 동적으로 관리
@@ -29,7 +31,7 @@ class DataContainer:
         # data_name이 숫자로 시작하는지 확인
         if data_name[0].isdigit():
             raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
-        
+
         setattr(self, data_name, data)
 
     def get_data(self, data_name):
@@ -42,13 +44,14 @@ class DataContainer:
             return getattr(self, data_name)
         else:
             raise AttributeError(f"No attribute named '{data_name}'")
-    
+
     def get_all_data_names(self):
         """
         1. 기능 : 현재 저장된 모든 속성명(변수명)을 반환한다.
         2. 반환값: 속성명 리스트
         """
         return list(self.__dict__.keys())
+
 
 # None발생시 Return 대응
 def _none_or(result: Optional[T]) -> Optional[T]:
@@ -68,15 +71,17 @@ def _str_to_list(data: Union[list, str], to_upper: bool = False) -> list:
     else:
         raise ValueError(f"type 입력오류: '{type(data)}'는 지원되지 않는 타입입니다.")
 
+
 # dict의 중첩된 값을 np.array화 한다.
-def _convert_to_array(kline_data:dict):
+def _convert_to_array(kline_data: dict):
     result = {}
-    
+
     for symbol, kline_data_symbol in kline_data.items():
         result[symbol] = {}
         for interval, kline_data_interval in kline_data_symbol.items():
             result[symbol][interval] = np.array(object=kline_data_interval, dtype=float)
     return result
+
 
 # kline_data를 container 자료형으로 반환한다.
 def _convert_to_container(kline_data):
@@ -88,29 +93,29 @@ def _convert_to_container(kline_data):
         >> backtest할 경우 generate_kline_closing_sync처리한 데이터를 반영할것.
     """
     container_data = DataContainer()
-    
+
     map_symbol = {}
     map_interval = {}
-    
+
     symbols = list(kline_data.keys())
     intervals = list(kline_data[symbols[0]].keys())
-    print('START')
+    print("START")
     for idx_i, interval in enumerate(intervals):
         map_interval[interval] = idx_i
-    
+
         dummy_data = []
-        
+
         for idx_s, symbol in enumerate(symbols):
             map_symbol[symbol] = idx_s
-    
+
             target_data = kline_data[symbol][interval]
             dummy_data.append(target_data)
         try:
             dummy_data = np.array(dummy_data)
         except Exception as e:
-            print(f'error - {e}')
+            print(f"error - {e}")
             return 0, 0, False
-        container_data.set_data(data_name = f'interval_{interval}', data=dummy_data)
+        container_data.set_data(data_name=f"interval_{interval}", data=dummy_data)
     return map_symbol, map_interval, container_data
 
 
@@ -386,7 +391,6 @@ def _load_json(file_path: str) -> Optional[Union[Dict, Any]]:
         return None
 
 
-
 # 올림 함수
 def _round_up(value: Union[str, float], step: Union[str, float]) -> float:
     """
@@ -462,6 +466,7 @@ def _save_to_json(file_path: str, new_data: Any, overwrite: bool = False):
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(data_to_save, file, ensure_ascii=False, indent=4)
 
+
 # ANSI 코드를 사용하여 콘솔 줄 전체를 지운 후 상태를 출력한다.
 def _std_print(message: str):
     """
@@ -472,18 +477,26 @@ def _std_print(message: str):
     4. 오류 검증 기능: 해당 없음.
     """
     # ANSI 코드로 줄 전체 지우기
+    formatted_message = pformat(message, indent=2, width=80)
+
     sys.stdout.write("\033[K")  # 현재 줄의 내용을 지움
     sys.stdout.write(f"\r{message}")  # 커서를 줄의 시작으로 이동 후 메시지 출력
     sys.stdout.flush()
-    
+
+
 def _convert_kline_data_array(kline_data: Dict) -> Dict[str, Dict[str, np.ndarray]]:
     result = {}
     for symbol, kline_data_symbol in kline_data.items():
         if not isinstance(kline_data_symbol, dict) or not kline_data_symbol:
-            raise ValueError('kline data가 유효하지 않음.')
+            raise ValueError("kline data가 유효하지 않음.")
         result[symbol] = {}
         for interval, kline_data_interval in kline_data_symbol.items():
-            if not isinstance(kline_data_interval, Union[List, np.ndarray]) or not kline_data_interval:
-                raise ValueError('kline data가 유효하지 않음.')
-            result[symbol][interval] = np.array(object=kline_data_interval, dtype=np.float64)
-    return result 
+            if (
+                not isinstance(kline_data_interval, Union[List, np.ndarray])
+                or not kline_data_interval
+            ):
+                raise ValueError("kline data가 유효하지 않음.")
+            result[symbol][interval] = np.array(
+                object=kline_data_interval, dtype=np.float64
+            )
+    return result

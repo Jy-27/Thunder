@@ -15,22 +15,22 @@ print(f"작업시작 >> {datetime.now()}")
 
 # symbols 지정
 symbols = [
-    "BTCUSDT",
-    "XRPUSDT",
-    "ADAUSDT",
+    # "BTCUSDT",
+    # "XRPUSDT",
+    # "ADAUSDT",
     # "NOTUSDT",
-    # "SANDUSDT",
+    "SANDUSDT",
     # "ARKMUSDT",
     # "SOLUSDT",
-    "DOGEUSDT",
+    # "DOGEUSDT",
 ]
 # interval 지정.
 # intervals = ["1m", "5m", "1h"]
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-28"
-end_date = "2024-12-8"
+start_date = "2024-12-9"
+end_date = "2024-12-10"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")

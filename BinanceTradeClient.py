@@ -367,7 +367,7 @@ class FuturesOrder(BinanceOrderManager):
         """
         endpoint = "/fapi/v1/leverageBracket"
         params = {"symbol": symbol.upper(), "timestamp": int(time.time() * 1000)}
-        return await self.__send_request("GET", endpoint, params)
+        return await self._BinanceOrderManager__send_request("GET", endpoint, params)
 
     # minQty, stepSize, notional 값을 수신 및 반환한다.
     async def __get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
@@ -425,7 +425,7 @@ class FuturesOrder(BinanceOrderManager):
             "leverage": leverage,
             "timestamp": int(time.time() * 1000),
         }
-        return await self.__send_request("POST", endpoint, params)
+        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
 
     # Ticker의 margin type 설정
     async def set_margin_type(self, symbol: str, margin_type: str) -> Union[str, Any]:
@@ -470,7 +470,7 @@ class FuturesOrder(BinanceOrderManager):
             "marginType": margin_type,
             "timestamp": int(time.time() * 1000),
         }
-        return await self.__send_request("POST", endpoint, params)
+        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
 
     # Futures 시장의 주문(long/short)신호를 보낸다.
     async def submit_order(
@@ -524,14 +524,18 @@ class FuturesOrder(BinanceOrderManager):
         # 지정가 주문일 경우 추가 파라미터
         if order_type == "LIMIT":
             params["timeInForce"] = time_in_force
-        if price:
             params["price"] = price
+            
+        elif order_type == "STOP_MARKET" and price:
+            params['stopPrice'] = price
+            
+        # if price:
 
         # 선물거래의 경우에만 positionSide와 reduceOnly 설정
         params["positionSide"] = position_side
         params["reduceOnly"] = "true" if reduce_only else "false"
 
-        return await self.__send_request("POST", endpoint, params)
+        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
 
     # Futures 전체 잔고 수신 후 보유 내역값만 반환
     async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:

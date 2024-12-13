@@ -1428,3 +1428,98 @@ class WasteTypeCode:
     #         indices_data = utils._load_json(file_path=indices_data_path)
 
     #     return (range_length_data, kline_data, indices_data, closing_sync_data)
+
+
+
+
+"""
+>>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', price=1.015, quantity=5, order_type='STOP_MARKET'))
+{'orderId': 46915674924, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '8GSV2rVnGLMBnO4HDwSb1Y', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'STOP_MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '1.01500', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'STOP_MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733915429075}
+>>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', quantity=5, order_type='MARKET'))
+{'orderId': 46916207450, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '476bSE3TUnGfOp6AsVCq12', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '0.00000', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733916764850}
+>>>
+"""
+from dataclasses import dataclass, fields
+from typing import List, Optional, Union
+
+@dataclass
+class TradeOrder:
+    symbol: str
+    trade_timestamp: int
+    entry_price: Union[float, int]
+    position: int
+    quantity: Union[float, int]
+    leverage: int
+    fee_rate: float = 0.05
+    init_value: Optional[float] = None
+    current_value: Optional[float] = None
+    profit_and_loss: Optional[float] = None
+    current_price: Optional[Union[float, int]] = None
+    break_event_price: Optional[float] = None
+    fee_open: Optional[Union[float, int]] = None
+    fee_close: Optional[Union[float, int]] = None
+    memo: Optional[str] = None
+
+    def __post_init__(self):
+        if self.current_price is None:
+            self.current_price = self.entry_price
+        if self.leverage <= 0:
+            raise ValueError(f"레버리지는 최소 1 이상이어야 합니다. 현재 값: {self.leverage}")
+        self.__update_fee()
+        self.__update_value()
+
+    def __update_fee(self):
+        adjusted_fee_rate = self.fee_rate / 1_000
+        self.fee_open = self.entry_price * adjusted_fee_rate * self.quantity
+        self.fee_close = self.current_price * adjusted_fee_rate * self.quantity
+        self.break_event_price = self.entry_price + self.fee_open
+
+    def __update_value(self):
+        self.init_value = (self.entry_price * self.quantity) / self.leverage
+        self.current_value = (self.current_price * self.quantity) / self.leverage
+        self.profit_and_loss = self.current_value - self.init_value
+
+    def update_current_price(self, current_price: [Union[float, int]]):
+        self.current_price = current_price
+        self.__update_fee()
+        self.__update_value()
+
+class WalletManager:
+    def __init__(self, stock_deposit: float):
+        self.stock_deposit = stock_deposit
+        
+
+class TradeOrderManager:
+    def __init__(self):
+        self.orders: List[TradeOrder] = []
+        self.symbol_map = {}
+        self.trade_symbol: List = []
+
+    def add_order(self, **kwargs):
+        """TradeOrder 생성 및 추가"""
+        valid_keys = {field.name for field in fields(TradeOrder)}  # TradeOrder 필드 이름 가져오기
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}  # 유효한 키워드만 필터링
+        order = TradeOrder(**filtered_kwargs)
+        self.orders.append(order)
+        self.__update_attr()  # symbol_map 업데이트
+        return order
+
+    def remove_order(self, symbol):
+        idx = self.symbol_map.get(symbol)
+        del self.orders[idx]
+        self.__update_symbol_map()
+    
+    def update(self, symbol:str, current_price: [Union[float, int]]):
+        symbol_idx = self.symbol_map.get(symbol)
+        if symbol_idx is None:
+            return
+        self.orders[symbol_idx].update_current_price(current_price=current_price)
+    
+    def get_order(self, symbol):
+        idx = self.symbol_map.get(symbol)
+        return self.orders[idx]
+    
+    def __update_attr(self):
+        """symbol_map 업데이트"""
+        self.symbol_map = {order.symbol: idx for idx, order in enumerate(self.orders)}  # 심볼과 인덱스 매핑
+        self.trade_symbol = list(self.symbol_map.keys())

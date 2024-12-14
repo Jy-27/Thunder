@@ -15,14 +15,14 @@ print(f"작업시작 >> {datetime.now()}")
 
 # symbols 지정
 symbols = [
-    "BTCUSDT",
-    "XRPUSDT",
+    # "BTCUSDT",
+    # "XRPUSDT",
     "ADAUSDT",
-    "NOTUSDT",
-    "SANDUSDT",
-    "ARKMUSDT",
-    "SOLUSDT",
-    "DOGEUSDT",
+    # "NOTUSDT",
+    # "SANDUSDT",
+    # "ARKMUSDT",
+    # "SOLUSDT",
+    # "DOGEUSDT",
 ]
 # interval 지정.
 # intervals = ["1m", "5m", "1h"]
@@ -37,21 +37,21 @@ print(f"instance 로딩 완료 >> {datetime.now()}")
 obj_process = DataProcess.TradeStopper()
 obj_analy = Analysis.AnalysisManager(back_test=True)
 obj_analy.intervals = intervals
-obj_order = OrderManager()
+obj_order = ProcessManager()
 obj_con = DataProcess.OrderConstraint()
 obj_data = DataManager(
     symbols=symbols, intervals=intervals, start_date=start_date, end_date=end_date
 )
 
-k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
-with open(k_path, 'rb')as file:
-    kline_data = pickle.load(file)
+# k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
+# with open(k_path, "rb") as file:
+#     kline_data = pickle.load(file)
 # kline_data = utils._load_json(file_path=k_path)
-# kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
+kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
 
 
-# kline_data = utils._convert_to_array(kline_data=kline_data)
-# kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
+kline_data = utils._convert_to_array(kline_data=kline_data)
+kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
 
 # kline_data = utils._load_json(file_path=)
 
@@ -62,10 +62,6 @@ obj_analysis = Analysis.AnalysisManager()
 
 
 trade_data = []
-
-# # 손익비용 저장할 변수
-# pnl_data = defaultdict(float)
-# pnl_count = defaultdict(int)
 
 # 초기 투자 자본
 seed_money = 1_000_000
@@ -90,7 +86,9 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             price = data[-1][4]
             close_timestampe = data[-1][6]
             symbol = symbols[maps_[0]]
-            obj_wallet.update_order_data(symbol=symbol, current_price=price, current_time=close_timestampe)
+            obj_wallet.update_order_data(
+                symbol=symbol, current_price=price, current_time=close_timestampe
+            )
         utils._std_print(f"{idx} / {obj_wallet.trade_analysis.total_balance}")
 
     scenario_1 = obj_analysis.scenario_1()
@@ -113,19 +111,15 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
 
         # 주문 신호 발생기
         status, qty, lv = asyncio.run(
-            obj_order.generate_order_open_signal(
+            obj_order.calculate_order_values(
                 symbol=symbol,
                 leverage=int(scenario_1[2] / 60),
                 balance=trade_balance,
-                market_type='futures'
+                market_type="futures",
             )
         )
         # 주문 신호 발생시
-        if (
-            status
-            and trade_count
-            > obj_wallet.trade_analysis.number_of_stocks
-        ):
+        if status and trade_count > obj_wallet.trade_analysis.number_of_stocks:
             # 포지션 종료를 위한 초기값 업데이트
             obj_process.initialize_trading_data(
                 symbol=symbol,
@@ -133,13 +127,15 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
                 entry_price=price,
             )
             # 지갑 정보 업데이트
-            obj_wallet.add_order(symbol=symbol,
-                                 start_timestamp=close_timestampe,
-                                 entry_price=price,
-                                 position=position,
-                                 quantity=qty,
-                                 leverage=lv)
-                                 
+            obj_wallet.add_order(
+                symbol=symbol,
+                start_timestamp=close_timestampe,
+                entry_price=price,
+                position=position,
+                quantity=qty,
+                leverage=lv,
+            )
+
     # 포지션 종료 검사.
     # 현재가
     # current_price = data[0][4]
@@ -157,61 +153,10 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         if is_stop and price > 0:
             # 지갑 금액 정보 업데이트
 
-            # 종료 신호 생성
-            # value = obj_order.generate_order_close_signal(
-            #     symbol=symbol,
-            #     current_price=price,
-            #     wallet_data=obj_wallet.account_balances,
-            # )
-
             # wallet에 보유정보 삭제 및 손익비용 연산 반환.
             obj_wallet.remove_order(symbol=symbol)
             # 매도 가격 도달시 종료하는 함수의 데이터 기록 제거.
             obj_process.remove_trading_data(symbol)
-            # 계좌정보 별도 저장.
-            # trade_data.append(obj_wallet.account_balances.get(symbol))
-            # trade_data.append(obj_wallet.balance_info)
 
-            # if pnl_value < 0:
-            # pprint(obj_wallet.balance_info)
-
-            # if not pnl_data.get(symbol):
-            #     pnl_data[symbol] = float(pnl_value)
-            #     pnl_count[symbol] = 0
-            # else:
-            #     pnl_data[symbol] += float(pnl_value)
-            #     pnl_count[symbol] += 1
-    # break
-# 실시간 변동이 보고싶다면 이곳에.
-# utils._std_print(f'{i} / {range_length_data}')
-# utils._std_print(round(obj_wallet.get_wallet_status(symbol=symbol, current_price=price)['total_assets'],3))
-
-# utils._std_print(obj_wallet.balance_info['total_assets'])
-# print(f"분석 종료 {datetime.now()}")
-
-# print("\n")
-# print("==>> wallet info")
-# pprint(obj_wallet.balance_info)
-# utils._save_to_json(
-#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/balance_info.json",
-#     new_data=obj_wallet.balance_info,
-# )
-
-# print("\n")
-# print("==>> balance info")
-# pprint(obj_wallet.account_balances)
-# utils._save_to_json(
-#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/account_balances.json",
-#     new_data=obj_wallet.account_balances,
-# )
-
-# print("\n")
-# print("==>> PNL info")
-
-# for idx, data in enumerate(trade_data):
-#     print(f"No. {idx}")
-#     pprint(data)
-# utils._save_to_json(
-#     file_path=f"{os.path.dirname(os.getcwd())}/DataStore/trade_data.json",
-#     new_data=trade_data,
-# )
+analyzer = ResultEvaluator(data=obj_wallet.trade_analysis.__dict__)
+analyzer.run_analysis()

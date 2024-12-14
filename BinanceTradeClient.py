@@ -525,10 +525,10 @@ class FuturesOrder(BinanceOrderManager):
         if order_type == "LIMIT":
             params["timeInForce"] = time_in_force
             params["price"] = price
-            
+
         elif order_type == "STOP_MARKET" and price:
-            params['stopPrice'] = price
-            
+            params["stopPrice"] = price
+
         # if price:
 
         # 선물거래의 경우에만 positionSide와 reduceOnly 설정

@@ -13,6 +13,8 @@ import utils
 import datetime
 from BinanceTradeClient import FuturesOrder, SpotOrder
 from MarketDataFetcher import FuturesMarket, SpotMarket
+from dataclasses import dataclass, fields
+
 
 """
 1. 목적
@@ -63,6 +65,194 @@ from MarketDataFetcher import FuturesMarket, SpotMarket
 
     저장은 별도의 함수를 구성해라. 한가지 함수에 너무 많은 기능을 담지마라.
 """
+
+@dataclass
+class TradeOrder:
+    symbol: str
+    start_timestamp: int  # 시작 시간
+    entry_price: Union[float, int]  # 진입 가격
+    position: int  # 포지션 (1: Long, -1: Short)
+    quantity: Union[float, int]  # 수량
+    leverage: int  # 레버리지
+    fee_rate: float = 0.05  # 수수료율
+    end_time: Optional[int] = None  # 종료 시간
+    initial_value: Optional[float] = None  # 초기 가치
+    current_value: Optional[float] = None  # 현재 가치
+    profit_loss: Optional[float] = None  # 손익 금액
+    current_price: Optional[Union[float, int]] = None  # 현재 가격
+    break_even_price: Optional[float] = None  # 손익분기점 가격
+    entry_fee: Optional[Union[float, int]] = None  # 진입 수수료
+    exit_fee: Optional[Union[float, int]] = None  # 종료 수수료
+
+    def __post_init__(self):
+        if self.current_price is None:
+            self.current_price = self.entry_price
+        if self.leverage <= 0:
+            raise ValueError(f"레버리지는 최소 1 이상이어야 합니다. 현재 값: {self.leverage}")
+        if self.end_time is None:
+            self.end_time = self.start_timestamp
+        self.__update_fees()
+        self.__update_values()
+
+    def __update_fees(self):
+        adjusted_fee_rate = self.fee_rate / 100
+        self.entry_fee = self.entry_price * adjusted_fee_rate * self.quantity * self.leverage
+        self.exit_fee = self.current_price * adjusted_fee_rate * self.quantity * self.leverage
+        total_fees = self.entry_fee + self.exit_fee
+        self.break_even_price = self.entry_price + (total_fees / self.quantity)
+
+    def __update_values(self):
+        self.initial_value = (self.entry_price * self.quantity) / self.leverage
+        self.current_value = (self.current_price * self.quantity) / self.leverage
+        total_fees = self.entry_fee + self.exit_fee
+        self.profit_loss = self.current_value - self.initial_value - total_fees
+
+    def update_trade_data(self, current_price: Union[float, int], current_time: int):
+        self.current_price = current_price
+        self.end_time = current_time
+        self.__update_fees()
+        self.__update_values()
+
+    def to_list(self):
+        return list(self.__dict__.values())
+
+
+class TradeAnalysis:
+    def __init__(self, initial_balance: float = 1_000):
+        self.closed_positions: Dict[str, List[List[Any]]] = {}
+        self.open_positions: Dict[str, List[List[Any]]] = {}
+
+        self.number_of_stocks: int = 0
+
+        self.initial_balance: float = initial_balance  # 초기 자산
+        self.total_balance: float = initial_balance  # 총 평가 자산
+        self.active_value: float = 0  # 거래 중 자산 가치
+        self.cash_balance: float = initial_balance  # 사용 가능한 예수금
+        self.profit_loss: float = 0  # 손익 금액
+        self.profit_loss_ratio: float = 0  # 손익률
+
+    def add_closed_position(self, trade_order_data: list):
+        symbol = trade_order_data[0]
+        if symbol not in self.closed_positions:
+            self.closed_positions[symbol] = [trade_order_data[1:]]
+        else:
+            self.closed_positions[symbol].append(trade_order_data[1:])
+        del self.open_positions[symbol]
+        self.update_wallet()
+        return self.closed_positions
+
+    def update_open_position(self, trade_order_data: list):
+        symbol = trade_order_data[0]
+        self.open_positions[symbol] = trade_order_data[1:]
+        self.update_wallet()
+        return self.open_positions
+
+    def update_wallet(self):
+        all_trades_data = []
+        open_trades_data = []
+
+        if self.closed_positions:
+            for _, trades_close in self.closed_positions.items():
+                all_trades_data.extend(trades_close)
+
+        if self.open_positions:
+            for _, trades_open in self.open_positions.items():
+                all_trades_data.append(trades_open)
+                open_trades_data.append(trades_open)
+            
+        open_position_length = len(self.open_positions)
+        if open_position_length == 0:
+            self.number_of_stocks = 0
+        elif open_position_length > 0:
+            self.number_of_stocks = open_position_length
+
+        if not self.closed_positions and not self.open_positions:
+            self.active_value = 0
+            self.cash_balance = self.total_balance
+            return
+
+        all_trades_data_array = np.array(all_trades_data)
+        open_trades_data_array = np.array(open_trades_data)
+
+        if all_trades_data_array.ndim == 1:
+            # 2차원 배열로 변환 (행 기준)
+            all_trades_data_array = all_trades_data_array.reshape(1, -1)
+            
+        if open_trades_data_array.ndim == 1:
+            # 2차원 배열로 변환 (행 기준)
+            open_trades_data_array = open_trades_data_array.reshape(1, -1)
+
+
+        sunk_cost = np.sum(all_trades_data_array[:, [12, 13]])
+        entry_cost = np.sum(all_trades_data_array[:, 7])
+        total_cost = sunk_cost + entry_cost
+        recovered_value = np.sum(all_trades_data_array[:, 8])
+
+        # 현재 거래중인 자산 초기화
+        if open_trades_data_array.size > 0:
+            self.active_value = np.sum(open_trades_data_array[:,8])
+        else:
+            self.active_value = 0
+
+        self.cash_balance = self.initial_balance - self.active_value
+        self.profit_loss = np.sum(all_trades_data_array[:, 9])
+        self.profit_loss_ratio = round((self.profit_loss / self.initial_balance) * 100, 3)
+        self.total_balance = self.cash_balance + self.active_value + self.profit_loss
+        
+        
+        if self.cash_balance < 0:
+            raise ValueError(f'주문 오류 : 진입금액이 예수금을 초과함.')
+        
+        # 계좌 가치가 0 미만이면 청산신호 발생 및 프로그램 중단.
+        if self.total_balance < 0:
+            raise ValueError(f'청산발생 : 계좌잔액 없음.')
+
+
+class TradeOrderManager:
+    def __init__(self, initial_balance: float = 1_000):
+        self.active_orders: List[TradeOrder] = []
+        self.order_index_map = {}
+        self.active_symbols: List[str] = []
+        self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)
+
+    def __refresh_order_map(self):
+        self.order_index_map = {order.symbol: idx for idx, order in enumerate(self.active_orders)}
+        self.active_symbols = list(self.order_index_map.keys())
+
+    def add_order(self, **kwargs):
+        if kwargs.get('symbol') in self.order_index_map:
+            return
+
+        valid_keys = {field.name for field in fields(TradeOrder)}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
+        order = TradeOrder(**filtered_kwargs)
+
+        self.active_orders.append(order)
+        self.__refresh_order_map()
+
+        order_signal = order.to_list()
+        self.trade_analysis.update_open_position(order_signal)
+        return order
+
+    def remove_order(self, symbol: str):
+        idx = self.order_index_map.get(symbol)
+        order_signal = self.active_orders[idx].to_list()
+        self.trade_analysis.add_closed_position(order_signal)
+        del self.active_orders[idx]
+        self.__refresh_order_map()
+
+    def update_order_data(self, symbol: str, current_price: Union[float, int], current_time: int):
+        idx = self.order_index_map.get(symbol)
+        if idx is None:
+            return
+        self.active_orders[idx].update_trade_data(current_price=current_price, current_time=current_time)
+        trade_order_data = self.active_orders[idx].to_list()
+        self.trade_analysis.update_open_position(trade_order_data)
+
+    def get_order(self, symbol: str):
+        idx = self.order_index_map.get(symbol)
+        return self.active_orders[idx]
+
 
 
 class DataManager:
@@ -416,8 +606,8 @@ class DataManager:
             data_container.set_data(data_name=f"map_{interval}", data=indices_data)
 
         if save:
-            path = os.path.join(self.parent_directory, self.storeage, indices_file)
-            utils._save_to_json(indices_data)
+            path = os.path.join(self.parent_directory, self.storeage, self.indices_file)
+            utils._save_to_json(file_path=indices_data, new_data=indices_data, overwrite=True)
         return indices_data
 
         # original code
@@ -472,13 +662,9 @@ class OrderManager:
     async def generate_order_open_signal(
         self,
         symbol: str,
-        position: int,
         leverage: int,
         balance: float,
-        entry_price: float,
-        open_timestamp: int,
         market_type: str = "futures",
-        fee: float = 0.0005,
     ):
         """
         1. 기능 : 조건 신호 발생시 가상의 구매신호를 발생한다.
@@ -496,7 +682,6 @@ class OrderManager:
         # position stopper 초기값 설정
         # self.ins_trade_stopper(symbol=symbol, position=position, entry_price=entry_price)
 
-        date = utils._convert_to_datetime(open_timestamp)
 
         # print(date)
         # leverage 값을 최소 5 ~ 최대 30까지 설정.
@@ -504,65 +689,20 @@ class OrderManager:
 
         # 현재가 기준 최소 주문 가능량 계산
         get_min_trade_qty = await ins_obj.get_min_trade_quantity(symbol=symbol)
-        # 조건에 부합ㅎ는 최대 주문 가능량 계산
+        # 조건에 부합하는 최대 주문 가능량 계산
         get_max_trade_qty = await ins_obj.get_max_trade_quantity(
             symbol=symbol, leverage=target_leverage, balance=balance
         )
 
-        margin = (get_max_trade_qty * entry_price) / target_leverage
-        fee_cost = entry_price * leverage * balance * fee
-        break_event_price = entry_price * (1 + fee)
-
-        # position을 문자형으로 변환함. {0:None, 1:'long', 2':'short'}
-        position_str = "LONG" if position == 1 else "SHORT"
-
-        fail_message = {
-            "symbol": symbol,
-            "tradeTimestamp": open_timestamp,
-            "tradeDate": date,
-            "entryPrice": entry_price,
-            "currentPrice": entry_price,
-            "position": position_str,
-            "quantity": get_max_trade_qty,
-            "margin": margin,
-            "breakEventPrice": break_event_price,
-            "leverage": target_leverage,
-            "liq.Price": None,
-            "fee_cost": fee_cost,
-        }
-
         if get_max_trade_qty < get_min_trade_qty:
-            fail_message["memo"] = "기본 주문 수량 > 최대 주문 수량"
-            return (False, fail_message)
+            print("기본 주문 수량 > 최대 주문 수량")
+            return (False, get_max_trade_qty, target_leverage)
 
-        if margin > balance:
-            fail_message["memo"] = "마진 금액 > 주문 금액"
-            return (False, fail_message)
+        # if margin > balance:
+        #     fail_message["memo"] = "마진 금액 > 주문 금액"
+        #     return (False, get_max_trade_qty, target_leverage)
 
-        liq_price = self.__get_liquidation_price(
-            entry_price=entry_price,
-            leverage=target_leverage,
-            quantity=get_max_trade_qty,
-            margin_balance=margin,
-            position_type=position_str,
-        )
-
-        result = {
-            "symbol": symbol,
-            "tradeTimestamp": open_timestamp,
-            "tradeDate": date,
-            "entryPrice": entry_price,
-            "currentPrice": entry_price,
-            "position": position_str,
-            "quantity": get_max_trade_qty,
-            "margin": margin,
-            "breakEventPrice": break_event_price,
-            "leverage": target_leverage,
-            "liq.Price": liq_price,
-            "fee_cost": fee_cost,
-            "memo": None,
-        }
-        return (True, result)
+        return (True, get_max_trade_qty, target_leverage)
 
     # 가상의 주문(close)을 생성하고, 매각에 대한 가치(usdt)를 연산 및 반환한다.
     def generate_order_close_signal(
@@ -688,185 +828,11 @@ class OrderManager:
         return round(liquidation_price, 2)
 
 
-class WalletManager:
-    """
-    가상의 wallet을 생성 및 운영함.
-    """
-
-    def __init__(self, initial_fund: float):
-        self.account_balances = {}
-        self.initial_fund = initial_fund
-        self.balance_info = {
-            "available_funds": self.initial_fund,
-            "locked_funds": {
-                "number_of_stocks": 0,
-                "profit_and_loss": 0,
-                "maintenance_margin": 0,
-                "profit_margin_ratio": 0,
-            },
-            "total_assets": self.initial_fund,
-        }
-        self.fee = 0.0005
-
-    # 매수(position open)주문 생성시 계좌에 정보 추가.
-    def add_funds(
-        self, order_signal: Dict[str, Optional[Any]]
-    ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
-        """
-        1. 기능 : 신규 주문 진행시 해당종목의 정보를 기록한다.
-        2. 매개변수
-            1) order_signal : 주문 신호 정보
-        """
-        symbol = order_signal.get("symbol")
-        if not isinstance(symbol, str):
-            raise ValueError(f"Order signal error - {symbol}")
-        margin = order_signal.get("margin")
-        if margin is None:
-            raise ValueError(f"주문 정보가 유효하지 않음.")
-        # self.balance_info['locked_funds']['number_of_stocks'] +=1
-        self.account_balances[symbol] = order_signal
-        self.balance_info["available_funds"] -= margin + order_signal.get("fee_cost")
-        self.__update_locked_funds()
-        return (self.balance_info, margin)
-
-    # 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
-    def remove_funds(
-        self, symbol: str
-    ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
-        """
-        1. 기능 : 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
-        2. 매개변수
-            1) symbol : 쌍거래 symbol
-        """
-
-        self.__update_locked_funds()
-        target_data = self.account_balances.get(symbol)
-        if target_data is None:
-            raise ValueError("데이터가 유효하지 않음.")
-
-        entry_price = target_data.get("entryPrice")
-        current_price = target_data.get("currentPrice")
-        quantity = target_data.get("quantity")
-        position = target_data.get("position")
-        margin = target_data.get("margin")
-        leverage = target_data.get("leverage")
-        fee = current_price * quantity * self.fee
-        if None in (entry_price, current_price, quantity, position, margin):
-            raise ValueError("데이터가 유효하지 않음.")
-
-        pnl_value = OrderManager.get_calc_pnl(
-            entry_price=entry_price,
-            current_price=current_price,
-            quantity=quantity,
-            position=position,
-        )
-        fund = pnl_value + margin
-
-        self.balance_info["available_funds"] += fund - fee
-        del self.account_balances[symbol]
-
-        # wallet정보를 업데이트 한다.
-        self.__update_locked_funds()
-        return (self.balance_info, pnl_value)
-
-    # 계좌 정보를 업데이트한다.
-    def __update_locked_funds(self):
-        """
-        1. 기능 : 계좌정보를 현재가격을 반영하여 업데이트한다.
-        2. 매개변수 : 해당없음.
-        """
-        number_of_stocks = 0
-        profit_and_loss = 0
-        maintenance_margin = 0
-        profit_margin_ratio = 0
-
-        # 업데이트 할 내용 없을경우 함수 종료
-        if self.account_balances == {}:
-            available_funds = self.balance_info.get("available_funds")
-            # total_assets = available_funds
-            self.balance_info = {
-                "available_funds": available_funds,
-                "locked_funds": {
-                    "number_of_stocks": 0,
-                    "profit_and_loss": 0,
-                    "maintenance_margin": 0,
-                    "profit_margin_ratio": 0,
-                },
-                "total_assets": available_funds,
-            }
-            return self.balance_info
-
-        # account_balaces의 정보를 기준으로 연산에 필요한 정보를 수집한다.
-        for symbol, symbol_data in self.account_balances.items():
-            entry_price = symbol_data.get("entryPrice")
-            current_price = symbol_data.get("currentPrice")
-            quantity = symbol_data.get("quantity")
-            position = symbol_data.get("position")
-            margin = symbol_data.get("margin")
-            fee_cost = symbol_data.get("fee_cost")
-
-            # 데이터에 문제가 발생할 경우 stop처리 한다. 하나라도 이상 데이터가 나올 수 없다.
-            if None in (entry_price, current_price, quantity, position, margin):
-                raise ValueError(f"account_balance 오류 - {symbol_data}")
-
-            # 보유량 표시
-            number_of_stocks += 1
-            profit_and_loss += OrderManager.get_calc_pnl(
-                entry_price=entry_price,
-                current_price=current_price,
-                quantity=quantity,
-                position=position,
-            )
-            maintenance_margin += margin
-
-        # pnl정보가 0이 아닐경우 초기값인 0을 연산값으로 대체한다. (에러 대응)
-        if not profit_and_loss == 0:
-            profit_margin_ratio = round(profit_and_loss / maintenance_margin, 3)
-
-        available_funds = self.balance_info["available_funds"]
-        total_assets = profit_and_loss + maintenance_margin + available_funds
-
-        # balance_info update
-        self.balance_info["locked_funds"]["number_of_stocks"] = number_of_stocks
-        self.balance_info["locked_funds"]["profit_and_loss"] = profit_and_loss
-        self.balance_info["locked_funds"]["maintenance_margin"] = maintenance_margin
-        self.balance_info["locked_funds"]["profit_margin_ratio"] = profit_margin_ratio
-        self.balance_info["total_assets"] = total_assets
-
-        return self.balance_info
-
-    # 계좌의 보유재고에 'currentPrice'항목 업데이트
-    def __update_current_price(
-        self, symbol: str, current_price: str
-    ) -> Dict[str, Dict[str, Optional[Any]]]:
-        """
-        1. 기능 : 보유중인 코인정보의 현재가를 업데이트한다. 전체 계좌 업데이트시 사용
-        2. 매개변수
-            1) symbol : 쌍거래 symbol
-            2) current_price :현재가
-        """
-        wallet = self.account_balances.get(symbol)
-        if wallet:
-            self.account_balances[symbol]["currentPrice"] = current_price
-            return self.account_balances
-        else:
-            pass
-
-    # 계좌의 정보를 연산 및 계좌 상태 정보를 반환한다.
-    def get_wallet_status(
-        self, symbol: Optional[str] = None, current_price: Optional[str] = None
-    ) -> Dict[str, float]:
-        # wallet에 대해 symbol정보 없을때에 대하여 대비 되어 있음 (pass 처리)
-        self.__update_current_price(symbol=symbol, current_price=current_price)
-        self.__update_locked_funds()
-        return self.balance_info
-
-
 
 
 
 #     def
-class WasteTypeCode:
+# class WasteTypeCode:
     """
     폐기 코드 집합소 / 전부 주석처리한다.
     """
@@ -1080,446 +1046,620 @@ class WasteTypeCode:
 
     #     return processed_data
 
-    # kline_data의 특정 interval idx를 closing_sync_data 값으로 동기화 시킨다. 백테스트에 사용될 데이터에 적용됨
-    def sync_kline_data(
-        self, idx: int, kline_data: dict, idx_mapping: list, sync_data: dict
-    ) -> Dict[str, Dict[str, np.ndarray[np.float64]]]:
-        """
-        1. 기능 : 백테스트에 적용시킬 kline_data의 특정 interval idx데이터를 closing_sync_data값으로 동기화 시킨다.
-        2. 매개변수
-            1) idx : 적용시킬 Index 값
-            2) kline_data : read_data_run함수의 [1] 반환값. >> kline_data
-            3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
-            4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
+#     # kline_data의 특정 interval idx를 closing_sync_data 값으로 동기화 시킨다. 백테스트에 사용될 데이터에 적용됨
+#     def sync_kline_data(
+#         self, idx: int, kline_data: dict, idx_mapping: list, sync_data: dict
+#     ) -> Dict[str, Dict[str, np.ndarray[np.float64]]]:
+#         """
+#         1. 기능 : 백테스트에 적용시킬 kline_data의 특정 interval idx데이터를 closing_sync_data값으로 동기화 시킨다.
+#         2. 매개변수
+#             1) idx : 적용시킬 Index 값
+#             2) kline_data : read_data_run함수의 [1] 반환값. >> kline_data
+#             3) idx_mapping : read_data_run함수의 [2] 반환값. >> indices_data
+#             4) sync_data : read_data_run 함수의 [3] 반환값. >> closing_sync_data
 
-        동작은 문제 없으나 너무 느림. 개선이 필요함.
-        """
-        idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
-        for symbol, kline_data_symbol in kline_data.items():
-            for interval, kline_data_interval in kline_data_symbol.items():
-                idx_map = idx_map_data.get(interval)
+#         동작은 문제 없으나 너무 느림. 개선이 필요함.
+#         """
+#         idx_map_data = self.__map_intervals_to_indices(idx_values=idx_mapping[idx])
+#         for symbol, kline_data_symbol in kline_data.items():
+#             for interval, kline_data_interval in kline_data_symbol.items():
+#                 idx_map = idx_map_data.get(interval)
 
-                kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
-        return kline_data
+#                 kline_data[symbol][interval][idx_map] = sync_data[symbol][interval][idx]
+#         return kline_data
 
-    # 각 interval별 1minute 단위로 환산한다.
-    def __convert_interval_to_minutes(self, minute: int, interval: str):
-        """
-        1. 기능 : 1muntes값을 각 interval별 값으로 환산한다.
-        2. 매개변수
-            1) minute : 타겟 시간 (분)
-            2) interval : 환산하고자 하는 interval 값
-        """
-        result = {
-            "1m": 1,
-            "3m": 3,
-            "5m": 5,
-            "15m": 15,
-            "30m": 30,
-            "1h": 60,
-            "2h": 120,
-            "4h": 240,
-            "6h": 360,
-            "8h": 480,
-            "12h": 720,
-            "1d": 1440,
-            "3d": 4320,
-        }
-        if not minute in result.keys():
-            raise ValueError(f"interval이 유효하지 않음 - {interval}")
-        return result.get(interval) / minute
+#     # 각 interval별 1minute 단위로 환산한다.
+#     def __convert_interval_to_minutes(self, minute: int, interval: str):
+#         """
+#         1. 기능 : 1muntes값을 각 interval별 값으로 환산한다.
+#         2. 매개변수
+#             1) minute : 타겟 시간 (분)
+#             2) interval : 환산하고자 하는 interval 값
+#         """
+#         result = {
+#             "1m": 1,
+#             "3m": 3,
+#             "5m": 5,
+#             "15m": 15,
+#             "30m": 30,
+#             "1h": 60,
+#             "2h": 120,
+#             "4h": 240,
+#             "6h": 360,
+#             "8h": 480,
+#             "12h": 720,
+#             "1d": 1440,
+#             "3d": 4320,
+#         }
+#         if not minute in result.keys():
+#             raise ValueError(f"interval이 유효하지 않음 - {interval}")
+#         return result.get(interval) / minute
 
-    # 연산이 용이하도록 interval값과 idx값을 이용하여 매핑값을 반환한다.
-    def __map_intervals_to_indices(self, idx_values: List[int]) -> Dict[str, int]:
-        """
-        1. 기능 : interval과 idx데이터를 연산이 용이하도록 매핑한다.
-        2. 매개변수
-            1) idx_values : 각 구간별 idx 정보
-        """
-        mapped_intervals = {}
-        for i, interval in enumerate(self.intervals):
-            mapped_intervals[interval] = idx_values[i]
-        return mapped_intervals
+#     # 연산이 용이하도록 interval값과 idx값을 이용하여 매핑값을 반환한다.
+#     def __map_intervals_to_indices(self, idx_values: List[int]) -> Dict[str, int]:
+#         """
+#         1. 기능 : interval과 idx데이터를 연산이 용이하도록 매핑한다.
+#         2. 매개변수
+#             1) idx_values : 각 구간별 idx 정보
+#         """
+#         mapped_intervals = {}
+#         for i, interval in enumerate(self.intervals):
+#             mapped_intervals[interval] = idx_values[i]
+#         return mapped_intervals
 
-    # dict 타입 데이터의 key값을 불러온다.
-    def __extract_intervals(self, kline_data: Dict) -> List[str]:
-        """
-        1. 기능 : dict 데이터의 최상위 key값을 추출하여 list타입으로 변환 및 반환한다.
-        2. 매개변수 : dict데이터
-        """
-        return list(kline_data.keys())
+#     # dict 타입 데이터의 key값을 불러온다.
+#     def __extract_intervals(self, kline_data: Dict) -> List[str]:
+#         """
+#         1. 기능 : dict 데이터의 최상위 key값을 추출하여 list타입으로 변환 및 반환한다.
+#         2. 매개변수 : dict데이터
+#         """
+#         return list(kline_data.keys())
 
-    # timestemp값을 반환한다.
-    def __extract_timestamps(self, nested_kline: Union[List, np.ndarray]):
-        """
-        1. 기능 : kline데이터의 최하위 중첩 내용의 timestamp를 반환한다.
-        2. 매개변수
-            1) nested_kline : kline 최하위 중첩데이터
-        """
-        open_timestamp = nested_kline[0]
-        close_timestamp = nested_kline[6]
-        return (open_timestamp, close_timestamp)
+#     # timestemp값을 반환한다.
+#     def __extract_timestamps(self, nested_kline: Union[List, np.ndarray]):
+#         """
+#         1. 기능 : kline데이터의 최하위 중첩 내용의 timestamp를 반환한다.
+#         2. 매개변수
+#             1) nested_kline : kline 최하위 중첩데이터
+#         """
+#         open_timestamp = nested_kline[0]
+#         close_timestamp = nested_kline[6]
+#         return (open_timestamp, close_timestamp)
 
-    # 최상위 key값을 제거하고 중첩된 dict값을 반환한다.
-    def __convert_dict_to_array(self, kline_data: Dict) -> Dict[str, np.ndarray]:
-        """
-        1. 기능 : dict의 1차 중첩 내용을 반환한다.
-        2. 매개변수
-            1) kline_data : 원본 kline data
-        """
-        result = {}
-        for _, data in kline_data.items():
-            for interval, nested_data in data.items():
-                result[interval] = np.array(nested_data, dtype=np.float64)
-        return result
+#     # 최상위 key값을 제거하고 중첩된 dict값을 반환한다.
+#     def __convert_dict_to_array(self, kline_data: Dict) -> Dict[str, np.ndarray]:
+#         """
+#         1. 기능 : dict의 1차 중첩 내용을 반환한다.
+#         2. 매개변수
+#             1) kline_data : 원본 kline data
+#         """
+#         result = {}
+#         for _, data in kline_data.items():
+#             for interval, nested_data in data.items():
+#                 result[interval] = np.array(nested_data, dtype=np.float64)
+#         return result
 
-    # 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다. (최종 결과물 / 저장은 별도로)
-    def get_matching_indices(self, kline_data: Dict) -> List[List[int]]:
-        """
-        1. 기능 : 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다.
-        2. 매개변수
-            1) kline_data : 원본 kline data 또는 self.generate_kline_interval_data() 함수값
-        """
-        array_data = self.__convert_dict_to_array(kline_data=kline_data)
-        intervals = self.__extract_intervals(array_data)
-        matching_indices = []
+#     # 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다. (최종 결과물 / 저장은 별도로)
+#     def get_matching_indices(self, kline_data: Dict) -> List[List[int]]:
+#         """
+#         1. 기능 : 각 interval구간 데이터의 연결되는 data idx값을 연산 및 반환한다.
+#         2. 매개변수
+#             1) kline_data : 원본 kline data 또는 self.generate_kline_interval_data() 함수값
+#         """
+#         array_data = self.__convert_dict_to_array(kline_data=kline_data)
+#         intervals = self.__extract_intervals(array_data)
+#         matching_indices = []
 
-        for idx, base_entry in enumerate(array_data[intervals[0]]):
-            match_row = [idx]
-            open_time, close_time = self.__extract_timestamps(base_entry)
+#         for idx, base_entry in enumerate(array_data[intervals[0]]):
+#             match_row = [idx]
+#             open_time, close_time = self.__extract_timestamps(base_entry)
 
-            for interval in intervals[1:]:
-                interval_data = array_data.get(interval)
-                if interval_data is None:
-                    # match_row.append(None)
-                    continue
+#             for interval in intervals[1:]:
+#                 interval_data = array_data.get(interval)
+#                 if interval_data is None:
+#                     # match_row.append(None)
+#                     continue
 
-                # 조건을 만족하는 인덱스 찾기
-                condition_indices = np.where(
-                    (interval_data[:, 0] <= open_time)
-                    & (interval_data[:, 6] >= close_time)
-                )[0]
+#                 # 조건을 만족하는 인덱스 찾기
+#                 condition_indices = np.where(
+#                     (interval_data[:, 0] <= open_time)
+#                     & (interval_data[:, 6] >= close_time)
+#                 )[0]
 
-                if condition_indices.size == 0:
-                    # match_row.append(None)
-                    continue
-                else:
-                    match_row.append(int(condition_indices[0]))
+#                 if condition_indices.size == 0:
+#                     # match_row.append(None)
+#                     continue
+#                 else:
+#                     match_row.append(int(condition_indices[0]))
 
-            # if None in match_row:
-            #     continue
-            matching_indices.append(match_row)
-            # utils._std_print(match_row)
+#             # if None in match_row:
+#             #     continue
+#             matching_indices.append(match_row)
+#             # utils._std_print(match_row)
 
-        return matching_indices
+#         return matching_indices
 
-    # 더미 데이터를 순환시킬때 for문의 range값을 계산한다.
-    def get_range_length(self, kline_data_real: Dict) -> int:
-        """
-        1. 기능 : 더미 데이터를 for 문에 동작할때 range값을 계산한다.
-        2. 매개변수
-            1) kline_data
-        """
-        unique_lengths = set()
+#     # 더미 데이터를 순환시킬때 for문의 range값을 계산한다.
+#     def get_range_length(self, kline_data_real: Dict) -> int:
+#         """
+#         1. 기능 : 더미 데이터를 for 문에 동작할때 range값을 계산한다.
+#         2. 매개변수
+#             1) kline_data
+#         """
+#         unique_lengths = set()
 
-        for _, kline_data_symbol in kline_data_real.items():
-            for _, kline_data_interval in kline_data_symbol.items():
-                unique_lengths.add(len(kline_data_interval) - 1)
-                # 길이가 두 개 이상이면 에러 발생
-                if len(unique_lengths) > 1:
-                    raise ValueError(
-                        f"Interval 데이터 길이가 일치하지 않음. 기초 데이터 삭제 요망 : {unique_lengths}"
-                    )
+#         for _, kline_data_symbol in kline_data_real.items():
+#             for _, kline_data_interval in kline_data_symbol.items():
+#                 unique_lengths.add(len(kline_data_interval) - 1)
+#                 # 길이가 두 개 이상이면 에러 발생
+#                 if len(unique_lengths) > 1:
+#                     raise ValueError(
+#                         f"Interval 데이터 길이가 일치하지 않음. 기초 데이터 삭제 요망 : {unique_lengths}"
+#                     )
 
-        # 길이가 하나뿐이라면, 값을 반환
-        return unique_lengths.pop()
+#         # 길이가 하나뿐이라면, 값을 반환
+#         return unique_lengths.pop()
 
-    # 데이터를 start_idx:end
-    def get_kline_closing_data_by_range(
-        self, end_idx: int, kline_data: Dict, step: int = 4_320
-    ):
+#     # 데이터를 start_idx:end
+#     def get_kline_closing_data_by_range(
+#         self, end_idx: int, kline_data: Dict, step: int = 4_320
+#     ):
 
-        result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
-        for symbol, kline_data_symbol in kline_data.items():
-            result[symbol] = {}
-            for interval, kline_data_interval in kline_data_symbol.items():
-                start_idx = end_idx - step
-                if start_idx < 0:
-                    start_idx = 0
-                result[symbol][interval] = kline_data_interval[start_idx:end_idx]
-        return result
+#         result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+#         for symbol, kline_data_symbol in kline_data.items():
+#             result[symbol] = {}
+#             for interval, kline_data_interval in kline_data_symbol.items():
+#                 start_idx = end_idx - step
+#                 if start_idx < 0:
+#                     start_idx = 0
+#                 result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+#         return result
 
-    # #
-    # def get_kline_interval_data_by_range(
-    #     self,
-    #     end_idx: int,
-    #     kline_data: Dict,
-    #     idx_data: List[List[int]],
-    #     step: int = 4_320,
-    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
-    #     """
-    #     1. 기능 : 기간별 데이터를 추출한다.
-    #     2. 매개변수
-    #         1) start_idx : idx 0 ~ x까지 값을 입력
-    #         2) step : 데이터 기간(min : 4320
-    #             - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
-    #         3) idx_data : self.get_matching_indices() 연산값.
-    #         4) step : 시작과 끝점간의 범위 (단위 : minutes)
-    #     3.Memo
-    #         >>> closing_sync_data를 대상으로 하는게 아님.
-    #         >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
-    #         >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
-    #                 예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
-    #                 1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
-    #     """
-    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+#     # #
+#     # def get_kline_interval_data_by_range(
+#     #     self,
+#     #     end_idx: int,
+#     #     kline_data: Dict,
+#     #     idx_data: List[List[int]],
+#     #     step: int = 4_320,
+#     # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+#     #     """
+#     #     1. 기능 : 기간별 데이터를 추출한다.
+#     #     2. 매개변수
+#     #         1) start_idx : idx 0 ~ x까지 값을 입력
+#     #         2) step : 데이터 기간(min : 4320
+#     #             - interval max값의 minute변경 (3d * 1min * 60min/h * 24hr/d)
+#     #         3) idx_data : self.get_matching_indices() 연산값.
+#     #         4) step : 시작과 끝점간의 범위 (단위 : minutes)
+#     #     3.Memo
+#     #         >>> closing_sync_data를 대상으로 하는게 아님.
+#     #         >>> 각 interval간 open_timestamp, close_timestamp간 매칭되는 부분을 추출
+#     #         >>> 주의 : 이후 interval 값은 이전 interval값의 최종 값이 이미 반영됐으므로 상호 실시간 변동사항 반영이 안됨.
+#     #                 예) 1분봉 idx 1 ~ 5 값 범위가 존재해도 5분봉은 이미 1분봉 idx 5번값 까지 최종 반영이 완료된 상태임.
+#     #                 1분봉 idx별 더 큰 묶음 interval값 실시간 반영 필요시 get_ral_time_kline_data_by_range()함수 사용할 것.
+#     #     """
+#     #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
 
-    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(
-    #                     idx_values=idx_data[end_idx]
-    #                 )
+#     #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(
+#     #                     idx_values=idx_data[end_idx]
+#     #                 )
 
-    #     for symbol, kline_data_symbol in kline_data.items():
-    #         result[symbol] = {}
-    #         for interval, kline_data_interval in kline_data_symbol.items():
-    #             idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
-    #             # intervals 리스트에 없는 interval은 제외한다.
-    #             if not interval in self.intervals:
-    #                 continue
-    #             if interval == self.intervals[0]:
-    #                 start_idx = end_idx - step
-    #             else:
-    #                 start_idx = end_idx - (step/idx_convert_map)
+#     #     for symbol, kline_data_symbol in kline_data.items():
+#     #         result[symbol] = {}
+#     #         for interval, kline_data_interval in kline_data_symbol.items():
+#     #             idx_convert_map: Dict[str, int] =self.__convert_interval_to_minutes(minute=step, interval=interval)
+#     #             # intervals 리스트에 없는 interval은 제외한다.
+#     #             if not interval in self.intervals:
+#     #                 continue
+#     #             if interval == self.intervals[0]:
+#     #                 start_idx = end_idx - step
+#     #             else:
+#     #                 start_idx = end_idx - (step/idx_convert_map)
 
-    #             if start_idx < 0:
-    #                 start_idx = 0
+#     #             if start_idx < 0:
+#     #                 start_idx = 0
 
-    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+#     #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
 
-    #     return result
+#     #     return result
 
-    # def get_kline_interval_data_by_range(
-    #     self,
-    #     end_idx: int,
-    #     kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
-    #     idx_data: List[List[int]],
-    #     step: int = 4320,
-    # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
-    #     """
-    #     개선된 버전: 비효율적인 반복문과 조건문 최적화
-    #     """
-    #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
+#     # def get_kline_interval_data_by_range(
+#     #     self,
+#     #     end_idx: int,
+#     #     kline_data: Dict[str, Dict[str, NDArray[np.float64]]],
+#     #     idx_data: List[List[int]],
+#     #     step: int = 4320,
+#     # ) -> Dict[str, Dict[str, NDArray[np.float64]]]:
+#     #     """
+#     #     개선된 버전: 비효율적인 반복문과 조건문 최적화
+#     #     """
+#     #     result: Dict[str, Dict[str, NDArray[np.float64]]] = {}
 
-    #     # intervals를 집합으로 변환
-    #     interval_set = set(self.intervals)
+#     #     # intervals를 집합으로 변환
+#     #     interval_set = set(self.intervals)
 
-    #     # 사전 계산된 매핑 캐싱
-    #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(idx_values=idx_data[end_idx])
-    #     idx_convert_map: Dict[str, int] = {
-    #         interval: self.__convert_interval_to_minutes(minute=step, interval=interval)
-    #         for interval in self.intervals
-    #     }
+#     #     # 사전 계산된 매핑 캐싱
+#     #     idx_map: Dict[str, int] = self.__map_intervals_to_indices(idx_values=idx_data[end_idx])
+#     #     idx_convert_map: Dict[str, int] = {
+#     #         interval: self.__convert_interval_to_minutes(minute=step, interval=interval)
+#     #         for interval in self.intervals
+#     #     }
 
-    #     for symbol, kline_data_symbol in kline_data.items():
-    #         result[symbol] = {}
+#     #     for symbol, kline_data_symbol in kline_data.items():
+#     #         result[symbol] = {}
 
-    #         # start_idx를 미리 계산하여 캐싱
-    #         start_idx_map = {}
-    #         for interval in self.intervals:
-    #             if interval == self.intervals[0]:
-    #                 start_idx_map[interval] = max(0, end_idx - step)
-    #             else:
-    #                 start_idx_map[interval] = max(0, end_idx - int(step / idx_convert_map.get(interval, 1)))
+#     #         # start_idx를 미리 계산하여 캐싱
+#     #         start_idx_map = {}
+#     #         for interval in self.intervals:
+#     #             if interval == self.intervals[0]:
+#     #                 start_idx_map[interval] = max(0, end_idx - step)
+#     #             else:
+#     #                 start_idx_map[interval] = max(0, end_idx - int(step / idx_convert_map.get(interval, 1)))
 
-    #         # 데이터를 처리
-    #         for interval, kline_data_interval in kline_data_symbol.items():
-    #             if interval not in interval_set:
-    #                 continue
+#     #         # 데이터를 처리
+#     #         for interval, kline_data_interval in kline_data_symbol.items():
+#     #             if interval not in interval_set:
+#     #                 continue
 
-    #             start_idx = start_idx_map[interval]
-    #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
+#     #             start_idx = start_idx_map[interval]
+#     #             result[symbol][interval] = kline_data_interval[start_idx:end_idx]
 
-    #     return result
+#     #     return result
 
-    # # kline real_data 확보 관련 통합실행
-    # async def download_data_run(
-    #     self, directory: Optional[str] = None
-    # ) -> Tuple[int, Dict]:
-    #     """
-    #     1. 기능 : 위 함수를 사용하기 복잡하기에 통합 다운로드 기능을 제공함.
-    #     2. 매개변수
-    #         1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
-    #     3. 반환값
-    #         1) range_length_data : for _ in range(range_length_data)에 들어감.
-    #         2) kline_data : 각 interval별 데이터를 수집 및 dict형태로 반환
-    #         3) indices_data : kline_data 1분봉 기준으로 매칭되는 다른 interval data index
-    #         4) closing_sync_data : 1분봉 기준 각 interval별 closing data
-    #     """
-    #     # directory가 None일 경우 상위폴더 위치로 지정
-    #     target_directory = os.path.join(
-    #         directory or os.path.dirname(os.getcwd()), self.storeage
-    #     )
+#     # # kline real_data 확보 관련 통합실행
+#     # async def download_data_run(
+#     #     self, directory: Optional[str] = None
+#     # ) -> Tuple[int, Dict]:
+#     #     """
+#     #     1. 기능 : 위 함수를 사용하기 복잡하기에 통합 다운로드 기능을 제공함.
+#     #     2. 매개변수
+#     #         1) directory : 각 파일 저장할 메인 폴더명 (파일명은 별도로 자동 지정됨.)
+#     #     3. 반환값
+#     #         1) range_length_data : for _ in range(range_length_data)에 들어감.
+#     #         2) kline_data : 각 interval별 데이터를 수집 및 dict형태로 반환
+#     #         3) indices_data : kline_data 1분봉 기준으로 매칭되는 다른 interval data index
+#     #         4) closing_sync_data : 1분봉 기준 각 interval별 closing data
+#     #     """
+#     #     # directory가 None일 경우 상위폴더 위치로 지정
+#     #     target_directory = os.path.join(
+#     #         directory or os.path.dirname(os.getcwd()), self.storeage
+#     #     )
 
-    #     if not os.path.exists(target_directory):
-    #         os.makedirs(target_directory)
+#     #     if not os.path.exists(target_directory):
+#     #         os.makedirs(target_directory)
 
-    #     # Data 순차적 로드
-    #     kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
-    #     indices_data = self.get_matching_indices(kline_data=kline_data)
-    #     closing_sync_data = self.generate_kline_closing_sync(
-    #         indices_data=indices_data, kline_data=kline_data
-    #     )
+#     #     # Data 순차적 로드
+#     #     kline_data = await self.generate_kline_interval_data(symbols=self.symbols)
+#     #     indices_data = self.get_matching_indices(kline_data=kline_data)
+#     #     closing_sync_data = self.generate_kline_closing_sync(
+#     #         indices_data=indices_data, kline_data=kline_data
+#     #     )
 
-    #     # closing_sync_data를 이용하여 데이터 길이 값 연산
-    #     range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
+#     #     # closing_sync_data를 이용하여 데이터 길이 값 연산
+#     #     range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
 
-    #     # 각 데이터들 저장할 path 지정
-    #     kline_path = os.path.join(target_directory, self.kline_data_file)
-    #     indices_path = os.path.join(target_directory, self.indices_file)
-    #     closing_sync_data_path = os.path.join(target_directory, self.kline_closing_sync_data)
+#     #     # 각 데이터들 저장할 path 지정
+#     #     kline_path = os.path.join(target_directory, self.kline_data_file)
+#     #     indices_path = os.path.join(target_directory, self.indices_file)
+#     #     closing_sync_data_path = os.path.join(target_directory, self.kline_closing_sync_data)
 
-    #     # Data 저장
-    #     utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
-    #     utils._save_to_json(
-    #         file_path=indices_path, new_data=indices_data, overwrite=True
-    #     )
-    #     # utils._save_to_json(file_path=closing_sync_data_path, new_data=closing_sync_data_file, overwrite=True)
-    #     # closing_sync_data_path는 np.array타입이므로 별도 저장.
+#     #     # Data 저장
+#     #     utils._save_to_json(file_path=kline_path, new_data=kline_data, overwrite=True)
+#     #     utils._save_to_json(
+#     #         file_path=indices_path, new_data=indices_data, overwrite=True
+#     #     )
+#     #     # utils._save_to_json(file_path=closing_sync_data_path, new_data=closing_sync_data_file, overwrite=True)
+#     #     # closing_sync_data_path는 np.array타입이므로 별도 저장.
 
-    #     with open(closing_sync_data_path, "wb") as file:
-    #         pickle.dump(closing_sync_data, file)
+#     #     with open(closing_sync_data_path, "wb") as file:
+#     #         pickle.dump(closing_sync_data, file)
 
-    #     # Tuple 형태로 자료 반환.
-    #     return (range_length_data, kline_data, indices_data, closing_sync_data)
+#     #     # Tuple 형태로 자료 반환.
+#     #     return (range_length_data, kline_data, indices_data, closing_sync_data)
 
-    # # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
-    # async def read_data_run(self, download_if_missing: bool = False):
-    #     """
-    #     1. 기능 : 본 class의 기능을 사용하기 용이하도록 통합적용. 데이터를 불러오는 함수이며, 데이터가 미존재시 신규 다운로드 하는 기능 추가.
-    #     2. 매개변수
-    #         1) download_if_missing : True일 경우 파일없을시 신규 다운로드.
-    #     """
+#     # # 기존에 작업 저장된 데이터를 불러오며, 선택적으로 데이터 없일시 신규 다운로드 기능 구현.
+#     # async def read_data_run(self, download_if_missing: bool = False):
+#     #     """
+#     #     1. 기능 : 본 class의 기능을 사용하기 용이하도록 통합적용. 데이터를 불러오는 함수이며, 데이터가 미존재시 신규 다운로드 하는 기능 추가.
+#     #     2. 매개변수
+#     #         1) download_if_missing : True일 경우 파일없을시 신규 다운로드.
+#     #     """
 
-    #     # 불러올 데이터의 초기부분 주소명 확보
-    #     parent_folder = os.path.dirname(os.getcwd())
-    #     # indices_path 주소 생성
-    #     closing_sync_data_path = os.path.join(
-    #         parent_folder, self.storeage, self.kline_closing_sync_data
-    #     )
-    #     kline_data_path = os.path.join(parent_folder, self.storeage, self.kline_data_file)
-    #     indices_data_path = os.path.join(parent_folder, self.storeage, self.indices_file)
+#     #     # 불러올 데이터의 초기부분 주소명 확보
+#     #     parent_folder = os.path.dirname(os.getcwd())
+#     #     # indices_path 주소 생성
+#     #     closing_sync_data_path = os.path.join(
+#     #         parent_folder, self.storeage, self.kline_closing_sync_data
+#     #     )
+#     #     kline_data_path = os.path.join(parent_folder, self.storeage, self.kline_data_file)
+#     #     indices_data_path = os.path.join(parent_folder, self.storeage, self.indices_file)
 
-    #     if download_if_missing:
-    #         if not os.path.exists(parent_folder):
-    #             os.makedirs(parent_folder)
-    #         # if not os.path.exists(closing_sync_data_path):
-    #         return await self.download_data_run()
-    #     else:
-    #         if not os.path.exists(path=kline_data_path):
-    #             raise ValueError(f"path 정보가 유효하지 않음 - {kline_data_path}")
-    #         if not os.path.exists(path=indices_data_path):
-    #             raise ValueError(f"path 정보가 유효하지 않음 - {indices_data_path}")
-    #         if not os.path.exists(path=closing_sync_data_path):
-    #             raise ValueError(f"path 정보가 유효하지 않음 - {closing_sync_data_path}")
-    #         with open(closing_sync_data_path, "rb") as file:
-    #             closing_sync_data = pickle.load(file)
+#     #     if download_if_missing:
+#     #         if not os.path.exists(parent_folder):
+#     #             os.makedirs(parent_folder)
+#     #         # if not os.path.exists(closing_sync_data_path):
+#     #         return await self.download_data_run()
+#     #     else:
+#     #         if not os.path.exists(path=kline_data_path):
+#     #             raise ValueError(f"path 정보가 유효하지 않음 - {kline_data_path}")
+#     #         if not os.path.exists(path=indices_data_path):
+#     #             raise ValueError(f"path 정보가 유효하지 않음 - {indices_data_path}")
+#     #         if not os.path.exists(path=closing_sync_data_path):
+#     #             raise ValueError(f"path 정보가 유효하지 않음 - {closing_sync_data_path}")
+#     #         with open(closing_sync_data_path, "rb") as file:
+#     #             closing_sync_data = pickle.load(file)
 
-    #         range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
-    #         kline_data = utils._load_json(file_path=kline_data_path)
-    #         indices_data = utils._load_json(file_path=indices_data_path)
+#     #         range_length_data = self.get_range_length(kline_data_real=closing_sync_data)
+#     #         kline_data = utils._load_json(file_path=kline_data_path)
+#     #         indices_data = utils._load_json(file_path=indices_data_path)
 
-    #     return (range_length_data, kline_data, indices_data, closing_sync_data)
-
-
+#     #     return (range_length_data, kline_data, indices_data, closing_sync_data)
 
 
-"""
->>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', price=1.015, quantity=5, order_type='STOP_MARKET'))
-{'orderId': 46915674924, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '8GSV2rVnGLMBnO4HDwSb1Y', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'STOP_MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '1.01500', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'STOP_MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733915429075}
->>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', quantity=5, order_type='MARKET'))
-{'orderId': 46916207450, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '476bSE3TUnGfOp6AsVCq12', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '0.00000', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733916764850}
->>>
-"""
-from dataclasses import dataclass, fields
-from typing import List, Optional, Union
 
-@dataclass
-class TradeOrder:
-    symbol: str
-    trade_timestamp: int
-    entry_price: Union[float, int]
-    position: int
-    quantity: Union[float, int]
-    leverage: int
-    fee_rate: float = 0.05
-    init_value: Optional[float] = None
-    current_value: Optional[float] = None
-    profit_and_loss: Optional[float] = None
-    current_price: Optional[Union[float, int]] = None
-    break_event_price: Optional[float] = None
-    fee_open: Optional[Union[float, int]] = None
-    fee_close: Optional[Union[float, int]] = None
-    memo: Optional[str] = None
 
-    def __post_init__(self):
-        if self.current_price is None:
-            self.current_price = self.entry_price
-        if self.leverage <= 0:
-            raise ValueError(f"레버리지는 최소 1 이상이어야 합니다. 현재 값: {self.leverage}")
-        self.__update_fee()
-        self.__update_value()
+# """
+# >>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', price=1.015, quantity=5, order_type='STOP_MARKET'))
+# {'orderId': 46915674924, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '8GSV2rVnGLMBnO4HDwSb1Y', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'STOP_MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '1.01500', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'STOP_MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733915429075}
+# >>> asyncio.run(obj.submit_order(symbol='ADAUSDT', side='SELL', quantity=5, order_type='MARKET'))
+# {'orderId': 46916207450, 'symbol': 'ADAUSDT', 'status': 'NEW', 'clientOrderId': '476bSE3TUnGfOp6AsVCq12', 'price': '0.00000', 'avgPrice': '0.00', 'origQty': '5', 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0.00000', 'timeInForce': 'GTC', 'type': 'MARKET', 'reduceOnly': False, 'closePosition': False, 'side': 'SELL', 'positionSide': 'BOTH', 'stopPrice': '0.00000', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'MARKET', 'priceMatch': 'NONE', 'selfTradePreventionMode': 'EXPIRE_MAKER', 'goodTillDate': 0, 'updateTime': 1733916764850}
+# >>>
+# """
+# from dataclasses import dataclass, fields
+# from typing import List, Optional, Union
 
-    def __update_fee(self):
-        adjusted_fee_rate = self.fee_rate / 1_000
-        self.fee_open = self.entry_price * adjusted_fee_rate * self.quantity
-        self.fee_close = self.current_price * adjusted_fee_rate * self.quantity
-        self.break_event_price = self.entry_price + self.fee_open
+# @dataclass
+# class TradeOrder:
+#     symbol: str
+#     trade_timestamp: int
+#     entry_price: Union[float, int]
+#     position: int
+#     quantity: Union[float, int]
+#     leverage: int
+#     fee_rate: float = 0.05
+#     init_value: Optional[float] = None
+#     current_value: Optional[float] = None
+#     profit_and_loss: Optional[float] = None
+#     current_price: Optional[Union[float, int]] = None
+#     break_event_price: Optional[float] = None
+#     fee_open: Optional[Union[float, int]] = None
+#     fee_close: Optional[Union[float, int]] = None
+#     memo: Optional[str] = None
 
-    def __update_value(self):
-        self.init_value = (self.entry_price * self.quantity) / self.leverage
-        self.current_value = (self.current_price * self.quantity) / self.leverage
-        self.profit_and_loss = self.current_value - self.init_value
+#     def __post_init__(self):
+#         if self.current_price is None:
+#             self.current_price = self.entry_price
+#         if self.leverage <= 0:
+#             raise ValueError(f"레버리지는 최소 1 이상이어야 합니다. 현재 값: {self.leverage}")
+#         self.__update_fee()
+#         self.__update_value()
 
-    def update_current_price(self, current_price: [Union[float, int]]):
-        self.current_price = current_price
-        self.__update_fee()
-        self.__update_value()
+#     def __update_fee(self):
+#         adjusted_fee_rate = self.fee_rate / 1_000
+#         self.fee_open = self.entry_price * adjusted_fee_rate * self.quantity
+#         self.fee_close = self.current_price * adjusted_fee_rate * self.quantity
+#         self.break_event_price = self.entry_price + self.fee_open
 
-class WalletManager:
-    def __init__(self, stock_deposit: float):
-        self.stock_deposit = stock_deposit
+#     def __update_value(self):
+#         self.init_value = (self.entry_price * self.quantity) / self.leverage
+#         self.current_value = (self.current_price * self.quantity) / self.leverage
+#         self.profit_and_loss = self.current_value - self.init_value
+
+#     def update_current_price(self, current_price: [Union[float, int]]):
+#         self.current_price = current_price
+#         self.__update_fee()
+#         self.__update_value()
+
+# class WalletManager:
+#     def __init__(self, stock_deposit: float):
+#         self.stock_deposit = stock_deposit
         
 
-class TradeOrderManager:
-    def __init__(self):
-        self.orders: List[TradeOrder] = []
-        self.symbol_map = {}
-        self.trade_symbol: List = []
+# class TradeOrderManager:
+#     def __init__(self):
+#         self.orders: List[TradeOrder] = []
+#         self.symbol_map = {}
+#         self.trade_symbol: List = []
 
-    def add_order(self, **kwargs):
-        """TradeOrder 생성 및 추가"""
-        valid_keys = {field.name for field in fields(TradeOrder)}  # TradeOrder 필드 이름 가져오기
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}  # 유효한 키워드만 필터링
-        order = TradeOrder(**filtered_kwargs)
-        self.orders.append(order)
-        self.__update_attr()  # symbol_map 업데이트
-        return order
+#     def add_order(self, **kwargs):
+#         """TradeOrder 생성 및 추가"""
+#         valid_keys = {field.name for field in fields(TradeOrder)}  # TradeOrder 필드 이름 가져오기
+#         filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}  # 유효한 키워드만 필터링
+#         order = TradeOrder(**filtered_kwargs)
+#         self.orders.append(order)
+#         self.__update_attr()  # symbol_map 업데이트
+#         return order
 
-    def remove_order(self, symbol):
-        idx = self.symbol_map.get(symbol)
-        del self.orders[idx]
-        self.__update_symbol_map()
+#     def remove_order(self, symbol):
+#         idx = self.symbol_map.get(symbol)
+#         del self.orders[idx]
+#         self.__update_symbol_map()
     
-    def update(self, symbol:str, current_price: [Union[float, int]]):
-        symbol_idx = self.symbol_map.get(symbol)
-        if symbol_idx is None:
-            return
-        self.orders[symbol_idx].update_current_price(current_price=current_price)
+#     def update(self, symbol:str, current_price: [Union[float, int]]):
+#         symbol_idx = self.symbol_map.get(symbol)
+#         if symbol_idx is None:
+#             return
+#         self.orders[symbol_idx].update_current_price(current_price=current_price)
     
-    def get_order(self, symbol):
-        idx = self.symbol_map.get(symbol)
-        return self.orders[idx]
+#     def get_order(self, symbol):
+#         idx = self.symbol_map.get(symbol)
+#         return self.orders[idx]
     
-    def __update_attr(self):
-        """symbol_map 업데이트"""
-        self.symbol_map = {order.symbol: idx for idx, order in enumerate(self.orders)}  # 심볼과 인덱스 매핑
-        self.trade_symbol = list(self.symbol_map.keys())
+#     def __update_attr(self):
+#         """symbol_map 업데이트"""
+#         self.symbol_map = {order.symbol: idx for idx, order in enumerate(self.orders)}  # 심볼과 인덱스 매핑
+#         self.trade_symbol = list(self.symbol_map.keys())
+# class WalletManager:
+#     """
+#     가상의 wallet을 생성 및 운영함.
+#     """
+
+#     def __init__(self, initial_fund: float):
+#         self.account_balances = {}
+#         self.initial_fund = initial_fund
+#         self.balance_info = {
+#             "available_funds": self.initial_fund,
+#             "locked_funds": {
+#                 "number_of_stocks": 0,
+#                 "profit_and_loss": 0,
+#                 "maintenance_margin": 0,
+#                 "profit_margin_ratio": 0,
+#             },
+#             "total_assets": self.initial_fund,
+#         }
+#         self.fee = 0.0005
+
+#     # 매수(position open)주문 생성시 계좌에 정보 추가.
+#     def add_funds(
+#         self, order_signal: Dict[str, Optional[Any]]
+#     ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
+#         """
+#         1. 기능 : 신규 주문 진행시 해당종목의 정보를 기록한다.
+#         2. 매개변수
+#             1) order_signal : 주문 신호 정보
+#         """
+#         symbol = order_signal.get("symbol")
+#         if not isinstance(symbol, str):
+#             raise ValueError(f"Order signal error - {symbol}")
+#         margin = order_signal.get("margin")
+#         if margin is None:
+#             raise ValueError(f"주문 정보가 유효하지 않음.")
+#         # self.balance_info['locked_funds']['number_of_stocks'] +=1
+#         self.account_balances[symbol] = order_signal
+#         self.balance_info["available_funds"] -= margin + order_signal.get("fee_cost")
+#         self.__update_locked_funds()
+#         return (self.balance_info, margin)
+
+#     # 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
+#     def remove_funds(
+#         self, symbol: str
+#     ) -> Tuple[Dict[str, Union[float, Dict[str, float]]], float]:
+#         """
+#         1. 기능 : 거래 종료시 해당 종목의 정보를 삭제하고, 손익비용을 반환한다.
+#         2. 매개변수
+#             1) symbol : 쌍거래 symbol
+#         """
+
+#         self.__update_locked_funds()
+#         target_data = self.account_balances.get(symbol)
+#         if target_data is None:
+#             raise ValueError("데이터가 유효하지 않음.")
+
+#         entry_price = target_data.get("entryPrice")
+#         current_price = target_data.get("currentPrice")
+#         quantity = target_data.get("quantity")
+#         position = target_data.get("position")
+#         margin = target_data.get("margin")
+#         leverage = target_data.get("leverage")
+#         fee = current_price * quantity * self.fee
+#         if None in (entry_price, current_price, quantity, position, margin):
+#             raise ValueError("데이터가 유효하지 않음.")
+
+#         pnl_value = OrderManager.get_calc_pnl(
+#             entry_price=entry_price,
+#             current_price=current_price,
+#             quantity=quantity,
+#             position=position,
+#         )
+#         fund = pnl_value + margin
+
+#         self.balance_info["available_funds"] += fund - fee
+#         del self.account_balances[symbol]
+
+#         # wallet정보를 업데이트 한다.
+#         self.__update_locked_funds()
+#         return (self.balance_info, pnl_value)
+
+#     # 계좌 정보를 업데이트한다.
+#     def __update_locked_funds(self):
+#         """
+#         1. 기능 : 계좌정보를 현재가격을 반영하여 업데이트한다.
+#         2. 매개변수 : 해당없음.
+#         """
+#         number_of_stocks = 0
+#         profit_and_loss = 0
+#         maintenance_margin = 0
+#         profit_margin_ratio = 0
+
+#         # 업데이트 할 내용 없을경우 함수 종료
+#         if self.account_balances == {}:
+#             available_funds = self.balance_info.get("available_funds")
+#             # total_assets = available_funds
+#             self.balance_info = {
+#                 "available_funds": available_funds,
+#                 "locked_funds": {
+#                     "number_of_stocks": 0,
+#                     "profit_and_loss": 0,
+#                     "maintenance_margin": 0,
+#                     "profit_margin_ratio": 0,
+#                 },
+#                 "total_assets": available_funds,
+#             }
+#             return self.balance_info
+
+#         # account_balaces의 정보를 기준으로 연산에 필요한 정보를 수집한다.
+#         for symbol, symbol_data in self.account_balances.items():
+#             entry_price = symbol_data.get("entryPrice")
+#             current_price = symbol_data.get("currentPrice")
+#             quantity = symbol_data.get("quantity")
+#             position = symbol_data.get("position")
+#             margin = symbol_data.get("margin")
+#             fee_cost = symbol_data.get("fee_cost")
+
+#             # 데이터에 문제가 발생할 경우 stop처리 한다. 하나라도 이상 데이터가 나올 수 없다.
+#             if None in (entry_price, current_price, quantity, position, margin):
+#                 raise ValueError(f"account_balance 오류 - {symbol_data}")
+
+#             # 보유량 표시
+#             number_of_stocks += 1
+#             profit_and_loss += OrderManager.get_calc_pnl(
+#                 entry_price=entry_price,
+#                 current_price=current_price,
+#                 quantity=quantity,
+#                 position=position,
+#             )
+#             maintenance_margin += margin
+
+#         # pnl정보가 0이 아닐경우 초기값인 0을 연산값으로 대체한다. (에러 대응)
+#         if not profit_and_loss == 0:
+#             profit_margin_ratio = round(profit_and_loss / maintenance_margin, 3)
+
+#         available_funds = self.balance_info["available_funds"]
+#         total_assets = profit_and_loss + maintenance_margin + available_funds
+
+#         # balance_info update
+#         self.balance_info["locked_funds"]["number_of_stocks"] = number_of_stocks
+#         self.balance_info["locked_funds"]["profit_and_loss"] = profit_and_loss
+#         self.balance_info["locked_funds"]["maintenance_margin"] = maintenance_margin
+#         self.balance_info["locked_funds"]["profit_margin_ratio"] = profit_margin_ratio
+#         self.balance_info["total_assets"] = total_assets
+
+#         return self.balance_info
+
+#     # 계좌의 보유재고에 'currentPrice'항목 업데이트
+#     def __update_current_price(
+#         self, symbol: str, current_price: str
+#     ) -> Dict[str, Dict[str, Optional[Any]]]:
+#         """
+#         1. 기능 : 보유중인 코인정보의 현재가를 업데이트한다. 전체 계좌 업데이트시 사용
+#         2. 매개변수
+#             1) symbol : 쌍거래 symbol
+#             2) current_price :현재가
+#         """
+#         wallet = self.account_balances.get(symbol)
+#         if wallet:
+#             self.account_balances[symbol]["currentPrice"] = current_price
+#             return self.account_balances
+#         else:
+#             pass
+
+#     # 계좌의 정보를 연산 및 계좌 상태 정보를 반환한다.
+#     def get_wallet_status(
+#         self, symbol: Optional[str] = None, current_price: Optional[str] = None
+#     ) -> Dict[str, float]:
+#         # wallet에 대해 symbol정보 없을때에 대하여 대비 되어 있음 (pass 처리)
+#         self.__update_current_price(symbol=symbol, current_price=current_price)
+#         self.__update_locked_funds()
+#         return self.balance_info
+
+

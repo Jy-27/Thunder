@@ -71,7 +71,51 @@ class AnalysisManager:
     interval데이터 분리 및 조회를 용이하기 위함.    
     """
 
-    def case_1_data_length(self, kline_data_lv3: Dict):
+
+    def __oscillator(self, kline_data_lv3, col, short_window, long_window):
+        volume = kline_data_lv3[:, col]
+        
+        # 이동평균 계산
+        short_ma = np.convolve(volume, np.ones(short_window) / short_window, mode='valid')
+        long_ma = np.convolve(volume, np.ones(long_window) / long_window, mode='valid')
+
+        # 두 이동평균 배열 길이 맞춤 (슬라이싱 또는 패딩 필요)
+        min_length = min(len(short_ma), len(long_ma))
+        short_ma = short_ma[-min_length:]
+        long_ma = long_ma[-min_length:]
+
+        # 0 또는 NaN 값 처리
+        with np.errstate(divide='ignore', invalid='ignore'):
+            volume_oscillator = np.where(
+                (long_ma == 0) | np.isnan(long_ma),
+                np.nan,  # 분모가 0이거나 NaN이면 NaN 반환
+                (short_ma - long_ma) / long_ma * 100
+            )
+
+        return volume_oscillator
+
+
+    def __sort_indices_by_column_ascending(self, kline_data_lv3: np.ndarray, col: int) -> np.ndarray:
+        """
+        2차원 np.ndarray의 특정 column을 기준으로 오름차순 정렬된 인덱스를 반환.
+        """
+        if len(kline_data_lv3.shape) != 2:
+            raise ValueError("Input array must be 2-dimensional.")
+        if col < 0 or col >= kline_data_lv3.shape[1]:
+            raise IndexError(f"Column index {col} is out of bounds for array with shape {kline_data_lv3.shape}.")
+        return np.argsort(kline_data_lv3[:, col])
+
+    def __sort_indices_by_column_descending(self, kline_data_lv3: np.ndarray, col: int) -> np.ndarray:
+        """
+        2차원 np.ndarray의 특정 column을 기준으로 내림차순 정렬된 인덱스를 반환.
+        """
+        if len(kline_data_lv3.shape) != 2:
+            raise ValueError("Input array must be 2-dimensional.")
+        if col < 0 or col >= kline_data_lv3.shape[1]:
+            raise IndexError(f"Column index {col} is out of bounds for array with shape {kline_data_lv3.shape}.")
+        return np.argsort(kline_data_lv3[:, col])[::-1]
+
+    def case_1_data_length(self, kline_data_lv3: np.ndarray):
         """
         1. 기능 : 데이터 길이 정보를 저장한다.
         2. 매개변수
@@ -83,7 +127,7 @@ class AnalysisManager:
         """
         self.case_1.append(len(kline_data_lv3))
 
-    def case_2_candle_length(self, kline_data_lv3: Dict):
+    def case_2_candle_length(self, kline_data_lv3: np.ndarray):
         """
         1. 기능 : 캔들 길이를 벡터 분석한다.
         2. 매개변수
@@ -113,6 +157,7 @@ class AnalysisManager:
             )
         )
 
+    # 연속증가 및 연속하락 구간을 찾는다.
     def case_3_continuous_trend_position(
         self, kline_data_lv3: np.ndarray, col: int = 4
     ):
@@ -197,7 +242,151 @@ class AnalysisManager:
         # 조건에 따른 반환
         self.case_5.append(max(adj_neg_count, 0) if neg_count > 0 else 0)
 
+    def case_6_ocillator_volume(self, kline_data_lv3: np.ndarray, short_window:int=5, long_window=10):
+        self.case_6.append(self.__oscillator(kline_data_lv3=kline_data_lv3, col=9, short_window=short_window, long_window=long_window))
+    
+    def case_7_ocillator_value(self, kline_data_lv3: np.ndarray, short_window:int=5, long_window=10):
+        self.case_7.append(self.__oscillator(kline_data_lv3=kline_data_lv3, col=10, short_window=short_window, long_window=long_window))
+    
+    def case_8_sorted_indices(self, kline_data_lv3: np.ndarray, col:int):
+        long_sort = self.__sort_indices_by_column_ascending(kline_data_lv3=kline_data_lv3, col=col)
+        short_sort = self.__sort_indices_by_column_descending(kline_data_lv3=kline_data_lv3, col=col)
+        # print(long_sort)
+        # print(short_sort)
+        
+        self.case_8.append([long_sort, short_sort])
+    
+    def case_9_rsi(self, kline_data_lv3: np.ndarray, col: int, window: int = 14) -> np.ndarray:
+        """
+        2차원 np.ndarray에서 특정 column을 기준으로 RSI 계산.
+        
+        Parameters:
+        - data (np.ndarray): 2차원 배열 (행: 데이터 포인트, 열: 속성)
+        - column (int): RSI를 계산할 기준 열 (예: 종가)
+        - window (int): RSI를 계산할 기간 (기본값: 14)
+        
+        Returns:
+        - np.ndarray: RSI 값 배열 (NaN 포함, 길이는 원본 데이터와 동일)
+        """
+        # 특정 열의 데이터를 추출
+        prices = kline_data_lv3[:, col]
+        
+        # 데이터 크기에 맞게 window 값 조정
+        actual_window = min(window, len(prices) - 1)
+        
+        # 가격 변화 계산
+        deltas = np.diff(prices)  # 현재 가격과 이전 가격의 차이
+        gains = np.maximum(deltas, 0)  # 상승폭 (음수는 0으로 처리)
+        losses = np.abs(np.minimum(deltas, 0))  # 하락폭 (양수는 0으로 처리)
+
+        # 평균 상승/하락 계산
+        avg_gain = np.empty_like(prices)
+        avg_loss = np.empty_like(prices)
+        avg_gain[:actual_window] = np.nan  # 초기값 NaN
+        avg_loss[:window] = np.nan  # 초기값 NaN
+
+        # 초기 평균 계산
+        avg_gain[actual_window] = np.mean(gains[:actual_window])
+        avg_loss[actual_window] = np.mean(losses[:actual_window])
+
+        # 지수 이동 평균 방식으로 계산
+        for i in range(actual_window + 1, len(prices)):
+            avg_gain[i] = (avg_gain[i - 1] * (actual_window - 1) + gains[i - 1]) / actual_window
+            avg_loss[i] = (avg_loss[i - 1] * (actual_window - 1) + losses[i - 1]) / actual_window
+
+        # RS 계산 및 RSI 계산
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+
+        # 초기 window 기간은 NaN으로 설정
+        rsi[:actual_window] = np.nan
+
+        self.case_9.append(rsi)
+
+    def scenario_2(self):
+        target_interval_5m = 2
+        target_interval_1h = 3
+        """
+        적용 interval : 5m, 1h
+        조건
+            1) 연속 3회 상승 or 하락. >> case_3
+            2) candle 의 몸통부분이 전체의 70% 이상.  >> case_2
+            3) 오실리언 벨류 플러스 일경우. >> case_7
+            4) 전고점 or 전저점 돌파.   >> case_8
+        
+        leverage : 2) 전고점 or 전저점 돌파 시간 diff
+        """
+
+        long_idx = 0
+        short_idx = 1
+        end_idx = -1
+
+        # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
+        if self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] -1):
+            position = 1
+            count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0]
+        
+        elif self.case_3[target_interval_5m][short_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] -1):
+            position = 2
+            count = np.diff(self.case_3[target_interval_5m][short_idx])[end_idx][0]
+        else:
+            return (False, 0, 0)
+        
+        
+        # candle길이 검토
+        target_length_ratio = 0.75
+        target_idx = -3
+        # candle 몸통 비율 검토
+        target_candle_data = self.case_2[target_interval_5m][target_idx:]
+        if np.all(target_candle_data == 0):
+            return (False, 0, 0)
+
+        # 분모 검사 추가
+        if np.any(target_candle_data[:, 3] == 0):
+            return (False, 0, 0)
+            
+        length_ratio = target_candle_data[: ,2] / target_candle_data[: ,3]
+        # 몸통 길이 비율이 target_length_ratio 보다 이상
+        if not np.all(length_ratio >= target_length_ratio):
+            return (False, 0, 0)
+        
+        #오실리언 벨유 플러스 여부 확인
+        is_ocillator_value = self.case_7[target_interval_5m][-1] > 0
+        
+        if not is_ocillator_value:
+            return (False, 0, 0)
+        
+        # 전고점 / 전저점 돌파여부 확인
+        # data_length = self.case_1[target_interval_1h] - 1
+        
+        if position == 1:
+            sort_ascending = self.case_8[target_interval_1h][long_idx]    
+            if max(sort_ascending) == sort_ascending[end_idx]:
+                leverage = np.diff(sort_ascending)[-1]
+            else:
+                return (False, 0, 0)
+
+        elif position == 2:
+            sort_descending = self.case_8[target_interval_1h][short_idx]
+            if min(sort_descending) == sort_descending[end_idx]:
+                leverage = np.abs(np.diff(sort_descending)[-1])
+            else:
+                return (False, 0, 0)
+        return (True, position, leverage)
+            
+        
+
     def scenario_1(self):
+        """
+        적용 interval : 5m, 1h
+        조건
+            1) 연속 3회 상승 or 하락.
+            2) 전고점 or 전저점 돌파.
+            3) candle 의 몸통부분이 전체의 70% 이상.
+            4) 오실리언 벨류 플러스 일경우.
+        
+        leverage : 2) 전고점 or 전저점 돌파 시간 diff
+        """
 
         target_diff = 3
         interval_5m = 2
@@ -230,6 +419,7 @@ class AnalysisManager:
             return is_case_3
         else:
             return (False, 0, 0)
+
 
 
 class Disposer:

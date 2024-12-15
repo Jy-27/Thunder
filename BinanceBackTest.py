@@ -14,7 +14,10 @@ import datetime
 from BinanceTradeClient import FuturesOrder, SpotOrder
 from MarketDataFetcher import FuturesMarket, SpotMarket
 from dataclasses import dataclass, fields
+import pandas as pd
 
+import matplotlib.pyplot as plt
+from matplotlib import style, ticker
 
 """
 1. 목적
@@ -736,15 +739,30 @@ class ResultEvaluator:
         # with open(file_path, 'r') as file:
         #     data = json.load(file)
 
-        self.closed_positions = data[0]["closed_positions"]
-        self.initial_balance = data[0]["initial_balance"]
-        self.total_balance = data[0]["total_balance"]
-        self.profit_loss = data[0]["profit_loss"]
-        self.data = data
+        self.closed_positions = data.closed_positions
+        self.initial_balance = data.initial_balance
+        self.total_balance = data.total_balance
+        self.profit_loss = data.profit_loss
+        self.profit_loss_ratio = data.profit_loss_ratio
         self.df = self.create_dataframe()
         self.summary = None
 
     def create_dataframe(self):
+        if not self.closed_positions:
+            # 빈 딕셔너리일 경우 0으로 채운 기본 데이터프레임 반환
+            return pd.DataFrame([{
+                "Symbol": None,
+                "Close Time": None,
+                "Profit/Loss": 0.0,
+                "Entry Price": 0.0,
+                "Exit Price": 0.0,
+                "Volume": 0.0,
+                "Entry Fee": 0.0,
+                "Exit Fee": 0.0,
+                "Total Fee": 0.0
+            }])
+
+        # 데이터가 있을 경우 데이터프레임 생성
         records = []
         for symbol, trades in self.closed_positions.items():
             for trade in trades:
@@ -877,7 +895,7 @@ class ResultEvaluator:
         print(f"Initial Balance: {self.initial_balance:,.2f}")
         print(f"Total Balance: {self.total_balance:,.2f}")
         print(f"Net Profit/Loss: {self.profit_loss:,.2f}")
-        print(f"Profit/Loss Ratio: {self.data[0]['profit_loss_ratio']:.2f}%")
+        print(f"Profit/Loss Ratio: {self.profit_loss_ratio:.2f}%")
         print()
 
     def run_analysis(self):

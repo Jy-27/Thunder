@@ -16,25 +16,25 @@ print(f"작업시작 >> {datetime.now()}")
 # symbols 지정
 symbols = [
     # "BTCUSDT",
-    # "XRPUSDT",
-    "ADAUSDT",
+    "XRPUSDT",
+    # "ADAUSDT",
     # "NOTUSDT",
     # "SANDUSDT",
     # "ARKMUSDT",
     # "SOLUSDT",
-    # "DOGEUSDT",
+    "DOGEUSDT",
 ]
 # interval 지정.
 # intervals = ["1m", "5m", "1h"]
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-10-1"
-end_date = "2024-12-13"
+start_date = "2024-11-5"
+end_date = "2024-12-4"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
-obj_process = DataProcess.TradeStopper()
+obj_process = DataProcess.TradeStopper(profit_ratio=0.035, risk_ratio=0.85)
 obj_analy = Analysis.AnalysisManager(back_test=True)
 obj_analy.intervals = intervals
 obj_order = ProcessManager()
@@ -64,7 +64,7 @@ obj_analysis = Analysis.AnalysisManager()
 trade_data = []
 
 # 초기 투자 자본
-seed_money = 1_000_000
+seed_money = 10
 
 # 가장 지갑 생성
 obj_wallet = TradeOrderManager(initial_balance=seed_money)
@@ -78,10 +78,15 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         obj_analysis.case_1_data_length(kline_data_lv3=data)
         obj_analysis.case_2_candle_length(kline_data_lv3=data)
         obj_analysis.case_3_continuous_trend_position(kline_data_lv3=data)
-        obj_analysis.case_4_process_neg_counts(kline_data_lv3=data, col=7)
-        obj_analysis.case_5_diff_neg_counts(kline_data_lv3=data, col1=1, col2=4)
+        # obj_analysis.case_4_process_neg_counts(kline_data_lv3=data, col=7)
+        # obj_analysis.case_5_diff_neg_counts(kline_data_lv3=data, col1=1, col2=4)
+        # obj_analysis.case_6_ocillator_volume(kline_data_lv3=data)#, col1=1, col2=4)
+        obj_analysis.case_7_ocillator_value(kline_data_lv3=data)#, col1=1, col2=4)
+        obj_analysis.case_8_sorted_indices(kline_data_lv3=data, col=4)
+        # obj_analysis.case_9_rsi(kline_data_lv3=data, col=4)
 
         # 1분봉의 값 기준으로 현재가, timestamp가격을 반영한다.
+    
         if interval == intervals[0]:
             price = data[-1][4]
             close_timestampe = data[-1][6]
@@ -89,13 +94,22 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             obj_wallet.update_order_data(
                 symbol=symbol, current_price=price, current_time=close_timestampe
             )
-        utils._std_print(f"{idx} / {obj_wallet.trade_analysis.total_balance}")
+        utils._std_print(f"{idx:,.0f} / {obj_wallet.trade_analysis.total_balance:.2f}")
+        
+    # if idx==10000:
+    #     break
 
-    scenario_1 = obj_analysis.scenario_1()
+    # #DEBUS CODE
+    # if idx == 10000:
+    #     analyzer = ResultEvaluator(data=obj_wallet.trade_analysis)
+    #     analyzer.run_analysis()
+    #     raise ValueError('브레이크!!!')
+
+    scenario_1 = obj_analysis.scenario_2()
     obj_analysis.reset_cases()
 
     if scenario_1[0]:
-        print(True)
+        # print(True)
         # 주문 제약 사항 스펙
         constraint = obj_con.calc_fund(
             obj_wallet.trade_analysis.total_balance, rate=0.2
@@ -158,5 +172,5 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             # 매도 가격 도달시 종료하는 함수의 데이터 기록 제거.
             obj_process.remove_trading_data(symbol)
 
-analyzer = ResultEvaluator(data=obj_wallet.trade_analysis.__dict__)
+analyzer = ResultEvaluator(data=obj_wallet.trade_analysis)
 analyzer.run_analysis()

@@ -116,10 +116,12 @@ class TradeOrder:
         self.break_even_price = self.entry_price + (total_fees / self.quantity)
 
     def __update_values(self):
-        self.initial_value = (self.entry_price * self.quantity) / self.leverage
+        # self.initial_value = (self.entry_price * self.quantity) / self.leverage
+        self.initial_value = (self.quantity / self.leverage) * self.entry_price
         self.current_value = (self.current_price * self.quantity) / self.leverage
         total_fees = self.entry_fee + self.exit_fee
-        self.profit_loss = self.current_value - self.initial_value - total_fees
+        # self.profit_loss = self.current_value - self.initial_value - total_fees
+        self.profit_loss = self.quantity * (self.current_price - self.entry_price) - total_fees
 
     def update_trade_data(self, current_price: Union[float, int], current_time: int):
         self.current_price = current_price
@@ -206,7 +208,7 @@ class TradeAnalysis:
 
         # 현재 거래중인 자산 초기화
         if open_trades_data_array.size > 0:
-            self.active_value = np.sum(open_trades_data_array[:, 8])
+            self.active_value = np.sum(open_trades_data_array[:, 7])
         else:
             self.active_value = 0
 

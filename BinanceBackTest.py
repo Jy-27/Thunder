@@ -107,10 +107,10 @@ class TradeOrder:
     def __update_fees(self):
         adjusted_fee_rate = self.fee_rate / 100
         self.entry_fee = (
-            self.entry_price * adjusted_fee_rate * self.quantity * self.leverage
+            self.entry_price * adjusted_fee_rate * self.quantity# * self.leverage
         )
         self.exit_fee = (
-            self.current_price * adjusted_fee_rate * self.quantity * self.leverage
+            self.current_price * adjusted_fee_rate * self.quantity# * self.leverage
         )
         total_fees = self.entry_fee + self.exit_fee
         self.break_even_price = self.entry_price + (total_fees / self.quantity)

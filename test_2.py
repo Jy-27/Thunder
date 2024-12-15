@@ -43,15 +43,15 @@ obj_data = DataManager(
     symbols=symbols, intervals=intervals, start_date=start_date, end_date=end_date
 )
 
-# k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
-# with open(k_path, "rb") as file:
-#     kline_data = pickle.load(file)
+k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
+with open(k_path, "rb") as file:
+    kline_data = pickle.load(file)
 # kline_data = utils._load_json(file_path=k_path)
-kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
+# kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
 
 
-kline_data = utils._convert_to_array(kline_data=kline_data)
-kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
+# kline_data = utils._convert_to_array(kline_data=kline_data)
+# kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
 
 # kline_data = utils._load_json(file_path=)
 
@@ -138,7 +138,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         # 마진이 예수금을 초과여부 검사
         is_cash_margin = obj_wallet.trade_analysis.cash_balance > margin_
         # 최대 보유 항목 초과여부 검사
-        is_trade_count = obj_wallet.trade_analysis.number_of_stocks < count
+        is_trade_count = obj_wallet.trade_analysis.number_of_stocks < trade_count
         
         # 주문 신호 발생시
         if status and is_cash_margin and is_trade_count:

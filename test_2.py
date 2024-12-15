@@ -15,13 +15,13 @@ print(f"작업시작 >> {datetime.now()}")
 
 # symbols 지정
 symbols = [
-    # "BTCUSDT",
+    "BTCUSDT",
     "XRPUSDT",
-    # "ADAUSDT",
-    # "NOTUSDT",
-    # "SANDUSDT",
-    # "ARKMUSDT",
-    # "SOLUSDT",
+    "ADAUSDT",
+    "NOTUSDT",
+    "SANDUSDT",
+    "ARKMUSDT",
+    "SOLUSDT",
     "DOGEUSDT",
 ]
 # interval 지정.
@@ -30,7 +30,7 @@ intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
 start_date = "2024-11-5"
-end_date = "2024-12-4"
+end_date = "2024-12-14"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
@@ -64,7 +64,7 @@ obj_analysis = Analysis.AnalysisManager()
 trade_data = []
 
 # 초기 투자 자본
-seed_money = 10
+seed_money = 6962.82
 
 # 가장 지갑 생성
 obj_wallet = TradeOrderManager(initial_balance=seed_money)
@@ -112,7 +112,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         # print(True)
         # 주문 제약 사항 스펙
         constraint = obj_con.calc_fund(
-            obj_wallet.trade_analysis.total_balance, rate=0.2
+            obj_wallet.trade_analysis.total_balance, rate=0.2, count_max=2
         )
 
         position = scenario_1[1]

@@ -171,7 +171,7 @@ class OrderConstraint:
     #     self.safety_account_ratio = 0.32
 
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
-    def calc_fund(self, funds: float, rate: float = 0.35) -> dict:
+    def calc_fund(self, funds: float, rate: float = 0.35, count_max:int =6) -> dict:
         """
         총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
 
@@ -210,7 +210,10 @@ class OrderConstraint:
                 count += 1
                 if target > funds:
                     break
-
+        
+        #count최대값을 지정한다. 너무 높면 회당 주문금액이 낮아진다.
+        count = min(count, count_max)
+        
         # 안전 금액 및 유효 금액 계산
         safety_value = last_valid_target * rate
         usable_value = last_valid_target - safety_value

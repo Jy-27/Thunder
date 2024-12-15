@@ -18,9 +18,9 @@ symbols = [
     "BTCUSDT",
     "XRPUSDT",
     "ADAUSDT",
-    "NOTUSDT",
+    # "NOTUSDT",
     "SANDUSDT",
-    "ARKMUSDT",
+    # "ARKMUSDT",
     "SOLUSDT",
     "DOGEUSDT",
 ]
@@ -132,14 +132,23 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
                 market_type="futures",
             )
         )
+        
+        # 주문 마진금액이 예수금보다 커야함.
+        margin_ = (qty / lv) * price
+        # 마진이 예수금을 초과여부 검사
+        is_cash_margin = obj_wallet.trade_analysis.cash_balance > margin_
+        # 최대 보유 항목 초과여부 검사
+        is_trade_count = obj_wallet.trade_analysis.number_of_stocks < count
+        
         # 주문 신호 발생시
-        if status and trade_count > obj_wallet.trade_analysis.number_of_stocks:
+        if status and is_cash_margin and is_trade_count:
             # 포지션 종료를 위한 초기값 업데이트
             obj_process.initialize_trading_data(
                 symbol=symbol,
                 position="LONG" if position == 1 else "SHORT",
                 entry_price=price,
             )
+                
             # 지갑 정보 업데이트
             obj_wallet.add_order(
                 symbol=symbol,

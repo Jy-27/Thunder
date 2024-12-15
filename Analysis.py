@@ -321,6 +321,11 @@ class AnalysisManager:
         short_idx = 1
         end_idx = -1
 
+        # case_3연산시 조건에 안맞는 부분이 있을 수 있다. 그럴 경우를 대비한 검사.
+        for i, (increase, decrease) in enumerate(self.case_3):
+            if not increase or not decrease:#리스트가 비어있는지 확인
+                return (False, 0, 0)
+
         # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
         if self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] -1):
             position = 1

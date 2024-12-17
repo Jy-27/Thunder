@@ -197,6 +197,25 @@ class BinanceOrderManager:
         }
         return await self.__send_request("GET", endpoint, params)
 
+
+    async def submit_transfer(self, asset: str, amount: float, transfer_type: int) -> Dict:
+        """
+        1. 기능: 잔액을 Spot과 Futures 계좌 간 전송한다.
+        2. 매개변수:
+            1) asset: 전송할 자산명 (예: USDT)
+            2) amount: 전송할 금액
+            3) transfer_type: 전송 유형 (1: Spot → Futures, 2: Futures → Spot)
+        """
+        endpoint = "/sapi/v1/futures/transfer"
+        params = {
+            "asset": asset.upper(),
+            "amount": amount,
+            "type": transfer_type,
+            "timestamp": int(time.time() * 1000),
+        }
+        return await self.__send_request("POST", endpoint, params)
+        
+
     # 미체결 취소 주문 생성 및 제출
     async def submit_cancel_order(self, symbol: str, order_id: int) -> Dict:
         """

@@ -633,12 +633,18 @@ class TradeManager:
 
                 # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
                 kline_data_array = utils._convert_to_array(kline_data=self.kline_data)
-                if not kline_data_array[2]:
-                    continue
+                # print(kline_data_array)
+                # if not kline_data_array[2]:
+                #     continue
 
+                print(kline_data_array)
+                
                 symbol_map, interval_map, container_data = utils._convert_to_container(
                     kline_data_array
                 )
+                print(symbol_map)
+                print(interval_map)
+                
                 for symbol, idx_s in symbol_map.items():
                     for interval in interval_map.keys():
                         get_data = container_data.get_data(f"interval_{interval}")[
@@ -660,7 +666,7 @@ class TradeManager:
                             kline_data_lv3=get_data, col1=1, col2=4
                         )
 
-                    scenario_1 = self.analysis_instance.scenario_1()
+                    scenario_1 = self.analysis_instance.scenario_2()
                     print(scenario_1)
                     self.analysis_instance.reset_cases()
 
@@ -668,7 +674,7 @@ class TradeManager:
                         await self.submit_open_order_signal(
                             symbol=symbol,
                             position=scenario_1[1],
-                            leverage=scenario_1[2],
+                            leverage=8,
                         )
                         # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="second", duration=20)
@@ -715,7 +721,7 @@ class SpotTrade(TradeManager):
             my_client.SpotOrder(),
             SpotMarket(),
             AnalysisManager(),
-            TradeStopper(),
+            TradeStopper(profit_ratio=0.02, risk_ratio=0.65),
             OrderConstraint(),
         )
 
@@ -728,7 +734,7 @@ class FuturesTrade(TradeManager):
             my_client.FuturesOrder(),
             FuturesMarket(),
             AnalysisManager(),
-            TradeStopper(),
+            TradeStopper(profit_ratio=0.02, risk_ratio=0.65),
             OrderConstraint(),
         )
 
@@ -770,7 +776,8 @@ class FuturesTrade(TradeManager):
         if min_trade_quantity > max_trade_quantity:
             return
 
-        max_leverage = await self.client_instance.get_max_leverage(symbol)
+        # max_leverage = await self.client_instance.get_max_leverage(symbol)
+        max_lverage = 75
         target_leverage = min(max_leverage, leverage)
 
         # 레버리지 설정

@@ -15,13 +15,13 @@ print(f"작업시작 >> {datetime.now()}")
 
 # symbols 지정
 symbols = [
-    "BTCUSDT",
+    # "BTCUSDT",
     "XRPUSDT",
     "ADAUSDT",
     # "NOTUSDT",
     "SANDUSDT",
     # "ARKMUSDT",
-    "SOLUSDT",
+    # "SOLUSDT",
     "DOGEUSDT",
 ]
 # interval 지정.
@@ -29,12 +29,12 @@ symbols = [
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-5"
-end_date = "2024-12-14"
+start_date = "2024-12-1"
+end_date = "2024-12-15"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
-obj_process = DataProcess.TradeStopper(profit_ratio=0.035, risk_ratio=0.85)
+obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.65)
 obj_analy = Analysis.AnalysisManager(back_test=True)
 obj_analy.intervals = intervals
 obj_order = ProcessManager()
@@ -43,15 +43,15 @@ obj_data = DataManager(
     symbols=symbols, intervals=intervals, start_date=start_date, end_date=end_date
 )
 
-k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
-with open(k_path, "rb") as file:
-    kline_data = pickle.load(file)
+# k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
+# with open(k_path, "rb") as file:
+#     kline_data = pickle.load(file)
 # kline_data = utils._load_json(file_path=k_path)
-# kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
+kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
 
 
-# kline_data = utils._convert_to_array(kline_data=kline_data)
-# kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
+kline_data = utils._convert_to_array(kline_data=kline_data)
+kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=True)
 
 # kline_data = utils._load_json(file_path=)
 
@@ -64,13 +64,14 @@ obj_analysis = Analysis.AnalysisManager()
 trade_data = []
 
 # 초기 투자 자본
-seed_money = 6962.82
-
+seed_money = 69492.7
 # 가장 지갑 생성
 obj_wallet = TradeOrderManager(initial_balance=seed_money)
 
 # 래핑 데이터를 이용하여 반복문 실행한다.
 for idx, d in enumerate(data_c.get_data("map_1m")):
+    if idx < 10_000:
+        continue
     for interval in intervals:
         maps_ = data_c.get_data(f"map_{interval}")[idx]
         # if interval == "5m":
@@ -94,16 +95,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             obj_wallet.update_order_data(
                 symbol=symbol, current_price=price, current_time=close_timestampe
             )
-        utils._std_print(f"{idx:,.0f} / {obj_wallet.trade_analysis.total_balance:.2f}")
-        
-    # if idx==10000:
-    #     break
-
-    # #DEBUS CODE
-    # if idx == 10000:
-    #     analyzer = ResultEvaluator(data=obj_wallet.trade_analysis)
-    #     analyzer.run_analysis()
-    #     raise ValueError('브레이크!!!')
+        utils._std_print(f"{idx:,.0f} / {obj_wallet.trade_analysis.profit_loss:,.2f}")
 
     scenario_1 = obj_analysis.scenario_2()
     obj_analysis.reset_cases()
@@ -127,7 +119,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         status, qty, lv = asyncio.run(
             obj_order.calculate_order_values(
                 symbol=symbol,
-                leverage=int(scenario_1[2] / 60),
+                leverage=30,
                 balance=trade_balance,
                 market_type="futures",
             )

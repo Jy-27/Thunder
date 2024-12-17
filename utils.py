@@ -99,7 +99,7 @@ def _convert_to_container(kline_data):
 
     symbols = list(kline_data.keys())
     intervals = list(kline_data[symbols[0]].keys())
-    print("START")
+    # print("START")
     for idx_i, interval in enumerate(intervals):
         map_interval[interval] = idx_i
 

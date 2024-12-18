@@ -667,15 +667,14 @@ class TradeManager:
                             kline_data_lv3=get_data, col=4
                         )
 
-                        # print(self.analysis_instance.case_1)
-                        # print(self.analysis_instance.case_2)
-                        # print(self.analysis_instance.case_3)
-                        # print(self.analysis_instance.case_7)
-                        # print(self.analysis_instance.case_8)
+                        print(self.analysis_instance.case_1)
+                        print(self.analysis_instance.case_2)
+                        print(self.analysis_instance.case_3)
+                        print(self.analysis_instance.case_7)
+                        print(self.analysis_instance.case_8)
                         
                     scenario_1 = self.analysis_instance.scenario_2()
                     self.analysis_instance.reset_cases()
-                    print(scenario_1)
 
                     if scenario_1[0]:
                         await self.submit_open_order_signal(

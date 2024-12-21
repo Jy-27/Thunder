@@ -69,6 +69,10 @@ class TradeManager:
         # anlysis 함수 현재 데이터 유형 확인
         self.websocket_type: dict = {}
 
+        # 수집할 kline_data의 기간을 지정한다.
+        # 해당 값을 활용하여 수신된 데이터의 길이를 비교하여 유효성을 검토한다.
+        self.interval_days: Optional[int] = None
+
         # instance init 전달
         self.ticker_instance = ticker_instance
         self.handler_instance = handler_instance  # asyncio._queue << 속성 여기에 있음.
@@ -81,8 +85,10 @@ class TradeManager:
         self.signal_data: Dict[str, Dict[str, Union[int, float]]] = {}
 
         # ticker 정보 저장 및 공유
+        # 검토 선정된 tickers 리스트
         self.active_tickers: List = []
 
+        # 거래중과 관련된 정보
         self.account_balance_raw: Dict = {}
         self.account_balance_summary: Dict = {}
         self.account_active_symbols: List = []
@@ -463,6 +469,9 @@ class TradeManager:
     # kline 데이터 interval map별 수집
     async def collect_kline_by_interval_loop(self, days: int = 2):
 
+        # interval day기간을 속성에 저장 후 현재 로딩 데이터의 길이가 유효한지 검토하는 목적
+        self.interval_days = days
+
         interval_map = self._generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 300
@@ -608,17 +617,40 @@ class TradeManager:
     # TEST ZONE = 검토대상 체크한다.
 
     def validate_kline(self):
+        #수집된 데이터의 symbols값을 확보한다.
         symbols_key = self.kline_data.keys()
 
+        # 수집된 데이터의 symbols와 타겟 symbols를 비교한다.
         is_symbol = set(symbols_key) == set(self.active_tickers)
 
         if not is_symbol:
+            print('symbol 없음.')
             return False
 
-        for symbol, kline_data_symbol in self.kline_data.items():
-            is_interval = set(kline_data_symbol.keys()) == set(self.KLINE_INTERVALS)
-            if not is_interval:
-                return False
+        # 마지막 값만 본다.
+        get_intervals = [interval for interval in self.kline_data.get(self.active_tickers[-1])]
+        
+        is_interval = set(get_intervals) == set(self.KLINE_INTERVALS)
+        if not is_interval:
+            print('interval 없음.')
+            return False
+        
+        target_idx = -1
+        target_data = self.kline_data[self.active_tickers[target_idx]][self.KLINE_INTERVALS[target_idx]]
+        data_length = len(target_data)
+        
+        # print(self.interval_days)
+        if self.interval_days is None:
+            print('interval dasy 없음.')
+            return False
+        
+        abs_data_len = self._get_kline_limit_by_days(interval=self.KLINE_INTERVALS[-1], days=self.interval_days)
+        is_data_emtpy = data_length >= abs_data_len
+
+        if not is_data_emtpy:
+            print('data길이 짧음 없음.')
+            return False
+        
         return True
 
     async def analysis_loop(self):
@@ -631,7 +663,7 @@ class TradeManager:
                 if not self.validate_kline():
                     print(self.active_tickers)
                     print("데이터 부족. continue")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(5)
                     continue
 
                 # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.

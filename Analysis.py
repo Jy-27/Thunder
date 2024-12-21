@@ -115,7 +115,7 @@ class AnalysisManager:
             raise IndexError(f"Column index {col} is out of bounds for array with shape {kline_data_lv3.shape}.")
         return np.argsort(kline_data_lv3[:, col])[::-1]
 
-    def case_1_data_length(self, kline_data_lv3: np.ndarray):
+    def run_case_1(self, kline_data_lv3: np.ndarray):
         """
         1. 기능 : 데이터 길이 정보를 저장한다.
         2. 매개변수
@@ -303,6 +303,12 @@ class AnalysisManager:
 
         self.case_9.append(rsi)
 
+class Scenario_2(AnalysisManager):
+    
+    
+    
+    
+    
     def scenario_2(self):
         target_interval_5m = 2
         target_interval_1h = 3

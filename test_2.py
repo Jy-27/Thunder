@@ -29,12 +29,12 @@ symbols = [
 intervals = ["1m", "3m", "5m", "1h"]
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-1"
-end_date = "2024-11-28"
+start_date = "2024-12-15"
+end_date = "2024-12-20"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
-obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.65)
+obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.98)
 obj_analy = Analysis.AnalysisManager(back_test=True)
 obj_analy.intervals = intervals
 obj_order = ProcessManager()
@@ -43,11 +43,11 @@ obj_data = DataManager(
     symbols=symbols, intervals=intervals, start_date=start_date, end_date=end_date
 )
 
-# k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
-# with open(k_path, "rb") as file:
-#     kline_data = pickle.load(file)
+k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
+with open(k_path, "rb") as file:
+    kline_data = pickle.load(file)
 # kline_data = utils._load_json(file_path=k_path)
-kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
+# kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
 
 
 kline_data = utils._convert_to_array(kline_data=kline_data)

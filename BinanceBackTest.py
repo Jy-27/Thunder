@@ -70,8 +70,19 @@ from matplotlib import style, ticker
 """
 
 
+
+
+############################################################
+############################################################
+##
+##  거래 내역 발생시 해당내역을 저장 및 관리하다.
+##  각 속성별 값들은 최종적 update method를 활용하여 업데이트한다.
+##
+############################################################
+############################################################
+
 @dataclass
-class TradeOrder:
+class TradingLog:
     """
     거래 발생시 거래내역에 대한 자세한 정보를 정리한다. 각종 손익비용에 대한 정보를 기록하여 분석할 수 있는 데이터로 활용한다.
     """
@@ -83,6 +94,7 @@ class TradeOrder:
     quantity: Union[float, int]  # 수량
     leverage: int  # 레버리지
     fee_rate: float = 0.05  # 수수료율
+    trade_scenario: Optional[str] = None # 적용 시나리오 값.
     end_time: Optional[int] = None  # 종료 시간
     initial_value: Optional[float] = None  # 초기 가치
     current_value: Optional[float] = None  # 현재 가치
@@ -150,70 +162,150 @@ class TradeAnalysis:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
 
+    # 거래 종료시 positions 정보를 self.close_positios에 저장 또는 추가한다.
     def add_closed_position(self, trade_order_data: list):
+        """
+        1. 기능 : 거래 포지션 종료시 해당 내역을 self.closed_positions에 추가 저장한다.
+        2. 매개변수
+            1) trade_order_data : class TradingLog data
+        """
+        
+        # symbol값을 index값으로 찾는다.
+        # trade_order_data는 Class TradingLog 데이터를 적용한다
         symbol = trade_order_data[0]
+        # self.closed_positions에 symbol값이 없을 경우 신규 값으로 기록 한다.
         if symbol not in self.closed_positions:
+            # index [1:]은 Class TradingLog 의 등록된 속성값중 symbol값 제외 모든 데이터를 포함한다.
             self.closed_positions[symbol] = [trade_order_data[1:]]
+        # self.closed_positions에 symbol값이 있을 경우 기존 값에 추가 기록 한다.
         else:
+            # index [1:]은 Class TradingLog 의 등록된 속성값중 symbol값 제외 모든 데이터를 포함한다.
             self.closed_positions[symbol].append(trade_order_data[1:])
+        # positions이 종료 됐으므로 self.open_postion에서 해당 symbol값을 제거한다.
         del self.open_positions[symbol]
+        # wallet 정보를 업데이트해서 각 속성값들을 업데이트(계산) 한다.
         self.update_wallet()
+        # self.closed_positions값을 반환한다.
+        # 필수 기능 아님.
         return self.closed_positions
 
-    def update_open_position(self, trade_order_data: list):
+    # 거래 발생시 positions 정보를 self.open_positios에 저장 한다.
+    def add_open_position(self, trade_order_data: list):
+        """'
+        1. 기능 : 거래 포지션 종료시 해당 내역을 self.open_positions에 저장한다.
+        2. 매개변수
+            1) trade_order_data : class TradingLog data
+        """
+        # symbol값을 index값으로 찾는다.
+        # trade_order_data는 Class TradingLog 데이터를 적용한다
         symbol = trade_order_data[0]
+        # index [1:]은 Class TradingLog 의 등록된 속성값중 symbol값 제외 모든 데이터를 포함한다.
         self.open_positions[symbol] = trade_order_data[1:]
+        # wallet 정보를 업데이트해서 각 속성값들을 업데이트(계산) 한다.
         self.update_wallet()
+        # self.open_positions값을 반환한다.
+        # 필수 기능 아님.
         return self.open_positions
 
+    # 속성값에 저장된 값을 업데이트(계산)하여 재 반영한다.
     def update_wallet(self):
+        """
+        1. 기능 : 본 class에 저장된 속성값들을 업데이트해서 현재 가상 계좌의 가치를 재평가한다.
+        2. 매개변수 : 해당없음.
+        """
+        
+        # 모든 거래정보를 저장할 변수를 초기화 한다.
         all_trades_data = []
+        # 현재 진행중인 거래정보를 저장할 변수를 초기화 한다.
         open_trades_data = []
 
+        # 종료된 포지션 거래가 존재시
         if self.closed_positions:
+            # 종료된 포지션 정보의 value값을 찾아서
             for _, trades_close in self.closed_positions.items():
+                # all_trade_data에 extend로 추가한다. 
+                # closed_positions은 2차원 list형태로 저장되므로 append가 아닌 extend를 이용한다.
                 all_trades_data.extend(trades_close)
 
+        # 진행중인 포지션 거래가 존재시
         if self.open_positions:
+            # 진행중인 포지션 정보의 value값을 찾아서
             for _, trades_open in self.open_positions.items():
+                # all_trade_data에 append로 추가한다.
+                # closed_positions과 달리 open_position은 불타기/물타기를 지원하지 않으므로 1차원 데이터로 저장된다.
                 all_trades_data.append(trades_open)
+                # 진행중인 포지션 정보의 value값을 별도로 추가한다.
                 open_trades_data.append(trades_open)
 
+        # 현재 진행중인 포지션의 갯수(길이)를 확인한다.
         open_position_length = len(self.open_positions)
+        # 현재 진행중인 포지션이 없다면,
         if open_position_length == 0:
+            # 거래중인 포지션은 없음.
             self.number_of_stocks = 0
+        # 현재 진행중인 포지션이 있다면,
         elif open_position_length > 0:
+            # 거래중인 포지션의 갯수를 저장한다.
             self.number_of_stocks = open_position_length
 
+        # 종료된 거래와 현재 진행된 거래가 없을경우
         if not self.closed_positions and not self.open_positions:
+            # 진행중인 거래대금 없음 적용
             self.active_value = 0
+            # 예수금과 평가 금액을 동일하게 설정.
             self.cash_balance = self.total_balance
+            # 본 함수 종료
             return
 
+        # 위 조건 통과시(종료된 거래와 현재 진행된 거래가 있을 경우)
+        # 전체 거래내역(거래중) 정보를 np.ndarray화 한다.
         all_trades_data_array = np.array(all_trades_data)
+        # 거래중 정보를 np.ndarray화 한다.
         open_trades_data_array = np.array(open_trades_data)
 
+        # 행의 길이가 1이하면 연산이 불가하므로 변환 별도의 작업을 해야한다.
+        # 행 길이 정보를 확인하여 길이가 1이라면,
         if all_trades_data_array.ndim == 1:
             # 2차원 배열로 변환 (행 기준)
             all_trades_data_array = all_trades_data_array.reshape(1, -1)
-
+        
+        # 행 길이 정보를 확인하여 길이가 1이라면,
         if open_trades_data_array.ndim == 1:
             # 2차원 배열로 변환 (행 기준)
             open_trades_data_array = open_trades_data_array.reshape(1, -1)
 
-        sunk_cost = np.sum(all_trades_data_array[:, [12, 13]])
-        entry_cost = np.sum(all_trades_data_array[:, 7])
+        # 수수료와 관련된 비용
+        # entry_fee : index 13
+        # exit_fee : index 14
+        # initial_value : index 8
+        # open or close position 추가시 index 0값을 제외하고 저장하므로 index 0은 start_timestamp가 적용됨.
+        
+        # 수수료 관련 비용
+        # entry_fee[13] + exit_fee[14]
+        sunk_cost = np.sum(all_trades_data_array[:, [13, 14]])
+        # 진입과 관련된 비용
+        entry_cost = np.sum(all_trades_data_array[:, 8])
+        
+        # 진입비용 + 수수료 전체
         total_cost = sunk_cost + entry_cost
-        recovered_value = np.sum(all_trades_data_array[:, 8])
+        # 현재 평가 가치
+        recovered_value = np.sum(all_trades_data_array[:, 9])
 
-        # 현재 거래중인 자산 초기화
+
+        ##################################################################################
+        # 아래 함수가 필요할까? 그냥 self.active_value = entry_cost로 하는게 나을수도.
+        ##################################################################################
+        
+        # 거래중인 자산 업데이트
         if open_trades_data_array.size > 0:
-            self.active_value = np.sum(open_trades_data_array[:, 7])
+            # 거래중인 자산금액 == 진입 관련 비용
+            self.active_value = entry_cost#np.sum(open_trades_data_array[:, 8])
         else:
+            # 거래중인 자산 없을경우 0
             self.active_value = 0
 
         self.cash_balance = self.initial_balance - self.active_value
-        self.profit_loss = np.sum(all_trades_data_array[:, 9])
+        self.profit_loss = np.sum(all_trades_data_array[:, 10])
         self.profit_loss_ratio = round(
             (self.profit_loss / self.initial_balance) * 100, 3
         )
@@ -229,10 +321,10 @@ class TradeAnalysis:
 
 class TradeOrderManager:
     """
-    주문관련 기능을 수행한다. TradeAnalysis, TradeOrder 두 class를 운용한다.
+    주문관련 기능을 수행한다. TradeAnalysis, TradingLog 두 class를 운용한다.
     """
     def __init__(self, initial_balance: float = 1_000):
-        self.active_orders: List[TradeOrder] = []
+        self.active_orders: List[TradingLog] = []
         self.order_index_map = {}
         self.active_symbols: List[str] = []
         self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)
@@ -247,15 +339,15 @@ class TradeOrderManager:
         if kwargs.get("symbol") in self.order_index_map:
             return
 
-        valid_keys = {field.name for field in fields(TradeOrder)}
+        valid_keys = {field.name for field in fields(TradingLog)}
         filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
-        order = TradeOrder(**filtered_kwargs)
+        order = TradingLog(**filtered_kwargs)
 
         self.active_orders.append(order)
         self.__refresh_order_map()
 
         order_signal = order.to_list()
-        self.trade_analysis.update_open_position(order_signal)
+        self.trade_analysis.add_open_position(order_signal)
         return order
 
     def remove_order(self, symbol: str):
@@ -275,7 +367,7 @@ class TradeOrderManager:
             current_price=current_price, current_time=current_time
         )
         trade_order_data = self.active_orders[idx].to_list()
-        self.trade_analysis.update_open_position(trade_order_data)
+        self.trade_analysis.add_open_position(trade_order_data)
 
     def get_order(self, symbol: str):
         idx = self.order_index_map.get(symbol)
@@ -328,22 +420,23 @@ class DataManager:
             end_date = self.end_date
 
         interval_to_milliseconds = {
-            "1m": 60000,
-            "3m": 180000,
-            "5m": 300000,
-            "15m": 900000,
-            "30m": 1800000,
-            "1h": 3600000,
-            "2h": 7200000,
-            "4h": 14400000,
-            "6h": 21600000,
-            "8h": 28800000,
-            "12h": 43200000,
-            "1d": 86400000,
-            "3d": 259200000,
+            "1m": 60_000,
+            "3m": 180_000,
+            "5m": 300_000,
+            "15m": 900_000,
+            "30m": 1_800_000,
+            "1h": 3_600_000,
+            "2h": 7_200_000,
+            "4h": 14_400_000,
+            "6h": 21_600_000,
+            "8h": 28_800_000,
+            "12h": 43_200_000,
+            "1d": 86_400_000,
+            "3d": 259_200_000,
         }
 
         # 시작 및 종료 날짜 문자열 처리
+        # 시간 정보는 반드시 00:00:00 > 23:59:59로 세팅해야 한다. 그렇지 않을경우 수신에 문제 발생.
         start_date = start_date + " 00:00:00"
         end_date = end_date + " 23:59:59"
 

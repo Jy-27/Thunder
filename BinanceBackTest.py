@@ -105,6 +105,7 @@ class TradingLog:
     exit_fee: Optional[Union[float, int]] = None  # 종료 수수료
 
     def __post_init__(self):
+        # 
         if self.current_price is None:
             self.current_price = self.entry_price
         if self.leverage <= 0:
@@ -145,6 +146,14 @@ class TradingLog:
         return list(self.__dict__.values())
 
 
+############################################################
+############################################################
+##
+##  가상의 지갑을 생성 운영하고 주문(포지션 open/close) 정보를 관리한다.
+##
+############################################################
+############################################################
+
 class TradeAnalysis:
     """
     거래발생시 해당내용을 가상 wallet에 저장하여 각종 손익비용을 분석한다. 분석한 데이터를 토대로 테스트종료시 결과를 계산할 베이스 데이터가 된다.
@@ -184,7 +193,8 @@ class TradeAnalysis:
         # positions이 종료 됐으므로 self.open_postion에서 해당 symbol값을 제거한다.
         del self.open_positions[symbol]
         # wallet 정보를 업데이트해서 각 속성값들을 업데이트(계산) 한다.
-        self.update_wallet()
+        self.update_wallet()     
+        
         # self.closed_positions값을 반환한다.
         # 필수 기능 아님.
         return self.closed_positions
@@ -292,87 +302,145 @@ class TradeAnalysis:
         recovered_value = np.sum(all_trades_data_array[:, 9])
 
 
+
+        ##################################################################################
         ##################################################################################
         # 아래 함수가 필요할까? 그냥 self.active_value = entry_cost로 하는게 나을수도.
         ##################################################################################
         
         # 거래중인 자산 업데이트
         if open_trades_data_array.size > 0:
-            # 거래중인 자산금액 == 진입 관련 비용
-            self.active_value = entry_cost#np.sum(open_trades_data_array[:, 8])
+            # 거래중인 자산금액
+            self.active_value = np.sum(open_trades_data_array[:, 8])
         else:
             # 거래중인 자산 없을경우 0
             self.active_value = 0
+        #################################################################################3
+        #################################################################################3
 
+        # 예수금 계산
         self.cash_balance = self.initial_balance - self.active_value
+        # 손익 계산
         self.profit_loss = np.sum(all_trades_data_array[:, 10])
+        # 손익률 계산
         self.profit_loss_ratio = round(
             (self.profit_loss / self.initial_balance) * 100, 3
         )
+        # 총 자산 평가 계산
         self.total_balance = self.cash_balance + self.active_value + self.profit_loss
 
+        ##################################################################################
+        ##################################################################################
+        # 본 문제를 별도의 함수로 만들어야 하는지 검토가 필요하다.
+        ##################################################################################
+
+        # 주문처리 후 wallet 업데이트시 예수금 부족현상 발생시 에러 발생
         if self.cash_balance < 0:
-            raise ValueError(f"주문 오류 : 진입금액이 예수금을 초과함.")
+            raise ValueError(f"주문 오류 : 진입금액이 예수금을 초과함. - {self.cash_balance}")
 
         # 계좌 가치가 0 미만이면 청산신호 발생 및 프로그램 중단.
         if self.total_balance < 0:
             raise ValueError(f"청산발생 : 계좌잔액 없음.")
+        ##################################################################################
 
 
+############################################################
+############################################################
+##
+##  주문 발생시 전체적인 운영을 총괄한다.
+##
+############################################################
+############################################################
 class TradeOrderManager:
     """
-    주문관련 기능을 수행한다. TradeAnalysis, TradingLog 두 class를 운용한다.
+    주문관련 기능을 수행한다. TradeAnalysis, TradingLog 두 class를 이용한다.
     """
     def __init__(self, initial_balance: float = 1_000):
-        self.active_orders: List[TradingLog] = []
-        self.order_index_map = {}
-        self.active_symbols: List[str] = []
-        self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)
+        self.active_orders: List[TradingLog] = []   # 현재 거래중인 항목
+        self.order_index_map = {}   # 
+        self.active_symbols: List[str] = [] # 거래중인 symbol정보
+        self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)    
 
+
+    # symbol별 idx map을 생성하고 현재 거래중인 항목을 list형태로 업데이트한다.
     def __refresh_order_map(self):
+        """
+        1. 기능 : symbol별 idx map을 생성하고 거래중인 항목을 list형태로 업데이트한다.
+        2. 매개변수 : 해당없음.
+        """
+        # symbol을 index map을 생성한다.
         self.order_index_map = {
             order.symbol: idx for idx, order in enumerate(self.active_orders)
         }
+        # 거래중인 symbol list를 업데이트한다.
         self.active_symbols = list(self.order_index_map.keys())
 
+    # open 주문 정보를 발생 및 거래중 항목을 추가한다.
     def add_order(self, **kwargs):
+        # 본 주문의 symbol이 현재 거래중이라면 추가 주문없이 반환한다.
         if kwargs.get("symbol") in self.order_index_map:
             return
 
+        # class TradingLog 의 속성명을 획득한다.
         valid_keys = {field.name for field in fields(TradingLog)}
+        # 파라미터 **kwargs값을 속성값별로 부여한다.
         filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
+        # 거래 log정보를 생성한다.
         order = TradingLog(**filtered_kwargs)
 
+        # 거래 log정보를 현재 주문 내역에 추가한다.
+        # class object가 저장되므로 추가적인 함수 명령이 가능하다.
         self.active_orders.append(order)
+        # idx map을 생성하고 거래중인 항목을 list형태로 업데이트한다.
         self.__refresh_order_map()
 
+        # 거래 log정보를 list형태로 변수 저장한다.
         order_signal = order.to_list()
+        
+        # log정보를 기준으로 현재 거래중으로 데이터를 반영한다.
+        # wallet 업데이트도 함께 처리됨.
         self.trade_analysis.add_open_position(order_signal)
         return order
 
+    # close 주문 정보 발생 및 거래중 항목을 제거한다.
     def remove_order(self, symbol: str):
+        # symbol값의 map데이터를 조회하여 index값을 확인한다.
         idx = self.order_index_map.get(symbol)
+        # 현재 거래중인 항목의 정보를 조회한 후 list형태로 반환받는다.
+        # list형태로 저장되어 있으므로 idx정보를 활용하여 데이터를 조회한다.
         order_signal = self.active_orders[idx].to_list()
+        # 거래중인 정보를 활용하여 closed_position함수를 실행한다.
         self.trade_analysis.add_closed_position(order_signal)
+        # 현재 거래중인 정보에서 해당 내역을 제거한다.
         del self.active_orders[idx]
+        # idx map 및 거래중인 항목을 업데이트 한다.
         self.__refresh_order_map()
 
+    # 현재 거래중인 항목에 대하여 현재 금액, 현재 시간 정보를 업데이트 한다.
     def update_order_data(
         self, symbol: str, current_price: Union[float, int], current_time: int
     ):
+        # 업데이트가 필요한 자료의 index값을 조회한다.
         idx = self.order_index_map.get(symbol)
+        
+        # idx값이 없으면 본 함수를 종료한다. (오류대처용)
         if idx is None:
             return
+        
+        # 거래중인 항목에 대하여 현재 데이터를 업데이트 한다.
+        # class object형태로 추가된 자료이므로 update 함수 명령이 가능하다.
         self.active_orders[idx].update_trade_data(
             current_price=current_price, current_time=current_time
         )
-        trade_order_data = self.active_orders[idx].to_list()
-        self.trade_analysis.add_open_position(trade_order_data)
+        
+        # 이 아래 코드를 왜 사용하지???
+        # trade_order_data = self.active_orders[idx].to_list()
+        # self.trade_analysis.add_open_position(trade_order_data)
 
+    # 진행중인 주문내역 정보를 반환한다.
     def get_order(self, symbol: str):
         idx = self.order_index_map.get(symbol)
         return self.active_orders[idx]
-
 
 class DataManager:
     """
@@ -606,8 +674,9 @@ class DataManager:
                         & (kline_data_interval[:, 6] >= target_close_timestamp)
                     )[0]
 
-                    if len(condition) != 1:
-                        print(f"{symbol} - {interval} - {condition}")
+                    # DEBUG CODE
+                    # if len(condition) != 1:
+                    #     print(f"{symbol} - {interval} - {condition}")
 
                     reference_open_timestamp = kline_data_interval[condition, 0][0]
                     reference_close_timestamp = kline_data_interval[condition, 6][0]
@@ -675,7 +744,7 @@ class DataManager:
             백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
         """
         # 하루의 총 분
-        minutes_in_a_day = 1440
+        minutes_in_a_day = 1_440
 
         # interval에 따른 간격(분) 정의
         interval_to_minutes = {
@@ -864,11 +933,11 @@ class ResultEvaluator:
                 records.append(
                     {
                         "Symbol": symbol,
-                        "Close Time": trade[6],
-                        "Profit/Loss": trade[9],
-                        "Entry Price": trade[1],
-                        "Exit Price": trade[10],
-                        "Volume": trade[2],
+                        "Close Time": trade[7],
+                        "Profit/Loss": trade[10],
+                        "Entry Price": trade[2],
+                        "Exit Price": trade[11],
+                        "Volume": trade[3],
                         "Entry Fee": trade[-2],
                         "Exit Fee": trade[-1],
                         "Total Fee": trade[-2] + trade[-1],

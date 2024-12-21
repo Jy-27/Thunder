@@ -18,10 +18,10 @@ symbols = [
     "BTCUSDT",
     "XRPUSDT",
     "ADAUSDT",
-    # "NOTUSDT",
+    "NOTUSDT",
     "SANDUSDT",
     "ARKMUSDT",
-    # "SOLUSDT",
+    "SOLUSDT",
     "DOGEUSDT",
 ]
 # interval 지정.
@@ -34,7 +34,7 @@ end_date = "2024-12-20"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
-obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.98)
+obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.85)
 obj_analy = Analysis.AnalysisManager(back_test=True)
 obj_analy.intervals = intervals
 obj_order = ProcessManager()
@@ -43,11 +43,11 @@ obj_data = DataManager(
     symbols=symbols, intervals=intervals, start_date=start_date, end_date=end_date
 )
 
-k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
-with open(k_path, "rb") as file:
-    kline_data = pickle.load(file)
+# k_path = os.path.join(os.path.dirname(os.getcwd()), "DataStore/closing_sync_data.pkl")
+# with open(k_path, "rb") as file:
+#     kline_data = pickle.load(file)
 # kline_data = utils._load_json(file_path=k_path)
-# kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
+kline_data = asyncio.run(obj_data.generate_kline_interval_data(save=True))
 
 
 kline_data = utils._convert_to_array(kline_data=kline_data)
@@ -127,6 +127,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         
         # 주문 마진금액이 예수금보다 커야함.
         margin_ = (qty / lv) * price
+        
         # 마진이 예수금을 초과여부 검사
         is_cash_margin = obj_wallet.trade_analysis.cash_balance > margin_
         # 최대 보유 항목 초과여부 검사

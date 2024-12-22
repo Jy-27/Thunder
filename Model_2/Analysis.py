@@ -24,11 +24,12 @@ from numpy.typing import NDArray
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self, back_test: bool = False):  # , symbols: list):
+    def __init__(self, intervals:List, back_test: bool = False):  # , symbols: list):
         self.back_test = back_test
         self.symbols = []
         self.kline_data = {}
         self.intervals = []
+        self.maps_interval = {interval: idx for idx, interval in enumerate(intervals)}
         self.OHLCV_COLUMNS: Final[List[str]] = [
             "Open Time",  # 0
             "Open",  # 1
@@ -44,7 +45,7 @@ class AnalysisManager:
             "Ignore",  # 11
         ]
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-
+        self.intervals = intervals
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
         self.case_1 = []
         self.case_2 = []
@@ -304,8 +305,6 @@ class AnalysisManager:
         self.case_9.append(rsi)
 
     def scenario_2(self):
-        target_interval_5m = 2
-        target_interval_1h = 3
         """
         적용 interval : 5m, 1h
         조건
@@ -317,6 +316,8 @@ class AnalysisManager:
         leverage : 2) 전고점 or 전저점 돌파 시간 diff
         """
 
+        target_interval_5m = self.maps_interval['5m']
+        target_interval_1h = self.maps_interval['1h']
         long_idx = 0
         short_idx = 1
         end_idx = -1

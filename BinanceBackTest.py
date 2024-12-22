@@ -90,7 +90,7 @@ class TradingLog:
     symbol: str
     start_timestamp: int  # 시작 시간
     entry_price: Union[float, int]  # 진입 가격
-    position: int  # 포지션 (1: Long, -1: Short)
+    position: int  # 포지션 (1: Long, 2: Short)
     quantity: Union[float, int]  # 수량
     leverage: int  # 레버리지
     fee_rate: float = 0.05  # 수수료율
@@ -134,7 +134,11 @@ class TradingLog:
         self.current_value = (self.current_price * self.quantity) / self.leverage
         total_fees = self.entry_fee + self.exit_fee
         # self.profit_loss = self.current_value - self.initial_value - total_fees
-        self.profit_loss = self.quantity * (self.current_price - self.entry_price) - total_fees
+        if self.position == 1:
+            self.profit_loss = self.quantity * (self.current_price - self.entry_price) - total_fees
+        elif self.position == 2:
+            self.profit_loss = self.quantity * (self.entry_price - self.current_price) - total_fees
+
 
     def update_trade_data(self, current_price: Union[float, int], current_time: int):
         self.current_price = current_price
@@ -357,7 +361,7 @@ class TradeOrderManager:
     """
     def __init__(self, initial_balance: float = 1_000):
         self.active_orders: List[TradingLog] = []   # 현재 거래중인 항목
-        self.order_index_map = {}   # 
+        self.order_index_map: Dict[str, int] = {}   # 
         self.active_symbols: List[str] = [] # 거래중인 symbol정보
         self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)    
 
@@ -408,7 +412,11 @@ class TradeOrderManager:
         idx = self.order_index_map.get(symbol)
         # 현재 거래중인 항목의 정보를 조회한 후 list형태로 반환받는다.
         # list형태로 저장되어 있으므로 idx정보를 활용하여 데이터를 조회한다.
-        order_signal = self.active_orders[idx].to_list()
+        # None 발생 대비용 (clean mypy)
+        if idx is not None:
+            order_signal = self.active_orders[idx].to_list()
+        else:
+            raise ValueError(f'index값이 없음 - {idx}')
         # 거래중인 정보를 활용하여 closed_position함수를 실행한다.
         self.trade_analysis.add_closed_position(order_signal)
         # 현재 거래중인 정보에서 해당 내역을 제거한다.
@@ -440,7 +448,12 @@ class TradeOrderManager:
     # 진행중인 주문내역 정보를 반환한다.
     def get_order(self, symbol: str):
         idx = self.order_index_map.get(symbol)
-        return self.active_orders[idx]
+        
+        if idx is not None:
+            return self.active_orders[idx]
+        else:
+            raise ValueError(f'index값이 없음 - {idx}')
+        
 
 class DataManager:
     """
@@ -517,7 +530,11 @@ class DataManager:
         # 시작 타임스탬프
         start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
         # interval 및 MAX_LIMIT 적용으로 계산된 최대 종료 타임스탬프
-        max_possible_end_timestamp = start_timestamp + (interval_step * MAX_LIMIT) - 1
+        
+        if interval_step is not None:
+            max_possible_end_timestamp = start_timestamp + (interval_step * MAX_LIMIT) - 1
+        else:
+            raise ValueError(f'interval step값 없음 - {interval_step}')
         # 지정된 종료 타임스탬프
         end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
 
@@ -586,7 +603,7 @@ class DataManager:
 
         api_call_count = 0
         start_time = datetime.datetime.now()
-        aggregated_results = {}
+        aggregated_results: Dict[str, Dict[str, List[int]]] = {}
 
         for symbol in symbols:
             aggregated_results[symbol] = {}
@@ -852,7 +869,7 @@ class ProcessManager:
         self.ins_trade_spot_client = SpotOrder()
         self.ins_trade_stopper = DataProcess.TradeStopper()
         self.market_type = ["FUTURES", "SPOT"]
-        self.MAX_LEVERAGE = 30
+        self.MAX_LEVERAGE = 20
         self.MIN_LEVERAGE = 5
 
     # 주문이 필요한 Qty, leverage를 계산한다.

@@ -88,7 +88,7 @@ class TradeStopper:
         }
         return self.trading_data[symbol]
 
-    @lru_cache(maxsize=30)
+    # @lru_cache(maxsize=30)
     def get_trading_stop_signal(self, symbol: str, current_price: float) -> bool:
         symbol = symbol.upper()
         data = self.__validate_and_get_data(symbol)
@@ -112,12 +112,12 @@ class TradeStopper:
 
         # 종료 조건
         if position in ["LONG", "BUY"] and current_price <= target_price:
-            # self.remove_trading_data(symbol)
-            self.get_trading_stop_signal.cache_clear()
+            self.remove_trading_data(symbol)
+            # self.get_trading_stop_signal.cache_clear()
             return True
         elif position in ["SHORT", "SELL"] and current_price >= target_price:
-            # self.remove_trading_data(symbol)
-            self.get_trading_stop_signal.cache_clear()
+            self.remove_trading_data(symbol)
+            # self.get_trading_stop_signal.cache_clear()
             return True
 
         return False

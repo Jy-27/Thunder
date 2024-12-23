@@ -17,6 +17,7 @@ class TradingLog:
     quantity: Union[float, int]  # 수량
     leverage: int  # 레버리지
     trade_scenario: Optional[str]  # 적용 시나리오 값.
+    test_mode: bool
     adj_start_price: Optional[float] = None
     fee_rate: float = 0.05  # 수수료율
     stop_price: Optional[float] = None# 포지션 종료 가격 지정.
@@ -62,6 +63,7 @@ class TradingLog:
         
         self.__calculate_fees()
         self.__calculate_trade_values()
+        self.update_trade_data(current_price=self.entry_price)#, current_timestamp=self.last_timestamp)
 
     def __calculate_fees(self):
         adjusted_fee_rate = self.fee_rate / 100
@@ -71,8 +73,6 @@ class TradingLog:
         self.exit_fee = (
             self.current_price * adjusted_fee_rate * self.quantity  # * self.leverage
         )
-        total_fees = self.entry_fee + self.exit_fee
-        self.break_even_price = self.entry_price + (total_fees / self.quantity)
 
     def __calculate_trade_values(self):
         # self.initial_value = (self.entry_price * self.quantity) / self.leverage
@@ -83,6 +83,9 @@ class TradingLog:
         self.current_value = (self.current_price * self.quantity) / self.leverage
         
         self.profit_loss = self.current_value - self.initial_value
+        
+        total_fees = self.entry_fee + self.exit_fee
+        self.break_even_price = self.entry_price + (total_fees / self.quantity)
         
         total_fees = self.entry_fee + self.exit_fee
         # self.profit_loss = self.current_value - self.initial_value - total_fees
@@ -102,6 +105,12 @@ class TradingLog:
         current_timestamp: Optional[int]=None,
     ):
         # self.stoploss = stop_price
+        if self.test_mode:
+            if current_timestamp is None:
+                raise ValueError(f'백테트시 current_timestamp값 입력해야함: {current_timestamp}')
+        elif not self.test_mode:
+            current_timestamp = int(time.time() * 1_000)
+        
         self.last_timestamp = current_timestamp
         self.current_price = current_price
         self.__calculate_fees()
@@ -260,23 +269,25 @@ class StopLoss:
             # 초기 손절율을 반영한다. 시간의 흐름에 따라 초기 손절율을 증가한다.
             # 증가된 손절율을 scale_stop_ratio에 영향을 미친다.abs
             # 횡보발생에 대한 대책이다.
+            
+            print(dynamic_rate)
             start_rate = self.initial_stop_rate - dynamic_rate
             
             # 롱 포지션시
             if position == 1:
                 # 보정 시작가를 계산한다.
                 adj_start_price = close_price * (1 - start_rate)
-                print(adj_start_price)
+                stop_price = adj_start_price + ((high_price-adj_start_price) * self.scale_stop_ratio)
                 # 보정 시작가에 scale_stop_ratio를 반영한다.
-                return adj_start_price + ((high_price-adj_start_price) * self.scale_stop_ratio)
             elif position == 2:
                 # 보정 시작가를 계산한다.
                 adj_start_price = close_price * (1 + start_rate)
+                stop_price = adj_start_price - ((adj_start_price - low_price) * self.__calculate_close_price)
                 # 보정 시작가에 scale_stop_ratio를 반영한다.
-                return adj_start_price - ((adj_start_price - low_price) * self.__calculate_close_price)
             # 포지션 정보 오입력시 오류를 발생시킨다.
             else:
                 raise ValueError(f'position은 1:long/buy, 2:short/sell만 입력가능: {position}')
+            return (adj_start_price, stop_price)
 
 
     # 초기 데이터를 추가한다.
@@ -324,7 +335,7 @@ class StopLoss:
             current_price=current_price, current_timestamp=current_timestamp
         )
         # 종료 가격을 계산한다.
-        self.trading_log[symbol].stop_price = self.__calculate_stop_price(symbol)
+        self.trading_log[symbol].adj_start_price, self.trading_log[symbol].stop_price = self.__calculate_stop_price(symbol)
         # 현재가격과 종료 가격을 비교하여 포지션 종료 여부를 결정한다.
         self.trading_log[symbol].exit_signal = self.__create_exit_signal(symbol)
 

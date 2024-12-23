@@ -5,6 +5,7 @@ import os
 import utils
 from pprint import pprint
 import Analysis
+import Analysis_r2
 import DataProcess
 from collections import defaultdict
 from datetime import datetime
@@ -18,24 +19,29 @@ symbols = [
     "BTCUSDT",
     "XRPUSDT",
     "ADAUSDT",
-    # "NOTUSDT",
+    "NOTUSDT",
     "SANDUSDT",
     "ARKMUSDT",
-    # "SOLUSDT",
+    "SOLUSDT",
     "DOGEUSDT",
+    'TRXUSDT'
 ]
 # interval 지정.
 # intervals = ["1m", "5m", "1h"]
-intervals = ["1m", "3m", "5m", "1h"]
+intervals = ["1m", "5m", '15m']
 
 # 적용할 데이터의 기간 지정.
-start_date = "2024-11-1"
-end_date = "2024-11-28"
+start_date = "2024-11-25"
+end_date = "2024-12-5"
 
 
 print(f"instance 로딩 완료 >> {datetime.now()}")
-obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.65)
-obj_analy = Analysis.AnalysisManager(back_test=True)
+
+# 포지션 종료관련 비율 지정
+obj_process = DataProcess.TradeStopper(profit_ratio=0.02, risk_ratio=0.95)
+
+obj_analy = Analysis.AnalysisManager(back_test=True, intervals=intervals)
+# obj_analy = Analysis_r2.AnalysisManager()
 obj_analy.intervals = intervals
 obj_order = ProcessManager()
 obj_con = DataProcess.OrderConstraint()
@@ -58,7 +64,7 @@ kline_data = obj_data.generate_kline_closing_sync(kline_data=kline_data, save=Tr
 symbol_map, interval_map, data_c = utils._convert_to_container(kline_data)
 obj_data.get_indices_data(data_container=data_c, lookback_days=1)
 
-obj_analysis = Analysis.AnalysisManager()
+obj_analysis = Analysis.AnalysisManager(intervals=intervals)
 
 
 trade_data = []
@@ -67,10 +73,11 @@ trade_data = []
 seed_money = 69492.7
 # 가장 지갑 생성
 obj_wallet = TradeOrderManager(initial_balance=seed_money)
-
+print('START Time : ', start_date, '00:00:00')
+print('END Time : ', end_date, '23:59:59')
 # 래핑 데이터를 이용하여 반복문 실행한다.
 for idx, d in enumerate(data_c.get_data("map_1m")):
-    if idx < 10_000:
+    if idx < 5_000:
         continue
     for interval in intervals:
         maps_ = data_c.get_data(f"map_{interval}")[idx]
@@ -83,7 +90,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         # obj_analysis.case_5_diff_neg_counts(kline_data_lv3=data, col1=1, col2=4)
         # obj_analysis.case_6_ocillator_volume(kline_data_lv3=data)#, col1=1, col2=4)
         obj_analysis.case_7_ocillator_value(kline_data_lv3=data)#, col1=1, col2=4)
-        obj_analysis.case_8_sorted_indices(kline_data_lv3=data, col=4)
+        obj_analysis.case_8_sorted_indices(kline_data_lv3=data, high_col=2, low_col=3)
         # obj_analysis.case_9_rsi(kline_data_lv3=data, col=4)
 
         # 1분봉의 값 기준으로 현재가, timestamp가격을 반영한다.
@@ -92,19 +99,19 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             price = data[-1][4]
             close_timestampe = data[-1][6]
             symbol = symbols[maps_[0]]
+            date = utils._convert_to_datetime(close_timestampe)
             obj_wallet.update_order_data(
                 symbol=symbol, current_price=price, current_time=close_timestampe
             )
-        utils._std_print(f"{idx:,.0f} / {obj_wallet.trade_analysis.profit_loss:,.2f}")
+        utils._std_print(f"{date} / {obj_wallet.trade_analysis.profit_loss:,.5f} / {obj_wallet.trade_analysis.total_balance}")
 
     scenario_1 = obj_analysis.scenario_2()
     obj_analysis.reset_cases()
 
     if scenario_1[0]:
-        # print(True)
         # 주문 제약 사항 스펙
         constraint = obj_con.calc_fund(
-            obj_wallet.trade_analysis.total_balance, rate=0.2, count_max=4
+            obj_wallet.trade_analysis.total_balance, rate=0.2, count_max=3
         )
 
         position = scenario_1[1]
@@ -127,6 +134,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         
         # 주문 마진금액이 예수금보다 커야함.
         margin_ = (qty / lv) * price
+        
         # 마진이 예수금을 초과여부 검사
         is_cash_margin = obj_wallet.trade_analysis.cash_balance > margin_
         # 최대 보유 항목 초과여부 검사

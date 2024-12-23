@@ -134,7 +134,11 @@ class TradingLog:
         self.current_value = (self.current_price * self.quantity) / self.leverage
         total_fees = self.entry_fee + self.exit_fee
         # self.profit_loss = self.current_value - self.initial_value - total_fees
-        self.profit_loss = self.quantity * (self.current_price - self.entry_price) - total_fees
+        if self.position == 1:
+            self.profit_loss = self.quantity * (self.current_price - self.entry_price) - total_fees
+        elif self.position == 2:
+            self.profit_loss = self.quantity * (self.entry_price - self.current_price) - total_fees
+
 
     def update_trade_data(self, current_price: Union[float, int], current_time: int):
         self.current_price = current_price
@@ -865,7 +869,7 @@ class ProcessManager:
         self.ins_trade_spot_client = SpotOrder()
         self.ins_trade_stopper = DataProcess.TradeStopper()
         self.market_type = ["FUTURES", "SPOT"]
-        self.MAX_LEVERAGE = 30
+        self.MAX_LEVERAGE = 20
         self.MIN_LEVERAGE = 5
 
     # 주문이 필요한 Qty, leverage를 계산한다.

@@ -675,6 +675,13 @@ class TradeManager:
         
     #     return True
 
+    def __validate(self) -> bool:
+        for symbol, symbol_data in self.kline_data.items():
+            for interval, interval_data in symbol_data.items():
+                if not interval_data:
+                    return False
+        return True
+
     async def analysis_loop(self):
         target_interval = "5m"
         await asyncio.sleep(20)
@@ -687,7 +694,7 @@ class TradeManager:
                 #     # print("데이터 부족. continue")
                 #     await asyncio.sleep(5)
                 #     continue
-                if self.kline_data[self.active_tickers[-1]][self.KLINE_INTERVALS[-1]] == []:
+                if not self.__validate():
                     # 원인은 모르겠지만 데이터가 업데이트 되기전에 array처리된 상황이 발생했다. 가장 마지막으로 수신예정인 항목을 수신여부 체크한다.
                     await asyncio.sleep(5)
                     continue

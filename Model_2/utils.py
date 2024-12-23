@@ -78,9 +78,11 @@ def _convert_to_array(kline_data: dict, is_slice: bool = False):
     
     if is_slice:
         # 각 interval의 최소 데이터 길이를 계산
+        all_intervals = set(interval for symbol_data in kline_data.values() for interval in symbol_data)
+
         min_lengths = {
-            interval: min(len(kline_data[symbol][interval]) for symbol in kline_data)
-            for interval in next(iter(kline_data.values()))
+            interval: min(len(kline_data[symbol][interval]) for symbol in kline_data if interval in kline_data[symbol])
+            for interval in all_intervals
         }
         
         for symbol, symbol_data in kline_data.items():

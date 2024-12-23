@@ -47,9 +47,9 @@ class TradeManager:
             # "1m",
             # "3m",
             "5m",
-            # "15m",
+            "15m",
             # "30m",
-            "1h",
+            # "1h",
             # "2h",
             # "4h",
             # "6h",
@@ -67,7 +67,7 @@ class TradeManager:
         # anlysis 함수 현재 데이터 유형 확인
         self.websocket_type: dict = {}
 
-        self.kline_data_update_flag = False
+        # self.kline_data_update_flag = False
         # 수집할 kline_data의 기간을 지정한다.
         # 해당 값을 활용하여 수신된 데이터의 길이를 비교하여 유효성을 검토한다.
         self.interval_days: Optional[int] = None
@@ -78,7 +78,7 @@ class TradeManager:
         self.client_instance = client_instance
         self.market_instance = market_instance
         self.analysis_instance = AnalysisManager(intervals = self.KLINE_INTERVALS)
-        self.process_instance = TradeStopper(profit_ratio=0.02, risk_ratio=0.65)
+        self.process_instance = TradeStopper(profit_ratio=0.015, risk_ratio=0.85)
         self.constraint_instance = OrderConstraint()
 
         self.signal_data: Dict[str, Dict[str, Union[int, float]]] = {}
@@ -179,7 +179,7 @@ class TradeManager:
                     self.kline_data.clear()
                 # ticker 초기화시 전체 kline을 업데이트 한다.abs
                 await self.update_all_klines()
-                self.kline_data_update_flag = True
+                # self.kline_data_update_flag = True
 
                 
 
@@ -200,18 +200,22 @@ class TradeManager:
         self.account_balance_raw = await self.client_instance.fetch_account_balance()
 
         # 시장 유형에 따라 주요 필드명 설정
-        primary_field_name = {"Futures": "positions", "Spot": "balances"}.get(
+        primary_field_name = {"FuturesTrade": "positions", "SpotTrade": "balances"}.get(
             self.market_type
         )
-        amount_field_name = {"Futures": "positionAmt", "Spot": "free"}.get(
+        amount_field_name = {"FuturesTrade": "positionAmt", "SpotTrade": "free"}.get(
             self.market_type
         )
-        symbol_field_name = {"Futures": "symbol", "Spot": "asset"}.get(self.market_type)
+        symbol_field_name = {"FuturesTrade": "symbol", "SpotTrade": "asset"}.get(self.market_type)
 
-        # 주요 데이터 필드가 존재하지 않을 경우 함수 종료
+        # # 주요 데이터 필드가 존재하지 않을 경우 함수 종료
         raw_data = self.account_balance_raw.get(primary_field_name, [])
-        if not raw_data:
-            return
+        
+        #DEBUG
+        # print(self.market_type)
+        # print(raw_data)
+        # if not raw_data:
+        #     return
 
         # 포지션 요약 정보와 활성 심볼 목록 초기화
         self.account_balance_summary = {}
@@ -492,9 +496,9 @@ class TradeManager:
             current_time_hour = cast(int, currunt_time_now.hour)
             current_time_minute = cast(int, currunt_time_now.minute)
 
-            self.kline_data_update_flag = False
-            print(self.kline_data_update_flag)
-            print(datetime.datetime.now())
+            # self.kline_data_update_flag = False
+            # print(self.kline_data_update_flag)
+            # print(datetime.datetime.now())
 
             
             if current_time_minute in interval_map.get("minutes"):
@@ -530,9 +534,9 @@ class TradeManager:
                                             limit=limit_,
                                         )
                                     )
-            self.kline_data_update_flag = True
-            print(self.kline_data_update_flag)
-            print(datetime.datetime.now())
+            # self.kline_data_update_flag = True
+            # print(self.kline_data_update_flag)
+            # print(datetime.datetime.now())
         # return self.kline_data
 
     # WebSocket에서 수신한 kline 데이터를 OHLCV 형식으로 변환
@@ -678,9 +682,13 @@ class TradeManager:
             # print(self.active_tickers)
             async with self.lock:
                 # kline update중 데이터가 부실할경우 continue
-                if not self.kline_data_update_flag:
-                    # print(self.active_tickers)
-                    # print("데이터 부족. continue")
+                # if not self.kline_data_update_flag:
+                #     # print(self.active_tickers)
+                #     # print("데이터 부족. continue")
+                #     await asyncio.sleep(5)
+                #     continue
+                if self.kline_data[self.active_tickers[-1]][self.KLINE_INTERVALS[-1]] == []:
+                    # 원인은 모르겠지만 데이터가 업데이트 되기전에 array처리된 상황이 발생했다. 가장 마지막으로 수신예정인 항목을 수신여부 체크한다.
                     await asyncio.sleep(5)
                     continue
 
@@ -693,8 +701,11 @@ class TradeManager:
                 symbol_map, interval_map, container_data = utils._convert_to_container(
                     kline_data_array
                 )
-                # print(symbol_map)
-                # print(interval_map)
+                
+                if isinstance(symbol_map, int):
+                    print('symbol_map이 int로 지정됨.')
+                    asyncio.sleep(5)
+                    continue
                 
                 for symbol, idx_s in symbol_map.items():
                     for interval in interval_map.keys():
@@ -714,14 +725,7 @@ class TradeManager:
                             kline_data_lv3=get_data
                         )
                         self.analysis_instance.case_8_sorted_indices(
-                            kline_data_lv3=get_data, col=4
-                        )
-
-                        # print(self.analysis_instance.case_1)
-                        # print(self.analysis_instance.case_2)
-                        # print(self.analysis_instance.case_3)
-                        # print(self.analysis_instance.case_7)
-                        # print(self.analysis_instance.case_8)
+                            kline_data_lv3=get_data, high_col=2, low_col=3)
                         
                     scenario_1 = self.analysis_instance.scenario_2()
                     self.analysis_instance.reset_cases()
@@ -730,7 +734,7 @@ class TradeManager:
                         await self.submit_open_order_signal(
                             symbol=symbol,
                             position=scenario_1[1],
-                            leverage=8,
+                            leverage=10,
                         )
                         # self.save_to_json(file_path=path, new_data=result)
             await utils._wait_time_sleep(time_unit="second", duration=30)
@@ -840,7 +844,7 @@ class FuturesTrade(TradeManager):
             symbol=symbol, margin_type="ISOLATED"
         )
 
-        order_side = "BUY" if position > 0 else "SELL"
+        order_side = "BUY" if position == 1 else "SELL"
         await self.client_instance.submit_order(
             symbol=symbol,
             side=order_side,
@@ -852,7 +856,7 @@ class FuturesTrade(TradeManager):
         # self.process_instance.initialize_trading_data(symbol = symbol,
         #                                               position = order_side,
         #                                               )
-        # 게좌정보 업데이트
+        # 계좌정보 업데이트
         await self.fetch_active_positions()
         print(self.account_balance_summary)
         entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
@@ -861,7 +865,7 @@ class FuturesTrade(TradeManager):
         )
 
         # api서버 과요청 방지
-        await utils._wait_time_sleep(time_unit="second", dun=2)
+        await utils._wait_time_sleep(time_unit="second",duration=2)
 
     # TEST ZONE
     # 포지션 종료 신호를 발송한다.
@@ -871,7 +875,8 @@ class FuturesTrade(TradeManager):
         2. 매개변수
             1) symbol : 쌍거래 symbol정보
         """
-
+        # DEBUG PRINT
+        print('종료신호 발생')
         position_data = self.account_balance_summary.get(symbol, None)
         if not position_data:
             return

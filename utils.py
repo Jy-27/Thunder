@@ -33,6 +33,17 @@ class DataContainer:
             raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
 
         setattr(self, data_name, data)
+    
+    def remove_data(self, data_name):
+            """
+            1. 기능 : 저장된 속성을 삭제한다.
+            2. 매개변수
+                1) data_name : 삭제할 속성명
+            """
+            if hasattr(self, data_name):
+                delattr(self, data_name)
+            else:
+                raise AttributeError(f"No attribute named '{data_name}' to delete")
 
     def get_data(self, data_name):
         """
@@ -44,6 +55,7 @@ class DataContainer:
             return getattr(self, data_name)
         else:
             raise AttributeError(f"No attribute named '{data_name}'")
+
 
     def get_all_data_names(self):
         """

@@ -8,26 +8,28 @@ import Analysis
 from pprint import pprint
 import matplotlib.pyplot as plt
 from matplotlib import style, ticker
+from typing import Optional, List, Union
+
 
 class BackTester:
     def __init__(
         self,
-        symbols,
-        intervals,
-        start_date,
-        end_date,
-        safety_balance_ratio,
-        stop_loss_rate,
-        is_download,
-        adj_timer,
-        adj_rate,
-        use_scale_stop,
-        leverage,
-        seed_money,
-        max_trade_number,
-        start_step,
-        init_stop_rate,
-        adj_interval,
+        symbols: str,
+        intervals: List[str],
+        seed_money: Union[int, float],
+        start_date: Union[int, float],
+        end_date: Union[int, float],
+        max_trade_number: int = 3,
+        init_stop_rate: float = 0.015,
+        adj_interval: str = "3m",
+        start_step: int = 5_000,
+        adj_rate: float = 0.0007,
+        use_scale_stop: bool = True,
+        adj_timer: bool = True,
+        stop_loss_rate: float = 0.025,
+        safety_balance_ratio: float = 0.2,
+        is_download: bool = True,
+        leverage: Optional[int] = None,
     ):
         self.symbols = [symbol.upper() for symbol in symbols]
         self.intervals = intervals
@@ -40,7 +42,7 @@ class BackTester:
         self.adj_rate = adj_rate
         self.adj_interval = adj_interval
         self.use_scale_stop = use_scale_stop
-        self.leverage = None
+        self.leverage = leverage
         self.test_mode = True
         self.closing_sync_data = None
         self.test_manager_ins = DataProcess.TestDataManager(
@@ -177,10 +179,10 @@ class BackTester:
         start_timestamp: int,
         scenario_type: int,
     ):
-        is_open_signal, quantity, leverage= await self.__validate_open_position(
+        is_open_signal, quantity, leverage = await self.__validate_open_position(
             symbol=symbol, price=price, leverage=leverage
         )
-               
+
         if not is_open_signal:
             return
         else:
@@ -206,21 +208,25 @@ class BackTester:
         if self.__validate_cloes_position(symbol=symbol):
             self.trade_analysis_ins.remove_order_data(symbol=symbol)
 
-
     async def run(self):
         await self.get_base_data()
         self.__validate_base_data()
         await self.get_indices_data()
 
-        header = "=" * 70
+        header = "=" * 100
         print(f"\n {header}\n")
-        print(f"    *****=-_( BACK TESTING )_-=*****\n")
-        print(f"    1. start     : {self.start_date}")
-        print(f"    2. end       : {self.end_date}")
-        print(f"    3. symbols   : {self.symbols}")
-        print(f"    4. intervals : {self.intervals}")
+        print(f"    ***-=-=-<< BACK TESTING >>-=-=-***\n")
+        print(f"    1.  StartDate : {self.start_date}")
+        print(f"    2.  EndDate   : {self.end_date}")
+        print(f"    3.  Symbols   : {self.symbols}")
+        print(f"    4.  SeedMoney : {self.seed_money} USDT")
+        print(f"    5.  leverage  : {self.leverage}x")
+        print(f"    6.  Intervals : {self.intervals}")
+        print(f"    7.  ScaleStop : {self.use_scale_stop}")
+        print(f"    8.  StopRate  : {self.stop_loss_rate*100:.2f} %")
+        print(f"    9.  AdjTimer  : {self.adj_timer}")
         print(f"\n {header}\n")
-        print('     DateTime             Number     PnL_Ratio        Gross_PnL')
+        print("     DateTime            Trading     PnL_Ratio          Gross_PnL")
 
         for idx, data in enumerate(
             self.closing_indices_data.get_data(self.target_run_interval)
@@ -233,17 +239,16 @@ class BackTester:
             # timestamp_min값을 초기화 한다.
             timestamp_min = []
             for interval in self.intervals:
-                
-                
+
                 maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]
                 data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
-                
+
                 symbol = self.symbols[maps_[0]]
                 price = data[-1][4]
                 end_timestamp = data[-1][6]
-                
+
                 timestamp_min.append(end_timestamp)
-                
+
                 ### 업데이트 및 이탈 검토 ###
                 if interval == self.intervals[0]:
                     # 현재 정보 업데이트와 동시에 stop signal 정보를 조회한다.
@@ -254,9 +259,11 @@ class BackTester:
                         self.active_close_position(symbol=symbol)
                     ### trane 출력 ###
                     date = utils._convert_to_datetime(end_timestamp)
-                    utils._std_print(f"{date}         {self.trade_analysis_ins.number_of_stocks}          {self.trade_analysis_ins.profit_loss_ratio:,.2f}            {self.trade_analysis_ins.profit_loss:,.2f}")
+                    utils._std_print(
+                        f"{date}         {self.trade_analysis_ins.number_of_stocks}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %            {self.trade_analysis_ins.profit_loss:,.2f}"
+                    )
                     # await asyncio.sleep(0.1)
-                
+
                 ### 분석 진행 ###
                 self.analyze_data(data)
             # asyncio.sleep(0.05)
@@ -265,7 +272,7 @@ class BackTester:
 
             # 사용 후 초기화
             self.analysis_ins.reset_cases()
-            
+
             if scenario_2[0]:
                 await self.active_open_position(
                     symbol=symbol,
@@ -276,17 +283,25 @@ class BackTester:
                     scenario_type=scenario_2[3],
                 )
         print("\n\nEND")
-        
 
 
 if __name__ == "__main__":
-    symbols = ["btcusdt", "xrpusdt", "adausdt", "linkusdt", "sandusdt", "bnbusdt", "dogeusdt", "solusdt"]  # 확인하고자 하는 심볼 정보
+    symbols = [
+        "btcusdt",
+        "xrpusdt",
+        "adausdt",
+        "linkusdt",
+        "sandusdt",
+        "bnbusdt",
+        "dogeusdt",
+        "solusdt",
+    ]  # 확인하고자 하는 심볼 정보
     intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     start_date = "2024-11-01 00:00:00"  # 시작 시간
     end_date = "2024-12-24 23:59:59"  # 종료 시간
     safety_balance_ratio = 0.02  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.025  # 스톱 로스 비율
-    is_download = True  # 기존 데이터로 할경우 False, 신규 다운로드 True
+    stop_loss_rate = 0.05  # 스톱 로스 비율
+    is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     adj_timer = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     adj_rate = 0.0007
     use_scale_stop = True  # final손절(False), Scale손절(True)
@@ -315,7 +330,7 @@ if __name__ == "__main__":
         init_stop_rate=init_stop_rate,
         adj_interval=adj_interval,
     )
-    
+
     asyncio.run(backtest_ins.run())
     analyze_statistics = DataProcess.ResultEvaluator(backtest_ins.trade_analysis_ins)
     analyze_statistics.run_analysis()

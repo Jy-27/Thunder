@@ -16,7 +16,8 @@ from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotMarket, FuturesMarket
 from Analysis import AnalysisManager
-from DataProcess import TradeStopper, OrderConstraint
+# from DataProcess import TradeStopper, OrderConstraint
+from DataProcess import OrderConstraint
 
 import BinanceTradeClient as my_client
 import asyncio
@@ -78,7 +79,7 @@ class TradeManager:
         self.client_instance = client_instance
         self.market_instance = market_instance
         self.analysis_instance = AnalysisManager(intervals = self.KLINE_INTERVALS)
-        self.process_instance = TradeStopper(profit_ratio=0.015, risk_ratio=0.85)
+        # self.process_instance = TradeStopper(profit_ratio=0.015, risk_ratio=0.85)
         self.constraint_instance = OrderConstraint()
 
         self.signal_data: Dict[str, Dict[str, Union[int, float]]] = {}
@@ -342,17 +343,17 @@ class TradeManager:
                             price = float(price)
                             # 해당코인 소지여부를 검토하고 손절가극 계산하여 조건 성립시 현재가 매각처리한다.
 
-                            if symbol in self.process_instance.trading_data.keys():
-                                is_close_signal = (
-                                    self.process_instance.get_trading_stop_signal(
-                                        symbol=symbol, current_price=price
-                                    )
-                                )
-                                if is_close_signal:
-                                    await self.submit_close_order_signal(symbol=symbol)
-                                    self.process_instance.remove_trading_data(
-                                        symbol=symbol
-                                    )
+                            # if symbol in self.process_instance.trading_data.keys():
+                            #     is_close_signal = (
+                            #         self.process_instance.get_trading_stop_signal(
+                            #             symbol=symbol, current_price=price
+                            #         )
+                            #     )
+                            #     if is_close_signal:
+                            #         await self.submit_close_order_signal(symbol=symbol)
+                            #         self.process_instance.remove_trading_data(
+                            #             symbol=symbol
+                            #         )
                             self.final_message_received[symbol][
                                 interval
                             ] = received_massage
@@ -866,10 +867,10 @@ class FuturesTrade(TradeManager):
         # 계좌정보 업데이트
         await self.fetch_active_positions()
         print(self.account_balance_summary)
-        entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
-        self.process_instance.initialize_trading_data(
-            symbol=symbol, position=order_side, entry_price=entry_price
-        )
+        # entry_price = self.account_balance_summary.get(symbol).get("entryPrice")
+        # self.process_instance.initialize_trading_data(
+        #     symbol=symbol, position=order_side, entry_price=entry_price
+        # )
 
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit="second",duration=2)

@@ -363,7 +363,7 @@ class AnalysisManager:
         # case_3연산시 조건에 안맞는 부분이 있을 수 있다. 그럴 경우를 대비한 검사.
         for i, (increase, decrease) in enumerate(self.case_3):
             if not increase or not decrease:  # 리스트가 비어있는지 확인
-                return (False, 0, 0)
+                return (False, 0, 0, 2)
 
 
         # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
@@ -380,7 +380,7 @@ class AnalysisManager:
             position = 2
 
         else:
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
             
 
         # # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
@@ -395,7 +395,7 @@ class AnalysisManager:
         #     position = 2
         #     count = np.diff(self.case_3[target_interval_5m][short_idx])[end_idx][0]
         # else:
-        #     return (False, 0, 0)
+        #     return (False, 0, 0, 2)
 
         # candle길이 검토
         target_length_ratio = 0.5
@@ -403,22 +403,22 @@ class AnalysisManager:
         # candle 몸통 비율 검토
         target_candle_data = self.case_2[target_interval_5m][target_idx:]
         if np.all(target_candle_data == 0):
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
         # 분모 검사 추가
         if np.any(target_candle_data[:, 3] == 0):
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
         length_ratio = target_candle_data[:, 2] / target_candle_data[:, 3]
         # 몸통 길이 비율이 target_length_ratio 보다 이상
         if not np.all(length_ratio >= target_length_ratio):
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
         # 오실리언 벨유 플러스 여부 확인
         is_ocillator_value = self.case_7[target_interval_5m][-1] > 0
 
         if not is_ocillator_value:
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
         # 전고점 / 전저점 돌파여부 확인
         # data_length = self.case_1[target_interval_15m] - 1
@@ -427,11 +427,11 @@ class AnalysisManager:
         leverage=10
 
         if position == 1 and self.case_8[target_interval_15m][long_idx]:
-            return (True, position, leverage)
+            return (True, position, leverage, 2)
         elif position == 2 and self.case_8[target_interval_15m][short_idx]:
-            return (True, position, leverage)
+            return (True, position, leverage, 2)
         else:
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
     def scenario_1(self):
         """
@@ -455,7 +455,7 @@ class AnalysisManager:
 
         # 데이터가 없을경우 False를 반환한다.
         if not case_3_data_increase or not case_3_data_decrease:
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
         target_data_max_idx = self.case_1[interval_5m] - 1
         if case_3_data_increase[-1][-1] == target_data_max_idx:
@@ -475,7 +475,7 @@ class AnalysisManager:
         ):
             return is_case_3
         else:
-            return (False, 0, 0)
+            return (False, 0, 0, 2)
 
 
 class Disposer:

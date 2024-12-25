@@ -336,3 +336,15 @@ if __name__ == "__main__":
     asyncio.run(backtest_ins.run())
     analyze_statistics = DataProcess.ResultEvaluator(backtest_ins.trade_analysis_ins)
     analyze_statistics.run_analysis()
+
+"""
+추가 검토 사항
+
+1. 브레이크 타임 적용 : 무분별한 사팔사팔 방지위한 interval 값 적용
+2. interval ms second 함수 생성 : Process파일 또는 utils파일이 Interval별 함수 생성.  <<완료>>
+3. interval 별 index 래핑 함수 생성 : 상 동
+4. symbol별 index래핑 함수 생성 : 상 동
+
+
+
+"""

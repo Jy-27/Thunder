@@ -187,31 +187,12 @@ class TradingLog:
             else:
                 raise ValueError(f"position입력 오류: {self.position}")
 
-        # 각 interval 밀리초를 래핑한다.
-        INTERVAL_MS_SECONDS: Final[dict] = {
-            "1m": 60_000,
-            "3m": 180_000,
-            "5m": 300_000,
-            "15m": 900_000,
-            "30m": 1_800_000,
-            "1h": 3_600_000,
-            "2h": 7_200_000,
-            "4h": 14_400_000,
-            "6h": 21_600_000,
-            "8h": 28_800_000,
-            "12h": 43_200_000,
-            "1d": 86_400_000,
-            "3d": 259_200_000,
-            "1w": 604_800_000,
-            "1M": 2_592_000_000,
-        }
-
         # adj_timer가 적용된다면,
         if self.adj_timer:
             # 종료시간과 시작시간의 차이를 구하고
             time_diff = self.last_timestamp - self.start_timestamp
             # 현재 설정된(self.adj_interval)값을 조회한다.
-            target_ms_seconds = INTERVAL_MS_SECONDS.get(self.adj_interval)
+            target_ms_seconds = utils._get_interval_ms_seconds(self.adj_interval)
             # 만일 adj_interval을 잘못입력시 오류발생시킨다.
             if target_ms_seconds is None:
                 # 이미 검증을 했지만, 혹시 모를 재검증.
@@ -464,29 +445,13 @@ class TestDataManager:
         if end_date is None:
             end_date = self.end_date
 
-        interval_to_milliseconds = {
-            "1m": 60_000,
-            "3m": 180_000,
-            "5m": 300_000,
-            "15m": 900_000,
-            "30m": 1_800_000,
-            "1h": 3_600_000,
-            "2h": 7_200_000,
-            "4h": 14_400_000,
-            "6h": 21_600_000,
-            "8h": 28_800_000,
-            "12h": 43_200_000,
-            "1d": 86_400_000,
-            "3d": 259_200_000,
-        }
-
         # 시작 및 종료 날짜 문자열 처리
         # 시간 정보는 반드시 00:00:00 > 23:59:59로 세팅해야 한다. 그렇지 않을경우 수신에 문제 발생.
         start_date = start_date# + " 00:00:00"
         end_date = end_date# + " 23:59:59"
 
         # interval에 따른 밀리초 단위 스텝 가져오기
-        interval_step = interval_to_milliseconds.get(interval)
+        interval_step = utils._get_interval_ms_seconds(interval)
 
         # Limit 값은 1,000이나 유연한 대처를 위해 999 적용
         MAX_LIMIT = 1_000

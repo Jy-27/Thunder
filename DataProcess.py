@@ -138,17 +138,17 @@ class TradingLog:
         if self.position == 1:
             # 수수료를 제외한 손익금
             self.net_profit_loss = (self.current_price - self.entry_price) * self.quantity
-            # 수수료를 포함한 손익금(총 수수료 반영)
-            self.gross_profit_loss = self.net_profit_loss - total_fees
+
         elif self.position == 2:
             # 수수료를 제외한 손익금
             self.net_profit_loss = (self.entry_price - self.current_price) * self.quantity
-            # 수수료를 포함한 손익금(총 수수료 반영)
-            self.gross_profit_loss = self.net_profit_loss - total_fees
+
             
         
         # 수수료 제외 손익률
         self.net_profit_loss_rate = self.net_profit_loss / self.initial_value
+        # 수수료를 포함한 손익금(총 수수료 반영)
+        self.gross_profit_loss = self.net_profit_loss - total_fees
         # 수수료 포함 손익률
         self.gross_profit_loss_rate = self.gross_profit_loss / self.initial_value
         # 손익분기 가격
@@ -284,6 +284,7 @@ class TradeAnaylsis:
         self.cash_balance: float = initial_balance  # 사용 가능한 예수금
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
+        self.trade_count: int = 0# 총 체결 횟수
 
     # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
     def validate_loss_scenario(self, symbol: str, scenario: int, chance: int, step_interval: str, current_timestamp: Optional[int] = None):
@@ -333,7 +334,7 @@ class TradeAnaylsis:
         # container name은 symbol로 정하고 데이터는 TradingLog를 넣는다.
         self.data_container.set_data(data_name=symbol, data=log_data)
         trade_data = self.__extract_valid_data(data=log_data)
-
+        self.trade_count +=1
         self.open_positions[symbol] = trade_data
         self.update_data()
 
@@ -432,15 +433,20 @@ class TradeAnaylsis:
         self.cash_balance = self.initial_balance + closed_pnl - self.active_value
         self.profit_loss = closed_pnl + open_pnl
         self.total_balance = self.profit_loss + self.active_value + self.cash_balance
-        self.profit_loss_ratio = self.profit_loss / self.initial_balance
+        # self.profit_loss_ratio = self.profit_loss / self.initial_balance
+        self.profit_loss_ratio = (self.total_balance - self.initial_balance)/self.initial_balance
 
 
 
-################################################
-# 
-#    BACK TEST METHOD ZONE
-#
-################################################
+##=---=####=---=####=---=####=---=####=---=####=---=##
+#=-=##=---=###=----=###=----=###=----=###=----=###=-=# 
+##=---=####=---=####=---=####=---=####=---=####=---=##
+#-=###=----=#=- BACK TEST METHOD ZONE -=##=----=###=-#
+##=---=####=---=####=---=####=---=####=---=####=---=##
+#=-=##=---=###=----=###=----=###=----=###=----=###=-=# 
+##=---=####=---=####=---=####=---=####=---=####=---=##
+
+
 class TestDataManager:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.

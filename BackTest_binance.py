@@ -239,7 +239,7 @@ class BackTester:
         print(f"    9.  AdjTimer   : {self.adj_timer}")
         print(f"    10. OrderBreak : {self.is_order_break}")
         print(f"\n {header}\n")
-        print("     DateTime            Trading     PnL_Ratio          Gross_PnL")
+        print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL")
 
         for idx, data in enumerate(
             self.closing_indices_data.get_data(self.target_run_interval)
@@ -261,7 +261,18 @@ class BackTester:
                 end_timestamp = data[-1][6]
 
                 timestamp_min.append(end_timestamp)
-
+                
+                ##=--=####=---=###=--=####=---=###=--=##
+                #-=##=---==-* DEBUG CODE START *--=##=-#
+                ##=--=####=---=###=--=####=---=###=--=##
+                
+                if interval == self.intervals[1]:
+                    self.analysis_ins.case_10_macd(data)
+                    
+                ##=--=####=---=###=--=####=---=###=--=##
+                ###=--=#=-*  DEBUG CODE END  *-=#=--=###
+                ##=--=####=---=###=--=####=---=###=--=##
+                
                 ### 업데이트 및 이탈 검토 ###
                 if interval == self.intervals[0]:
                     # 현재 정보 업데이트와 동시에 stop signal 정보를 조회한다.
@@ -273,7 +284,7 @@ class BackTester:
                     ### trane 출력 ###
                     date = utils._convert_to_datetime(end_timestamp)
                     utils._std_print(
-                        f"{date}         {self.trade_analysis_ins.number_of_stocks}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %            {self.trade_analysis_ins.profit_loss:,.2f}"
+                        f"{date}    {self.trade_analysis_ins.number_of_stocks}         {self.trade_analysis_ins.trade_count:,.0f}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %         {self.trade_analysis_ins.profit_loss:,.2f}"
                     )
                     # await asyncio.sleep(0.1)
 
@@ -282,7 +293,8 @@ class BackTester:
             # asyncio.sleep(0.05)
             ### 진입 검토 ###
             scenario_2 = self.analysis_ins.scenario_2()
-
+            scenario_3 = self.analysis_ins.scenario_3()
+            
             # 사용 후 초기화
             self.analysis_ins.reset_cases()
 
@@ -295,6 +307,18 @@ class BackTester:
                     start_timestamp=min(timestamp_min),
                     scenario_type=scenario_2[3],
                 )
+            
+            if scenario_3[0]:
+                await self.active_open_position(
+                    symbol=symbol,
+                    price=price,
+                    position=scenario_3[1],
+                    leverage=scenario_3[2],
+                    start_timestamp=min(timestamp_min),
+                    scenario_type=scenario_3[3],
+                )
+                
+            
         print("\n\nEND")
 
 

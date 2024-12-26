@@ -341,6 +341,111 @@ class AnalysisManager:
 
         self.case_9.append(rsi)
 
+    def case_10_macd(self, data, short_window=12, long_window=26, signal_window=9, volume_threshold=500):
+        """
+        NumPy 기반 MACD 계산과 거래 전략 수행
+        :param prices: ndarray, 종가 데이터
+        :param volumes: ndarray, 거래량 데이터
+        :param short_window: Short EMA 기간 (기본값: 12)
+        :param long_window: Long EMA 기간 (기본값: 26)
+        :param signal_window: Signal EMA 기간 (기본값: 9)
+        :param volume_threshold: 거래량 임계값 (기본값: 500)
+        :return: 신호 배열 ('buy', 'sell', None), MACD, Signal, Histogram (ndarray)
+        """
+        # EMA 계산 함수
+        
+        prices=data[:,4]
+        volumes=data[:,9]
+        
+        def ema(values, window):
+            alpha = 2 / (window + 1)
+            ema_values = np.zeros_like(values)
+            ema_values[0] = values[0]
+            for i in range(1, len(values)):
+                ema_values[i] = alpha * values[i] + (1 - alpha) * ema_values[i - 1]
+            return ema_values
+
+        # MACD 계산
+        ema_short = ema(prices, short_window)
+        ema_long = ema(prices, long_window)
+        macd = ema_short - ema_long
+        signal = ema(macd, signal_window)
+        histogram = macd - signal
+
+        # print(ema_short)
+        # print(ema_long)
+        # print(macd)
+        # print(signal)
+        # print(histogram)
+
+        # 거래 전략 신호 계산
+        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        # print(buy_signals)
+        sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
+        # print(sell_signals)
+
+        if buy_signals[-1]:
+            self.case_10.append(1)
+        elif sell_signals[-1]:
+            self.case_10.append(2)
+        else:
+            self.case_10.append(0)
+
+
+
+
+    def calculate_macd_numpy(prices, short_window=12, long_window=26, signal_window=9):
+        """
+        NumPy 기반 MACD, Signal, Histogram 계산
+        :param prices: ndarray, 종가 데이터
+        :param short_window: Short EMA 기간 (기본값: 12)
+        :param long_window: Long EMA 기간 (기본값: 26)
+        :param signal_window: Signal EMA 기간 (기본값: 9)
+        :return: MACD, Signal, Histogram (ndarray)
+        """
+        # EMA 계산
+        def ema(values, window):
+            alpha = 2 / (window + 1)
+            ema_values = np.zeros_like(values)
+            ema_values[0] = values[0]
+            for i in range(1, len(values)):
+                ema_values[i] = alpha * values[i] + (1 - alpha) * ema_values[i - 1]
+            return ema_values
+
+        ema_short = ema(prices, short_window)
+        ema_long = ema(prices, long_window)
+        macd = ema_short - ema_long
+        signal = ema(macd, signal_window)
+        histogram = macd - signal
+        return macd, signal, histogram
+
+    def macd_trading_strategy_numpy(prices, volumes, macd, signal, volume_threshold=500):
+        """
+        NumPy 기반 MACD 전략으로 매수/매도 신호 계산
+        :param prices: ndarray, 종가 데이터
+        :param volumes: ndarray, 거래량 데이터
+        :param macd: ndarray, MACD 값
+        :param signal: ndarray, Signal 값
+        :param volume_threshold: 거래량 임계값 (기본값: 500)
+        :return: 신호 배열 ('buy', 'sell', None)
+        """
+        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
+        
+        signals = np.full(prices.shape, None, dtype=object)
+        signals[buy_signals] = 1
+        signals[sell_signals] = 2
+        return signals
+
+    def scenario_3(self):
+        scenario = 3
+        is_order_signal = self.case_10[0]
+        leverage = 10
+        if is_order_signal > 0:
+            return (True, is_order_signal, leverage, scenario)
+        else:
+            return (False, is_order_signal, leverage, scenario)
+
     def scenario_2(self):
         """
         적용 interval : 5m, 1h

@@ -24,12 +24,16 @@ class BackTester:
         adj_interval: str = "3m",
         start_step: int = 5_000,
         adj_rate: float = 0.0007,
-        use_scale_stop: bool = True,
+        is_use_scale_stop: bool = True,
         adj_timer: bool = True,
         stop_loss_rate: float = 0.025,
         safety_balance_ratio: float = 0.2,
         is_download: bool = True,
         leverage: Optional[int] = None,
+        # 주문신호 유효성 검토(브레이크 기능)
+        is_order_break: bool = True,
+        loss_chance:int = 2,
+        step_interval:str='2h',
     ):
         self.symbols = [symbol.upper() for symbol in symbols]
         self.intervals = intervals
@@ -41,8 +45,11 @@ class BackTester:
         self.adj_timer = adj_timer
         self.adj_rate = adj_rate
         self.adj_interval = adj_interval
-        self.use_scale_stop = use_scale_stop
+        self.is_use_scale_stop = is_use_scale_stop
         self.leverage = leverage
+        self.is_order_break = is_order_break
+        self.loss_chance:Optional[int] = loss_chance if self.is_order_break else None
+        self.step_interval:Optional[str] = step_interval if self.is_order_break else None
         self.test_mode = True
         self.closing_sync_data = None
         self.test_manager_ins = DataProcess.TestDataManager(
@@ -179,6 +186,11 @@ class BackTester:
         start_timestamp: int,
         scenario_type: int,
     ):
+        if self.is_order_break:
+            is_loss_scnario = self.trade_analysis_ins.validate_loss_scenario(symbol=symbol, scenario=scenario_type, chance=self.loss_chance, step_interval=self.step_interval, current_timestamp=start_timestamp)
+            if not is_loss_scnario:
+                return
+            
         is_open_signal, quantity, leverage = await self.__validate_open_position(
             symbol=symbol, price=price, leverage=leverage
         )
@@ -200,7 +212,7 @@ class BackTester:
                 adj_timer=self.adj_timer,
                 adj_rate=self.adj_rate,
                 adj_interval=self.adj_interval,
-                use_scale_stop=self.use_scale_stop,
+                use_scale_stop=self.is_use_scale_stop,
             )
             self.trade_analysis_ins.add_log_data(log_data=log_data)
 
@@ -216,15 +228,16 @@ class BackTester:
         header = "=" * 100
         print(f"\n {header}\n")
         print(f"    ***-=-=-<< BACK TESTING >>-=-=-***\n")
-        print(f"    1.  StartDate : {self.start_date}")
-        print(f"    2.  EndDate   : {self.end_date}")
-        print(f"    3.  Symbols   : {self.symbols}")
-        print(f"    4.  SeedMoney : {self.seed_money} USDT")
-        print(f"    5.  leverage  : {self.leverage}x")
-        print(f"    6.  Intervals : {self.intervals}")
-        print(f"    7.  ScaleStop : {self.use_scale_stop}")
-        print(f"    8.  StopRate  : {self.stop_loss_rate*100:.2f} %")
-        print(f"    9.  AdjTimer  : {self.adj_timer}")
+        print(f"    1.  StartDate  : {self.start_date}")
+        print(f"    2.  EndDate    : {self.end_date}")
+        print(f"    3.  Symbols    : {self.symbols}")
+        print(f"    4.  SeedMoney  : {self.seed_money} USDT")
+        print(f"    5.  leverage   : {self.leverage}x")
+        print(f"    6.  Intervals  : {self.intervals}")
+        print(f"    7.  ScaleStop  : {self.is_use_scale_stop}")
+        print(f"    8.  StopRate   : {self.stop_loss_rate*100:.2f} %")
+        print(f"    9.  AdjTimer   : {self.adj_timer}")
+        print(f"    10. OrderBreak : {self.is_order_break}")
         print(f"\n {header}\n")
         print("     DateTime            Trading     PnL_Ratio          Gross_PnL")
 
@@ -311,6 +324,10 @@ if __name__ == "__main__":
     leverage = 10
     init_stop_rate = 0.015
     adj_interval = "3m"
+    is_order_break = True
+    loss_chance = 2
+    step_interval = '2h'
+    
 
     backtest_ins = BackTester(
         symbols=symbols,
@@ -322,13 +339,16 @@ if __name__ == "__main__":
         is_download=is_download,
         adj_timer=adj_timer,
         adj_rate=adj_rate,
-        use_scale_stop=use_scale_stop,
+        is_use_scale_stop=use_scale_stop,
         seed_money=seed_money,
         max_trade_number=max_trade_number,
         start_step=start_step,
         leverage=leverage,
         init_stop_rate=init_stop_rate,
         adj_interval=adj_interval,
+        is_order_break=is_order_break,
+        loss_chance=loss_chance,
+        step_interval=step_interval
     )
 
     asyncio.run(backtest_ins.run())

@@ -285,6 +285,47 @@ class TradeAnaylsis:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
 
+    # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
+    def validate_loss_scenario(self, symbol: str, scenario: int, chance: int, step_interval: str, current_timestamp: Optional[int] = None):
+        """
+        1. 기능: 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
+        2. 매개변수:
+            1) symbol : 쌍거래 symbol
+            2) scenario : 적용될 시나리오
+            3) data_range : 검토할 데이터의 범위 (최대 데이터 개수)
+            4) chance : 허용되는 최대 손실 횟수
+            5) step_interval : 시간 간격(ms) 계산용
+            6) current_timestamp : 현재 시간, None일 경우 현재 시간을 생성
+        """
+
+        # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
+        if symbol not in self.closed_positions:
+            return True
+
+        # 거래 종료 데이터 np.array화
+        data_array = np.array(self.closed_positions[symbol], float)
+
+        # 현재 타임스탬프 설정
+        if current_timestamp is None:
+            current_timestamp = int(time.time() * 1_000)
+
+        # interval별 밀리초 계산
+        ms_seconds = utils._get_interval_ms_seconds(step_interval)
+        target_timestamp = current_timestamp - ms_seconds
+
+        # 조건 필터링
+        mask = (
+            (data_array[:, 1] > target_timestamp) &  # last_timestamp > target_timestamp
+            (data_array[:, 16] == scenario) &  # trade_scenario == scenario
+            (data_array[:, 13] < 0)  # gross_profit_loss < 0
+        )
+        filtered_count = np.sum(mask)  # 조건을 만족하는 데이터 개수
+
+        # 허용된 chance보다 이상 이면 False 반환
+        return filtered_count <= chance
+
+
+
     # TradingLog 클라스를 컨테이너 데이터에 저장한다.
     def add_log_data(self, log_data: TradingLog):
         # symbol정보를 조회한다.

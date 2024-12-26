@@ -262,7 +262,7 @@ class BackTester:
                     ### trane 출력 ###
                     date = utils._convert_to_datetime(end_timestamp)
                     utils._std_print(
-                        f"{date}         {self.trade_analysis_ins.number_of_stocks}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %            {self.trade_analysis_ins.profit_loss:,.2f}"
+                        f"{date}         {self.trade_analysis_ins.number_of_stocks}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %          {self.trade_analysis_ins.profit_loss:,.2f}        {self.trade_analysis_ins.total_balance:,.2f}"
                     )
                     # await asyncio.sleep(0.1)
 

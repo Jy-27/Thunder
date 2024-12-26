@@ -16,6 +16,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import style, ticker
 
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 @dataclass
 class TradingLog:
     """
@@ -432,7 +435,7 @@ class TradeAnaylsis:
         self.active_value = active_value
         self.cash_balance = self.initial_balance + closed_pnl - self.active_value
         self.profit_loss = closed_pnl + open_pnl
-        self.total_balance = self.profit_loss + self.active_value + self.cash_balance
+        self.total_balance = self.profit_loss + self.initial_balance
         # self.profit_loss_ratio = self.profit_loss / self.initial_balance
         self.profit_loss_ratio = (self.total_balance - self.initial_balance)/self.initial_balance
 
@@ -977,6 +980,17 @@ class OrderConstraint:
 
 
 
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import pandas as pd
+
+
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
+
+
 class ResultEvaluator:
     def __init__(self, trade_analysis_ins):
         """
@@ -998,7 +1012,6 @@ class ResultEvaluator:
         :return: pandas DataFrame
         """
         if not self.closed_positions:
-            # 데이터가 없을 경우 빈 데이터프레임 반환
             print("Info: No data in closed_positions. Returning an empty DataFrame.")
             return pd.DataFrame(columns=[
                 "Symbol", "Scenario", "Position", "Start Timestamp", "End Timestamp", 
@@ -1051,182 +1064,112 @@ class ResultEvaluator:
             Total_Fees=("Total Fee", "sum"),
         )
 
-        # 총계 추가
-        summary.loc[("Total", "Total", "Total")] = summary.sum(numeric_only=True)
-        summary.loc[("Total", "Total", "Total"), "Trades"] = len(self.df)
         self.summary = summary
 
     def plot_profit_loss(self):
         """
-        시나리오별 Long, Short, Total 그래프와 전체 합계 그래프를 포함한 시각화
+        동일한 막대 그래프로 구성된 시각화.
+        행: 각 시나리오, 열: Long, Short, Total
+        최하단 행: Long_Total, Short_Total, Total
         """
         if self.summary is None or self.summary.empty:
-            print("Warning: No summary data available for plotting.")
+            print("Warning: No data available for plotting.")
             return
 
-        style.use("ggplot")  # 스타일 설정
         summary_reset = self.summary.reset_index()
         scenarios = summary_reset["Scenario"].unique()
-        positions = ["Long", "Short", "Total"]  # 그래프에 필요한 포지션
-        n_rows = len(scenarios) + 1  # 각 시나리오 + 합계
-        n_cols = len(positions)
+        positions = ["Long", "Short", "Total"]
 
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), facecolor="white")
-        axes = axes.reshape(n_rows, n_cols)
+        # 총 행 수: 시나리오 수 + 1 (최하단 합계 행)
+        total_rows = len(scenarios) + 1
+        total_cols = len(positions)
 
-        all_symbols = summary_reset["Symbol"].unique()  # 전체 심볼 목록
+        # Subplots 생성
+        fig = make_subplots(
+            rows=total_rows, cols=total_cols,
+            subplot_titles=[
+                f"{scenario}_{position}" for scenario in scenarios for position in positions
+            ] + [f"Combined_{position}" for position in positions],
+            vertical_spacing=0.1
+        )
 
-        for i, scenario in enumerate(scenarios):
-            for j, position in enumerate(positions):
-                ax = axes[i, j]
+        # X축의 기본 심볼 목록
+        all_symbols = summary_reset["Symbol"].unique()
+        if len(all_symbols) == 0:  # 심볼이 없으면 기본값 추가
+            all_symbols = [f"Symbol_{i}" for i in range(5)]
 
-                if position == "Total":
-                    # Total 그래프: Long과 Short 데이터를 합산
-                    long_data = summary_reset[
-                        (summary_reset["Scenario"] == scenario) & 
-                        (summary_reset["Position"] == "Long")
-                    ][["Symbol", "Gross_PnL", "Total_Profits", "Total_Losses"]]
-                    short_data = summary_reset[
-                        (summary_reset["Scenario"] == scenario) & 
-                        (summary_reset["Position"] == "Short")
-                    ][["Symbol", "Gross_PnL", "Total_Profits", "Total_Losses"]]
+        # 시나리오별 데이터 추가
+        for row, scenario in enumerate(scenarios, start=1):
+            for col, position in enumerate(positions, start=1):
+                data = summary_reset[
+                    (summary_reset["Scenario"] == scenario) &
+                    (summary_reset["Position"] == position)
+                ]
 
-                    # Long과 Short 데이터를 합산
-                    data = pd.DataFrame({"Symbol": all_symbols})
-                    data = data.merge(long_data, on="Symbol", how="left", suffixes=("", "_long"))
-                    data = data.merge(short_data, on="Symbol", how="left", suffixes=("", "_short"))
-                    data.fillna(0, inplace=True)
-                    data["Gross_PnL"] = data["Gross_PnL"] + data["Gross_PnL_short"]
-                    data["Total_Profits"] = data["Total_Profits"] + data["Total_Profits_short"]
-                    data["Total_Losses"] = data["Total_Losses"] + data["Total_Losses_short"]
-                else:
-                    # Long 또는 Short 데이터 선택
-                    data = summary_reset[
-                        (summary_reset["Scenario"] == scenario) & 
-                        (summary_reset["Position"] == position)
-                    ]
-
-                # 거래가 없는 경우 기본 데이터 생성
+                # 데이터가 없으면 기본값 생성
                 if data.empty:
                     data = pd.DataFrame({
                         "Symbol": all_symbols,
                         "Gross_PnL": [0] * len(all_symbols),
-                        "Total_Profits": [0] * len(all_symbols),
-                        "Total_Losses": [0] * len(all_symbols),
                     })
 
-                # 그래프 스틱 너비 설정
-                bar_width = 0.5
-
-                # 순손익, 수익, 손실 바 그래프
-                ax.bar(
-                    data["Symbol"],
-                    data["Gross_PnL"],
-                    color="#1f77b4",
-                    edgecolor="black",
-                    linewidth=1.5,
-                    label="Gross PnL",
-                    width=bar_width,
-                )
-                ax.bar(
-                    data["Symbol"],
-                    data["Total_Profits"],
-                    color="#2ca02c",
-                    alpha=0.7,
-                    edgecolor="black",
-                    linewidth=1.5,
-                    label="Total Profits",
-                    width=bar_width,
-                )
-                ax.bar(
-                    data["Symbol"],
-                    -data["Total_Losses"],
-                    color="#d62728",
-                    alpha=0.7,
-                    edgecolor="black",
-                    linewidth=1.5,
-                    label="Total Losses",
-                    width=bar_width,
+                fig.add_trace(
+                    go.Bar(
+                        x=data["Symbol"],
+                        y=data["Gross_PnL"],
+                        name=f"{scenario}_{position}",
+                        marker=dict(
+                            color=["#2ca02c" if v > 0 else "#d62728" for v in data["Gross_PnL"]],
+                            line=dict(color="black", width=2)  # 검정 테두리 추가
+                        ),
+                        text=[f"{v:.2f}" for v in data["Gross_PnL"]],  # 소수점 2자리 표현
+                        textposition="auto",
+                    ),
+                    row=row, col=col
                 )
 
-                # 제목 수정
-                if position == "Total":
-                    title_position = f"Scenario_{scenario}_Total"
-                else:
-                    title_position = f"Scenario_{scenario}_{position}"
-                ax.set_title(title_position, fontsize=12)
-
-                ax.set_ylabel("Profit/Loss", fontsize=10)
-                ax.set_xlabel("Symbol", fontsize=10)
-                ax.tick_params(axis="x", rotation=45, labelsize=8)
-
-                # y축 포맷 설정
-                ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x:,.0f}"))
-                ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
-                ax.grid(axis="y", linestyle="--", alpha=0.5)
-                if j == 0:  # 첫 열에만 범례 추가
-                    ax.legend(fontsize=8)
-
-        # 마지막 행: 모든 시나리오의 합계 표시
-        for j, position in enumerate(positions):
-            ax = axes[-1, j]
-
+        # 합계 데이터 추가
+        for col, position in enumerate(positions, start=1):
             total_data = summary_reset[
-                (summary_reset["Position"] == position)
+                summary_reset["Position"] == position
             ].groupby("Symbol").sum().reset_index()
 
-            # 거래가 없는 경우 기본 데이터 생성
+            # 데이터가 없으면 기본값 생성
             if total_data.empty:
                 total_data = pd.DataFrame({
                     "Symbol": all_symbols,
                     "Gross_PnL": [0] * len(all_symbols),
-                    "Total_Profits": [0] * len(all_symbols),
-                    "Total_Losses": [0] * len(all_symbols),
                 })
 
-            # 순손익, 수익, 손실 바 그래프
-            ax.bar(
-                total_data["Symbol"],
-                total_data["Gross_PnL"],
-                color="#1f77b4",
-                edgecolor="black",
-                linewidth=1.5,
-                label="Gross PnL",
-                width=bar_width,
-            )
-            ax.bar(
-                total_data["Symbol"],
-                total_data["Total_Profits"],
-                color="#2ca02c",
-                alpha=0.7,
-                edgecolor="black",
-                linewidth=1.5,
-                label="Total Profits",
-                width=bar_width,
-            )
-            ax.bar(
-                total_data["Symbol"],
-                -total_data["Total_Losses"],
-                color="#d62728",
-                alpha=0.7,
-                edgecolor="black",
-                linewidth=1.5,
-                label="Total Losses",
-                width=bar_width,
+            fig.add_trace(
+                go.Bar(
+                    x=total_data["Symbol"],
+                    y=total_data["Gross_PnL"],
+                    name=f"Combined_{position}",
+                    marker=dict(
+                        color=["#1f77b4" if v > 0 else "#ff7f0e" for v in total_data["Gross_PnL"]],
+                        line=dict(color="black", width=2)  # 검정 테두리 추가
+                    ),
+                    text=[f"{v:.2f}" for v in total_data["Gross_PnL"]],  # 소수점 2자리 표현
+                    textposition="auto",
+                ),
+                row=total_rows, col=col
             )
 
-            title_position = f"Combined_{position}"
-            ax.set_title(title_position, fontsize=12)
+        # 레이아웃 업데이트
+        fig.update_layout(
+            height=300 * total_rows,
+            width=1800,  # 넓이를 2배로 확대
+            title="📊 Scenario-Based Profit/Loss Analysis",
+            title_font_size=20,
+            template="plotly_white",
+            showlegend=False,
+            xaxis=dict(showgrid=True),  # X축 그리드 활성화
+            yaxis=dict(showgrid=True),  # Y축 그리드 활성화
+        )
 
-            ax.set_ylabel("Profit/Loss", fontsize=10)
-            ax.set_xlabel("Symbol", fontsize=10)
-            ax.tick_params(axis="x", rotation=45, labelsize=8)
-            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x:,.0f}"))
-            ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
-            ax.grid(axis="y", linestyle="--", alpha=0.5)
-
-        plt.tight_layout()
-        plt.show()
+        # 그래프 출력
+        fig.show()
 
     def print_summary(self):
         """

@@ -525,49 +525,49 @@ class AnalysisManager:
         else:
             return (False, 0, 0, 2)
 
-    def scenario_1(self):
-        """
-        적용 interval : 5m, 1h
-        조건
-            1) 연속 3회 상승 or 하락.
-            2) 전고점 or 전저점 돌파.
-            3) candle 의 몸통부분이 전체의 70% 이상.
-            4) 오실리언 벨류 플러스 일경우.
+    # def scenario_1(self):
+    #     """
+    #     적용 interval : 5m, 1h
+    #     조건
+    #         1) 연속 3회 상승 or 하락.
+    #         2) 전고점 or 전저점 돌파.
+    #         3) candle 의 몸통부분이 전체의 70% 이상.
+    #         4) 오실리언 벨류 플러스 일경우.
 
-        leverage : 2) 전고점 or 전저점 돌파 시간 diff
-        """
+    #     leverage : 2) 전고점 or 전저점 돌파 시간 diff
+    #     """
 
-        target_diff = 3
-        interval_5m = 2
+    #     target_diff = 3
+    #     interval_5m = 2
 
-        is_case_5 = self.case_5[interval_5m] > 5
+    #     is_case_5 = self.case_5[interval_5m] > 5
 
-        case_3_data_increase = self.case_3[interval_5m][0]
-        case_3_data_decrease = self.case_3[interval_5m][1]
+    #     case_3_data_increase = self.case_3[interval_5m][0]
+    #     case_3_data_decrease = self.case_3[interval_5m][1]
 
-        # 데이터가 없을경우 False를 반환한다.
-        if not case_3_data_increase or not case_3_data_decrease:
-            return (False, 0, 0, 2)
+    #     # 데이터가 없을경우 False를 반환한다.
+    #     if not case_3_data_increase or not case_3_data_decrease:
+    #         return (False, 0, 0, 2)
 
-        target_data_max_idx = self.case_1[interval_5m] - 1
-        if case_3_data_increase[-1][-1] == target_data_max_idx:
-            diff_data = np.diff(case_3_data_increase)[-1][0]
-            is_case_3 = (True, 1, diff_data)
-        elif case_3_data_decrease[-1][-1] == target_data_max_idx:
-            diff_data = np.diff(case_3_data_increase)[-1][0]
-            is_case_3 = (True, 2, diff_data)
-        else:
-            is_case_3 = (False, 0, 0)
+    #     target_data_max_idx = self.case_1[interval_5m] - 1
+    #     if case_3_data_increase[-1][-1] == target_data_max_idx:
+    #         diff_data = np.diff(case_3_data_increase)[-1][0]
+    #         is_case_3 = (True, 1, diff_data)
+    #     elif case_3_data_decrease[-1][-1] == target_data_max_idx:
+    #         diff_data = np.diff(case_3_data_increase)[-1][0]
+    #         is_case_3 = (True, 2, diff_data)
+    #     else:
+    #         is_case_3 = (False, 0, 0)
 
-        if (
-            is_case_5
-            and is_case_3[0]
-            and is_case_3[2] >= target_diff
-            and self.case_4[0] > 5
-        ):
-            return is_case_3
-        else:
-            return (False, 0, 0, 2)
+    #     if (
+    #         is_case_5
+    #         and is_case_3[0]
+    #         and is_case_3[2] >= target_diff
+    #         and self.case_4[0] > 5
+    #     ):
+    #         return is_case_3
+    #     else:
+    #         return (False, 0, 0, 2)
 
 
 class Disposer:

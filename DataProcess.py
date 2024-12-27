@@ -285,6 +285,7 @@ class TradeAnaylsis:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0# 총 체결 횟수
+        self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
     # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
     def validate_loss_scenario(self, symbol: str, scenario: int, chance: int, step_interval: str, current_timestamp: Optional[int] = None):

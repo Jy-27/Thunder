@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 from pprint import pformat
+import DataProcess
 
 T = TypeVar("T")
 
@@ -33,17 +34,17 @@ class DataContainer:
             raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
 
         setattr(self, data_name, data)
-    
+
     def remove_data(self, data_name):
-            """
-            1. 기능 : 저장된 속성을 삭제한다.
-            2. 매개변수
-                1) data_name : 삭제할 속성명
-            """
-            if hasattr(self, data_name):
-                delattr(self, data_name)
-            else:
-                raise AttributeError(f"No attribute named '{data_name}' to delete")
+        """
+        1. 기능 : 저장된 속성을 삭제한다.
+        2. 매개변수
+            1) data_name : 삭제할 속성명
+        """
+        if hasattr(self, data_name):
+            delattr(self, data_name)
+        else:
+            raise AttributeError(f"No attribute named '{data_name}' to delete")
 
     def get_data(self, data_name):
         """
@@ -56,13 +57,73 @@ class DataContainer:
         else:
             raise AttributeError(f"No attribute named '{data_name}'")
 
-
     def get_all_data_names(self):
         """
         1. 기능 : 현재 저장된 모든 속성명(변수명)을 반환한다.
         2. 반환값: 속성명 리스트
         """
         return list(self.__dict__.keys())
+
+    def clear_all_data(self):
+        """
+        1. 기능 : 저장된 모든 속성을 초기화한다.
+        """
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
+
+
+# kline data의 컬럼값을 반환한다.  (자꾸 까먹어서 함수로 만들자.)
+def _info_kline_columns():
+    return [
+        "Open Time",  # 0
+        "Open",  # 1
+        "High",  # 2
+        "Low",  # 3
+        "Close",  # 4
+        "Volume",  # 5
+        "Close Time",  # 6
+        "Quote Asset Volume",  # 7
+        "Number of Trades",  # 8
+        "Taker Buy Base Asset Volume",  # 9
+        "Taker Buy Quote Asset Volume",  # 10
+        "Ignore",  # 11
+    ]
+
+
+# 전체 interval 정보를 반환한다. (자꾸 까먹어서 함수로 만들자.)
+def _info_kline_interval():
+    return [
+        "1m",
+        "3m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "4h",
+        "6h",
+        "8h",
+        "12h",
+        "1d",
+        "3d",
+        "1w",
+        "1M",
+    ]
+
+# Trading Log의 속성값을 래핑한다. (자꾸 까먹어서 함수로 만들자.)
+def _info_trade_log_attr_maps():
+    # DataProcess.TradingLog의 속성 가져오기
+    trading_log_vars = vars(DataProcess.TradingLog)
+    
+    # __match_args__가 존재하는지 확인
+    if '__match_args__' not in trading_log_vars:
+        return {}  # 존재하지 않으면 빈 딕셔너리 반환
+    
+    attr_ = trading_log_vars['__match_args__']
+    
+    # 속성 이름과 인덱스 매핑
+    return {attr: idx for idx, attr in enumerate(attr_)}
+
 
 
 # None발생시 Return 대응
@@ -87,16 +148,22 @@ def _str_to_list(data: Union[list, str], to_upper: bool = False) -> list:
 # dict의 중첩된 값을 np.array화 한다.
 def _convert_to_array(kline_data: dict, is_slice: bool = False):
     result = {}
-    
+
     if is_slice:
         # 각 interval의 최소 데이터 길이를 계산
-        all_intervals = set(interval for symbol_data in kline_data.values() for interval in symbol_data)
+        all_intervals = set(
+            interval for symbol_data in kline_data.values() for interval in symbol_data
+        )
 
         min_lengths = {
-            interval: min(len(kline_data[symbol][interval]) for symbol in kline_data if interval in kline_data[symbol])
+            interval: min(
+                len(kline_data[symbol][interval])
+                for symbol in kline_data
+                if interval in kline_data[symbol]
+            )
             for interval in all_intervals
         }
-        
+
         for symbol, symbol_data in kline_data.items():
             result[symbol] = {}
             for interval, interval_data in symbol_data.items():
@@ -531,7 +598,8 @@ def _convert_kline_data_array(kline_data: Dict) -> Dict[str, Dict[str, np.ndarra
             )
     return result
 
-def _get_interval_ms_seconds(interval:str):
+
+def _get_interval_ms_seconds(interval: str):
     INTERVAL_MS_SECONDS: Final[dict] = {
         "1m": 60_000,
         "3m": 180_000,
@@ -550,5 +618,5 @@ def _get_interval_ms_seconds(interval:str):
         "1M": 2_592_000_000,
     }
     if not interval in INTERVAL_MS_SECONDS:
-        raise ValueError(f'interval 값이 유효하지 않음: {interval}')
+        raise ValueError(f"interval 값이 유효하지 않음: {interval}")
     return INTERVAL_MS_SECONDS[interval]

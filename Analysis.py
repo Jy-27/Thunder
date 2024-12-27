@@ -30,24 +30,11 @@ class AnalysisManager:
         self.kline_data = {}
         self.intervals = []
         self.maps_interval = {interval: idx for idx, interval in enumerate(intervals)}
-        self.OHLCV_COLUMNS: Final[List[str]] = [
-            "Open Time",  # 0
-            "Open",  # 1
-            "High",  # 2
-            "Low",  # 3
-            "Close",  # 4
-            "Volume",  # 5
-            "Close Time",  # 6
-            "Quote Asset Volume",  # 7
-            "Number of Trades",  # 8
-            "Taker Buy Base Asset Volume",  # 9
-            "Taker Buy Quote Asset Volume",  # 10
-            "Ignore",  # 11
-        ]
+        self.OHLCV_COLUMNS: Final[List[str]] = utils._info_kline_columns()
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
         self.intervals = intervals
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
-        self.case_1 = []
+        self.data_container = utils.DataContainer()
         self.case_2 = []
         self.case_3 = []
         self.case_4 = []

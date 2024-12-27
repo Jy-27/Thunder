@@ -255,6 +255,9 @@ class BackTester:
 
                 maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]
                 data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
+                ##=--=####=---=###=--=####=---=###=--=##
+                # Memo : 데이를 interval별 container화 처리해야겠다.
+                ##=--=####=---=###=--=####=---=###=--=##
 
                 symbol = self.symbols[maps_[0]]
                 price = data[-1][4]

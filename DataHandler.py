@@ -12,23 +12,7 @@ class BinanceHandler:
     """
 
     # KLINE(OHLCV) 데이터를 수신하기 위한 interval 값으로, 앞에 'kline_' 접두사를 추가로 붙여야 한다.
-    KLINE_INTERVALS: Final[List] = [
-        "1m",
-        "3m",
-        "5m",
-        "15m",
-        "30m",
-        "1h",
-        "2h",
-        "4h",
-        "6h",
-        "8h",
-        "12h",
-        "1d",
-        "3d",
-        "1w",
-        "1M",
-    ]
+    KLINE_INTERVALS: Final[List] = utils._info_kline_interval()
     # OPEN API 데이터 수신을 위한 ENDPOINT, kline의 경우 for 함수를 이용하여 별도로 붙였다.
     ENDPOINT: Final[List[str]] = [
         "ticker",

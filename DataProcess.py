@@ -19,6 +19,36 @@ from matplotlib import style, ticker
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+
+##=--=####=---=###=--=####=---=###=--=##
+#-=##=---==-*   M E  M O  *-==---=##=-#
+##=--=####=---=###=--=####=---=###=--=##
+
+# TickerDataManager.get_ticker_above_price에 적용될 dummy data 생성 함수 만들기
+    # fetch_ticker_price 대용
+# TickerDataManager.get_tickers_above_value 적용될 dummy data 생성 함수 만들기
+    # fetch_24hr_ticker 대용
+# TickerDataManager.get_tickers_above_change 적용될 dummy data 생성 함수 만들기
+    # fetch_24hr_ticker 대용
+
+# 목표 // 백테스티 더미에티어를 반영하여 target_ticker가 적용되는지 여부를 확인한다.abs
+# 타겟 티켓도 아닌데 발주 진행건으로 분류되는 것은 결과 데이터에 영향을 미친다.
+
+def trade_log_attr_maps():
+    # DataProcess.TradingLog의 속성 가져오기
+    trading_log_vars = vars(TradingLog)
+    
+    # __match_args__가 존재하는지 확인
+    if '__match_args__' not in trading_log_vars:
+        return {}  # 존재하지 않으면 빈 딕셔너리 반환
+    
+    attr_ = trading_log_vars['__match_args__']
+    
+    # 속성 이름과 인덱스 매핑
+    return {attr: idx for idx, attr in enumerate(attr_)}
+
+
+
 @dataclass
 class TradingLog:
     """
@@ -219,7 +249,7 @@ class TradingLog:
             )
         elif self.position == 2:
             self.adj_start_price = self.entry_price * (1 + start_rate)
-            self.stop_price = self.adj_start_price - (
+            self.stop_price = self.adj_start_price + (
                 (self.adj_start_price - self.low_price) * (1 + self.stop_rate)
             )
         else:
@@ -288,7 +318,13 @@ class TradeAnaylsis:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0# 총 체결 횟수
-        self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
+        # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
+
+    def validate_open_position(self, symbol:str):
+        if symbol in self.open_positions:
+            return True
+        else:
+            return False
 
     # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
     def validate_loss_scenario(self, symbol: str, scenario: int, chance: int, step_interval: str, current_timestamp: Optional[int] = None):
@@ -306,7 +342,7 @@ class TradeAnaylsis:
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
         if symbol not in self.closed_positions:
             return True
-
+        
         # 거래 종료 데이터 np.array화
         data_array = np.array(self.closed_positions[symbol], float)
 
@@ -318,16 +354,18 @@ class TradeAnaylsis:
         ms_seconds = utils._get_interval_ms_seconds(step_interval)
         target_timestamp = current_timestamp - ms_seconds
 
+        # print(utils._convert_to_datetime(target_timestamp))
+        # print(data_array[0][1])
         # 조건 필터링
         mask = (
-            (data_array[:, 1] > target_timestamp) &  # last_timestamp > target_timestamp
+            (data_array[:, 1] >= target_timestamp) &  # last_timestamp > target_timestamp
             (data_array[:, 16] == scenario) &  # trade_scenario == scenario
             (data_array[:, 13] < 0)  # gross_profit_loss < 0
         )
         filtered_count = np.sum(mask)  # 조건을 만족하는 데이터 개수
 
-        # 허용된 chance보다 이상 이면 False 반환
-        return filtered_count <= chance
+        # 허용된 chance보다 크면 이면 False 반환
+        return filtered_count < chance
 
 
 
@@ -487,6 +525,9 @@ class TestDataManager:
         self.kline_data_file = "kline_data.json"
         self.parent_directory = os.path.dirname(os.getcwd())
 
+    # def create_dummy_signal(self, signal_type:str):
+        
+
     # 장기간 kline data수집을 위한 date간격을 생성하여 timestamp형태로 반환한다.
     def __generate_timestamp_ranges(
         self, interval: str, start_date: str, end_date: str
@@ -638,7 +679,7 @@ class TestDataManager:
 
         # np.arange시 전체 shift처리위하여 dummy data를 추가함.
         dummy_data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
+        # dummy_data = [0 for _ in range(10)]
         # 최종 반환 데이터를 초기화
         output_data = {}
 
@@ -845,12 +886,12 @@ class TestProcessManager:
     각종 연산이 필요한 함수들의 집함한다. 
     """
 
-    def __init__(self):
+    def __init__(self, max_leverage:int):
         self.ins_trade_futures_client = FuturesOrder()
         self.ins_trade_spot_client = SpotOrder()
         # self.ins_trade_stopper = DataProcess.TradeStopper()
         self.market_type = ["FUTURES", "SPOT"]
-        self.MAX_LEVERAGE = 20
+        self.max_leverage = max_leverage
         self.MIN_LEVERAGE = 5
 
     # 주문이 필요한 Qty, leverage를 계산한다.
@@ -879,7 +920,7 @@ class TestProcessManager:
 
         # print(date)
         # leverage 값을 최소 5 ~ 최대 30까지 설정.
-        target_leverage = min(max(leverage, self.MIN_LEVERAGE), self.MAX_LEVERAGE)
+        target_leverage = min(max(leverage, self.MIN_LEVERAGE), self.max_leverage)
 
         # 현재가 기준 최소 주문 가능량 계산
         get_min_trade_qty = await ins_obj.get_min_trade_quantity(symbol=symbol)
@@ -978,18 +1019,6 @@ class OrderConstraint:
 
     # total_balance_ =
     # available_balance_ =
-
-
-
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import pandas as pd
-
-
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import plotly.express as px
-import pandas as pd
 
 
 class ResultEvaluator:

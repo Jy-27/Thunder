@@ -4,8 +4,9 @@ import utils
 import copy
 from collections import defaultdict
 from typing import List, Dict, Optional, Union, Any, Tuple, Final
+from dataclasses import dataclass, fields, field, asdict
 from numpy.typing import NDArray
-
+import inspect
 
 """
 시나리오 1. 
@@ -21,7 +22,22 @@ from numpy.typing import NDArray
 으로 신호 정의함.
 """
 
+@dataclass
+class IntervalConfig:
+    KLINE_INTERVAL = utils._info_kline_intervals()  # 클래스 변수
+    target_interval = ['1m', '3m', '5m', '15m']
+    # target_interval: list[str] = None  # 인스턴스 변수
+    
+    interval_maps: dict = None  # interval_maps를 속성으로 선언
 
+    def __post_init__(self):       
+        # target_interval 유효성 검사
+        for interval in self.target_interval:
+            if interval not in self.KLINE_INTERVAL:
+                raise ValueError(f"interval 값이 유효하지 않음: {interval}")
+        
+        # interval_maps 속성 초기화
+        self.interval_maps = {f'interval_{data}': idx for idx, data in enumerate(self.target_interval)}
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
     def __init__(self, intervals: List, back_test: bool = False):  # , symbols: list):
@@ -32,9 +48,10 @@ class AnalysisManager:
         self.maps_interval = {interval: idx for idx, interval in enumerate(intervals)}
         self.OHLCV_COLUMNS: Final[List[str]] = utils._info_kline_columns()
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-        self.intervals = intervals
+        self.intervals = IntervalConfig.target_interval
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
-        self.data_container = utils.DataContainer()
+        self.data_container:Optional[utils.DataContainer] = None
+        self.case_1 = []
         self.case_2 = []
         self.case_3 = []
         self.case_4 = []
@@ -53,6 +70,13 @@ class AnalysisManager:
     def reset_cases(self):
         for i in range(1, 15):
             getattr(self, f"case_{i}").clear()
+
+    def set_dataset(self, container_data):
+        self.data_container = container_data
+        
+    def clear_dataset(self):
+        self.data_container.clear_all_data()
+
 
     """
     case들을 속성값에 저장시 반드시 tuple or list로 한번 감싼 후 추가할 것.
@@ -424,14 +448,20 @@ class AnalysisManager:
         signals[sell_signals] = 2
         return signals
 
-    def scenario_3(self):
-        scenario = 3
+    # 시나리오의 number값을 int 타입으로 반환한다.
+    def __get_scenario_number(self)->int:
+        stack = inspect.stack()
+        parent_function_name = stack[1].function
+        return int(parent_function_name.split('_')[-1])
+
+    def scenario_3(self) -> Tuple[bool, ]:
+        scenario_n = self.__get_scenario_number()
         is_order_signal = self.case_10[0]
         leverage = 10
         if is_order_signal > 0:
-            return (True, is_order_signal, leverage, scenario)
+            return (True, is_order_signal, leverage, scenario_n)
         else:
-            return (False, is_order_signal, leverage, scenario)
+            return (False, is_order_signal, leverage, scenario_n)
 
     def scenario_2(self):
         """
@@ -445,6 +475,7 @@ class AnalysisManager:
         leverage : 2) 전고점 or 전저점 돌파 시간 diff
         """
 
+        scenario_n = self.__get_scenario_number()
         target_interval_5m = self.maps_interval["5m"]
         target_interval_15m = self.maps_interval["15m"]
 
@@ -455,7 +486,7 @@ class AnalysisManager:
         # case_3연산시 조건에 안맞는 부분이 있을 수 있다. 그럴 경우를 대비한 검사.
         for i, (increase, decrease) in enumerate(self.case_3):
             if not increase or not decrease:  # 리스트가 비어있는지 확인
-                return (False, 0, 0, 2)
+                return (False, 0, 0, scenario_n)
 
 
         # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
@@ -472,7 +503,7 @@ class AnalysisManager:
             position = 2
 
         else:
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
             
 
         # # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
@@ -495,22 +526,22 @@ class AnalysisManager:
         # candle 몸통 비율 검토
         target_candle_data = self.case_2[target_interval_5m][target_idx:]
         if np.all(target_candle_data == 0):
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
 
         # 분모 검사 추가
         if np.any(target_candle_data[:, 3] == 0):
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
 
         length_ratio = target_candle_data[:, 2] / target_candle_data[:, 3]
         # 몸통 길이 비율이 target_length_ratio 보다 이상
         if not np.all(length_ratio >= target_length_ratio):
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
 
         # 오실리언 벨유 플러스 여부 확인
         is_ocillator_value = self.case_7[target_interval_5m][-1] > 0
 
         if not is_ocillator_value:
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
 
         # 전고점 / 전저점 돌파여부 확인
         # data_length = self.case_1[target_interval_15m] - 1
@@ -523,7 +554,7 @@ class AnalysisManager:
         elif position == 2 and self.case_8[target_interval_15m][short_idx]:
             return (True, position, leverage, 2)
         else:
-            return (False, 0, 0, 2)
+            return (False, 0, 0, scenario_n)
 
     # def scenario_1(self):
     #     """

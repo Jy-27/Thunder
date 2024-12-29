@@ -8,9 +8,133 @@ from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 from pprint import pformat
-import DataProcess
+
 
 T = TypeVar("T")
+
+
+def _info_kline_columns():
+    return [
+        "Open Time",  # 0
+        "Open",  # 1
+        "High",  # 2
+        "Low",  # 3
+        "Close",  # 4
+        "Volume",  # 5
+        "Close Time",  # 6
+        "Quote Asset Volume",  # 7
+        "Number of Trades",  # 8
+        "Taker Buy Base Asset Volume",  # 9
+        "Taker Buy Quote Asset Volume",  # 10
+        "Ignore",  # 11
+    ]
+
+
+def _info_kline_intervals():
+    return [
+        "1m",
+        "3m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "4h",
+        "6h",
+        "8h",
+        "12h",
+        "1d",
+        "3d",
+        "1w",
+        "1M",
+    ]
+
+
+def _info_ticker_prices_dummy():
+    return [
+        {
+            "symbol": "VIDTUSDT",
+            "priceChange": "-0.0007000",
+            "priceChangePercent": "-2.281",
+            "weightedAvgPrice": "0.0307967",
+            "lastPrice": "0.0299900",
+            "lastQty": "2032",
+            "openPrice": "0.0306900",
+            "highPrice": "0.0322500",
+            "lowPrice": "0.0296400",
+            "volume": "523222663",
+            "quoteVolume": "16113552.4409600",
+            "openTime": 1735226220000,
+            "closeTime": 1735312674334,
+            "firstId": 38058345,
+            "lastId": 38195016,
+            "count": 136640,
+        },
+        {
+            "symbol": "CETUSUSDT",
+            "priceChange": "-0.0139000",
+            "priceChangePercent": "-3.976",
+            "weightedAvgPrice": "0.3460686",
+            "lastPrice": "0.3357000",
+            "lastQty": "21",
+            "openPrice": "0.3496000",
+            "highPrice": "0.3627700",
+            "lowPrice": "0.3335400",
+            "volume": "52445124",
+            "quoteVolume": "18149608.3262600",
+            "openTime": 1735226220000,
+            "closeTime": 1735312672513,
+            "firstId": 32422036,
+            "lastId": 32595554,
+            "count": 173516,
+        },
+        {
+            "symbol": "BTCUSDT_250627",
+            "priceChange": "5294.7",
+            "priceChangePercent": "5.523",
+            "weightedAvgPrice": "102639.7",
+            "lastPrice": "101156.8",
+            "lastQty": "0.001",
+            "openPrice": "95862.1",
+            "highPrice": "103780.1",
+            "lowPrice": "90997.0",
+            "volume": "154.021",
+            "quoteVolume": "15808672.4",
+            "openTime": 1735286700000,
+            "closeTime": 1735312677534,
+            "firstId": 1,
+            "lastId": 13653,
+            "count": 13653,
+        },
+    ]
+
+
+def _info_24hr_ticker_dummy():
+    return [
+        {"symbol": "1000000MOGUSDT", "price": "2.2652000", "time": 1735312497433},
+        {"symbol": "VANAUSDT", "price": "18.682000", "time": 1735312504022},
+        {"symbol": "XAIUSDT", "price": "0.2428000", "time": 1735312502604},
+        {"symbol": "ALGOUSDT", "price": "0.3395", "time": 1735312501560},
+        {"symbol": "FLOWUSDT", "price": "0.723", "time": 1735312446406},
+        {"symbol": "ETHWUSDT", "price": "3.427300", "time": 1735312500406},
+        {"symbol": "DOGSUSDT", "price": "0.0005437", "time": 1735312502024},
+        {"symbol": "BRETTUSDT", "price": "0.1292400", "time": 1735312502311},
+        {"symbol": "1000XECUSDT", "price": "0.03467", "time": 1735312486481},
+        {"symbol": "CFXUSDT", "price": "0.1621100", "time": 1735312499944},
+        {"symbol": "KAVAUSDT", "price": "0.4613", "time": 1735312499940},
+        {"symbol": "BATUSDT", "price": "0.2424", "time": 1735312498061},
+        {"symbol": "ZKUSDT", "price": "0.1956400", "time": 1735312496696},
+        {"symbol": "TNSRUSDT", "price": "0.4530000", "time": 1735312502049},
+        {"symbol": "MEWUSDT", "price": "0.0065610", "time": 1735312500660},
+        {"symbol": "XLMUSDT", "price": "0.34872", "time": 1735312498775},
+        {"symbol": "NTRNUSDT", "price": "0.369600", "time": 1735312500326},
+        {"symbol": "ALTUSDT", "price": "0.1157400", "time": 1735312503913},
+        {"symbol": "PNUTUSDT", "price": "0.6473500", "time": 1735312502111},
+        {"symbol": "OGNUSDT", "price": "0.1133", "time": 1735312479979},
+        {"symbol": "SSVUSDT", "price": "24.924000", "time": 1735312501990},
+        {"symbol": "GLMRUSDT", "price": "0.2592000", "time": 1715763618575},
+        {"symbol": "INJUSDT", "price": "21.050000", "time": 1735312499980},
+    ]
 
 
 class DataContainer:
@@ -70,60 +194,6 @@ class DataContainer:
         """
         for attr in list(self.__dict__.keys()):
             delattr(self, attr)
-
-
-# kline data의 컬럼값을 반환한다.  (자꾸 까먹어서 함수로 만들자.)
-def _info_kline_columns():
-    return [
-        "Open Time",  # 0
-        "Open",  # 1
-        "High",  # 2
-        "Low",  # 3
-        "Close",  # 4
-        "Volume",  # 5
-        "Close Time",  # 6
-        "Quote Asset Volume",  # 7
-        "Number of Trades",  # 8
-        "Taker Buy Base Asset Volume",  # 9
-        "Taker Buy Quote Asset Volume",  # 10
-        "Ignore",  # 11
-    ]
-
-
-# 전체 interval 정보를 반환한다. (자꾸 까먹어서 함수로 만들자.)
-def _info_kline_interval():
-    return [
-        "1m",
-        "3m",
-        "5m",
-        "15m",
-        "30m",
-        "1h",
-        "2h",
-        "4h",
-        "6h",
-        "8h",
-        "12h",
-        "1d",
-        "3d",
-        "1w",
-        "1M",
-    ]
-
-# Trading Log의 속성값을 래핑한다. (자꾸 까먹어서 함수로 만들자.)
-def _info_trade_log_attr_maps():
-    # DataProcess.TradingLog의 속성 가져오기
-    trading_log_vars = vars(DataProcess.TradingLog)
-    
-    # __match_args__가 존재하는지 확인
-    if '__match_args__' not in trading_log_vars:
-        return {}  # 존재하지 않으면 빈 딕셔너리 반환
-    
-    attr_ = trading_log_vars['__match_args__']
-    
-    # 속성 이름과 인덱스 매핑
-    return {attr: idx for idx, attr in enumerate(attr_)}
-
 
 
 # None발생시 Return 대응

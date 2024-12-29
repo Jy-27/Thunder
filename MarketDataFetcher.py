@@ -5,6 +5,7 @@ import utils
 import datetime
 from http import HTTPStatus
 from typing import Final, Dict, Any, Optional, List, Union, TypeVar, cast
+# from DataProcess import DataInfo
 
 # 로깅 설정
 logging.basicConfig(
@@ -15,37 +16,8 @@ T = TypeVar("T")
 
 class MarketDataManager:
     BASE_URL: str
-    OHLCV_INTERVALS: Final[list] = [
-        "1m",
-        "3m",
-        "5m",
-        "15m",
-        "30m",
-        "1h",
-        "2h",
-        "4h",
-        "6h",
-        "8h",
-        "12h",
-        "1d",
-        "3d",
-        # "1w",
-        # "1M",
-    ]
-    OHLCV_COLUMNS: Final[list[str]] = [
-        "Open Time",
-        "Open",
-        "High",
-        "Low",
-        "Close",
-        "Volume",
-        "Close Time",
-        "Quote Asset Volume",
-        "Number of Trades",
-        "Taker Buy Base Asset Volume",
-        "Taker Buy Quote Asset Volume",
-        "Ignore",
-    ]
+    OHLCV_INTERVALS: Final[list] = utils._info_kline_intervals()
+    OHLCV_COLUMNS: Final[list[str]] = utils._info_kline_columns()
 
     def __init__(self, base_url: str):
         BASE_URL: str = base_url
@@ -118,11 +90,11 @@ class MarketDataManager:
             unit_milliseconds = cast(
                 int,
                 {
-                    "m": 60 * 1000,
-                    "h": 60 * 60 * 1000,
-                    "d": 24 * 60 * 60 * 1000,
-                    "w": 7 * 24 * 60 * 60 * 1000,
-                    "M": 30 * 24 * 60 * 60 * 1000,
+                    "m": 60 * 1_000,
+                    "h": 60 * 60 * 1_000,
+                    "d": 24 * 60 * 60 * 1_000,
+                    "w": 7 * 24 * 60 * 60 * 1_000,
+                    "M": 30 * 24 * 60 * 60 * 1_000,
                 }.get(interval_unit_type),
             )
 
@@ -181,7 +153,7 @@ class MarketDataManager:
 
     # Ticker별 limit 지정 OHLCV데이터 수신
     async def fetch_klines_limit(
-        self, symbol: str, interval: str, limit: int = 1000
+        self, symbol: str, interval: str, limit: int = 1_000
     ) -> Optional[List[List[Union[str, int]]]]:
         """
         1. 기능 : 지정 Ticker의 OHLCV값을 수신 및 반환한다.
@@ -213,8 +185,8 @@ class MarketDataManager:
             2) interval : BinanceAPIBase Class의 OHLCV_INTERVALS 속성값 참조
             3) limit : 수신하고자 하는 데이터의 양
         """
-        limit = 1000  # 최대 수신 길이 1000
-        ms_second = 1000
+        limit = 1_000  # 최대 수신 길이 1000
+        ms_second = 1_000
 
         # 날짜 매개변수 검증
         if not start_date and not end_date:

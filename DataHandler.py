@@ -5,31 +5,28 @@ import utils
 import datetime
 from typing import Final, Dict, List, Union, Optional
 
-
 class BinanceHandler:
     """
     Binance OPEN API 데이터를 수신한다. 별도의 API KEY가 필요 없다.
     """
-
-    # KLINE(OHLCV) 데이터를 수신하기 위한 interval 값으로, 앞에 'kline_' 접두사를 추가로 붙여야 한다.
-    KLINE_INTERVALS: Final[List] = utils._info_kline_interval()
-    # OPEN API 데이터 수신을 위한 ENDPOINT, kline의 경우 for 함수를 이용하여 별도로 붙였다.
-    ENDPOINT: Final[List[str]] = [
-        "ticker",
-        "trade",
-        "miniTicker",
-        *[f"kline_{i}" for i in KLINE_INTERVALS],
-        "depth",
-        "24hrTicker",
-        "aggTrade",
-    ]
-
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, intervals: Union[list, str]):
         self.BASE_URL: str = base_url
         self.asyncio_queue: asyncio.Queue = asyncio.Queue()
         self.stream_type: Optional[str] = None
 
         self.stop_event = asyncio.Event()
+        # KLINE(OHLCV) 데이터를 수신하기 위한 interval 값으로, 앞에 'kline_' 접두사를 추가로 붙여야 한다.
+        self.intervals: Final[List] = [intervals if isinstance(intervals, str) else intervals]
+        # OPEN API 데이터 수신을 위한 ENDPOINT, kline의 경우 for 함수를 이용하여 별도로 붙였다.
+        self.ENDPOINT: Final[List[str]] = [
+            "ticker",
+            "trade",
+            "miniTicker",
+            *[f"kline_{i}" for i in intervals],
+            "depth",
+            "24hrTicker",
+            "aggTrade",
+        ]
 
     # endpoint 유효성 검사 후 반환
     def __normalize_endpoint(self, endpoint: str) -> str:
@@ -142,18 +139,20 @@ class BinanceHandler:
 
 
 class SpotHandler(BinanceHandler):
-    def __init__(self):
-        super().__init__(base_url="wss://stream.binance.com:9443/ws/")
+    def __init__(self, intervals:Union[str, list]):
+        super().__init__(base_url="wss://stream.binance.com:9443/ws/", intervals=intervals)
 
 
 class FuturesHandler(BinanceHandler):
-    def __init__(self):
-        super().__init__(base_url="wss://fstream.binance.com/ws/")
-
+    def __init__(self, intervals:Union[str, list]):
+        super().__init__(base_url="wss://fstream.binance.com/ws/", intervals=intervals)
+ 
 
 if __name__ == "__main__":
-    spot = SpotHandler()
-    futures = FuturesHandler()
+    intervals_all = utils._info_kline_intervals()
+    target_intervals = intervals_all[0:3]
+    spot = SpotHandler(target_intervals)
+    futures = FuturesHandler(target_intervals)
 
     symbols = ["btcusdt", "adausdt", "xrpusdt", "ethusdt"]
     stream = spot.ENDPOINT[0]

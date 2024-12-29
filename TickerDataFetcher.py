@@ -1,6 +1,6 @@
 import asyncio
 import utils
-from typing import Optional, List
+from typing import Optional, List, Union
 from MarketDataFetcher import SpotMarket, FuturesMarket
 
 
@@ -63,7 +63,7 @@ class TickerDataManager:
 
     # 특정 단가 이상 또는 이하에 해당하는 Ticker 반환.
     async def get_tickers_above_price(
-        self, target_price: float, comparison: str = "above"
+        self, target_price: float, comparison: str = "above", dummy_data: Optional[List[Dick[str, Union[str, int]]]]=None
     ) -> List:
         """
         1. 기능 : 특정 현재가 기준 이상 / 이하에 해당하는 Ticker리스트를 반환한다.
@@ -72,11 +72,15 @@ class TickerDataManager:
             2) comparison : 'above', 'below'
                 >> 'above' : 이상
                 >> 'below' : 이하
+            3) dummy_data : fetch_ticker_price() 더미데이터. 벡테스트시 사용.
         """
         if comparison not in ["above", "below"]:
             raise ValueError("comparison은 'above' 또는 'below' 중 하나여야 합니다.")
 
-        ticker_data = await self.api_instance.fetch_ticker_price()
+        if dummy_data is None:
+            ticker_data = await self.api_instance.fetch_ticker_price()
+        else:
+            ticker_data = dummy_data
         filtered_tickers = set()
 
         for ticker_info in ticker_data:
@@ -92,7 +96,7 @@ class TickerDataManager:
         self, target_value: float, comparison: str = "above"
     ) -> List:
         """
-        1. 기능 : 24시간 거래기준하여 특정 거래디금 이상 또는 이하에 해당하는 Ticker리스트를 반환한다.
+        1. 기능 : 24시간 거래기준하여 특정 거래대금 이상 또는 이하에 해당하는 Ticker리스트를 반환한다.
         2. 매개변수
             1) target_value : 목표 거래대금 (단위 : USD)
             2) comparison : 'above', 'below'
@@ -114,15 +118,16 @@ class TickerDataManager:
 
     # Ticker의 변동률을 기준하여 리스트 반환.abs
     async def get_tickers_above_change(
-        self, target_percent: float, comparison: str = "above", absolute: bool = False
+        self, percent: float, comparison: str = "above", absolute: bool = False
     ) -> List:
         """
         1. 기능 : 24시간 거래기준하여 특정 변동률 이상 또는 이하에 해당하는 Ticker리스트를 반환한다.
         2. 매개변수
-            1) target_percent : 목표 변동률 (단위 : %, 예:) 3.56% -> 3.56 입력
+            1) target_percent : 목표 변동률, 3.56% -> 0.0356 입력
             2) comparison : 'above', 'below'
                 >> 'above' : 이상
                 >> 'below' : 이하
+                    "이상" // "이하" 겹치는 값은 인지하고 있음.
         """
         ticker_data = await self.api_instance.fetch_24hr_ticker()
         comparison_type = ["above", "below"]
@@ -134,7 +139,7 @@ class TickerDataManager:
 
         filtered_tickers = set()
         literal_data = utils._collections_to_literal(ticker_data)
-
+        target_percent = percent * 100
         for data in literal_data:
             change_percent = data.get("priceChangePercent")
             symbol = data.get("symbol")

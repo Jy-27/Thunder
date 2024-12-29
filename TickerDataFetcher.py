@@ -63,7 +63,10 @@ class TickerDataManager:
 
     # 특정 단가 이상 또는 이하에 해당하는 Ticker 반환.
     async def get_tickers_above_price(
-        self, target_price: float, comparison: str = "above", dummy_data: Optional[List[Dick[str, Union[str, int]]]]=None
+        self,
+        target_price: float,
+        comparison: str = "above",
+        dummy_data: Optional[List[Dick[str, Union[str, int]]]] = None,
     ) -> List:
         """
         1. 기능 : 특정 현재가 기준 이상 / 이하에 해당하는 Ticker리스트를 반환한다.

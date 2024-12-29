@@ -143,7 +143,9 @@ class BackTester:
             trade_count = conctraint.get("count")
 
             if trade_balance is None or trade_count is None:
-                raise ValueError(f'trade_balance 또는 trade_count 값이 없음: {trade_balance, trade_count}')
+                raise ValueError(
+                    f"trade_balance 또는 trade_count 값이 없음: {trade_balance, trade_count}"
+                )
 
             if self.leverage is None:
                 leverage = leverage

@@ -102,7 +102,9 @@ class BinanceOrderManager:
         response.raise_for_status()
         return response.json()
 
-    async def submit_fund_transfer(self, amount: float, transfer_type: int, asset: str='USDT') -> Dict:
+    async def submit_fund_transfer(
+        self, amount: float, transfer_type: int, asset: str = "USDT"
+    ) -> Dict:
         """
         1. 기능: 잔액을 Spot과 Futures 계좌 간 전송한다.
         2. 매개변수:
@@ -118,11 +120,11 @@ class BinanceOrderManager:
             "type": transfer_type,
             "timestamp": int(time.time() * 1000),
         }
-        method = 'POST'
-        
+        method = "POST"
+
         headers = await self.__get_headers()
         params = await self.__sign_params(params)
-        
+
         response = requests.request(method, url, headers=headers, params=params)
         response.raise_for_status()
         return response.json()

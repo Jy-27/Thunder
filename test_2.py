@@ -25,11 +25,11 @@ symbols = [
     "ARKMUSDT",
     "SOLUSDT",
     "DOGEUSDT",
-    'TRXUSDT'
+    "TRXUSDT",
 ]
 # interval 지정.
 # intervals = ["1m", "5m", "1h"]
-intervals = ["1m", "5m", '15m']
+intervals = ["1m", "5m", "15m"]
 
 # 적용할 데이터의 기간 지정.
 start_date = "2024-11-25"
@@ -74,8 +74,8 @@ trade_data = []
 seed_money = 69492.7
 # 가장 지갑 생성
 obj_wallet = TradeOrderManager(initial_balance=seed_money)
-print('START Time : ', start_date, '00:00:00')
-print('END Time : ', end_date, '23:59:59')
+print("START Time : ", start_date, "00:00:00")
+print("END Time : ", end_date, "23:59:59")
 # 래핑 데이터를 이용하여 반복문 실행한다.
 for idx, d in enumerate(data_c.get_data("map_1m")):
     if idx < 5_000:
@@ -90,12 +90,12 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
         # obj_analysis.case_4_process_neg_counts(kline_data_lv3=data, col=7)
         # obj_analysis.case_5_diff_neg_counts(kline_data_lv3=data, col1=1, col2=4)
         # obj_analysis.case_6_ocillator_volume(kline_data_lv3=data)#, col1=1, col2=4)
-        obj_analysis.case_7_ocillator_value(kline_data_lv3=data)#, col1=1, col2=4)
+        obj_analysis.case_7_ocillator_value(kline_data_lv3=data)  # , col1=1, col2=4)
         obj_analysis.case_8_sorted_indices(kline_data_lv3=data, high_col=2, low_col=3)
         # obj_analysis.case_9_rsi(kline_data_lv3=data, col=4)
 
         # 1분봉의 값 기준으로 현재가, timestamp가격을 반영한다.
-    
+
         if interval == intervals[0]:
             price = data[-1][4]
             close_timestampe = data[-1][6]
@@ -104,7 +104,9 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
             obj_wallet.update_order_data(
                 symbol=symbol, current_price=price, current_time=close_timestampe
             )
-        utils._std_print(f"{date} / {obj_wallet.trade_analysis.profit_loss:,.5f} / {obj_wallet.trade_analysis.total_balance}")
+        utils._std_print(
+            f"{date} / {obj_wallet.trade_analysis.profit_loss:,.5f} / {obj_wallet.trade_analysis.total_balance}"
+        )
 
     scenario_1 = obj_analysis.scenario_2()
     obj_analysis.reset_cases()
@@ -132,15 +134,15 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
                 market_type="futures",
             )
         )
-        
+
         # 주문 마진금액이 예수금보다 커야함.
         margin_ = (qty / lv) * price
-        
+
         # 마진이 예수금을 초과여부 검사
         is_cash_margin = obj_wallet.trade_analysis.cash_balance > margin_
         # 최대 보유 항목 초과여부 검사
         is_trade_count = obj_wallet.trade_analysis.number_of_stocks < trade_count
-        
+
         # 주문 신호 발생시
         if status and is_cash_margin and is_trade_count:
             # 포지션 종료를 위한 초기값 업데이트
@@ -149,7 +151,7 @@ for idx, d in enumerate(data_c.get_data("map_1m")):
                 position="LONG" if position == 1 else "SHORT",
                 entry_price=price,
             )
-                
+
             # 지갑 정보 업데이트
             obj_wallet.add_order(
                 symbol=symbol,

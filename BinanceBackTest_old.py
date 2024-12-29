@@ -17,7 +17,6 @@ from dataclasses import dataclass, fields
 import pandas as pd
 
 
-
 """
 1. 목적
     >>> 대입결과 최상의 이익조건을 찾고 실제 SystemTrading에 반영한다.
@@ -69,8 +68,6 @@ import pandas as pd
 """
 
 
-
-
 ############################################################
 ############################################################
 ##
@@ -80,16 +77,17 @@ import pandas as pd
 ############################################################
 ############################################################
 
+
 class TradeOrderManager:
     """
     주문관련 기능을 수행한다. TradeAnalysis, TradingLog 두 class를 이용한다.
     """
-    def __init__(self, initial_balance: float = 1_000):
-        self.active_orders: List[TradingLog] = []   # 현재 거래중인 항목
-        self.order_index_map: Dict[str, int] = {}   # 
-        self.active_symbols: List[str] = [] # 거래중인 symbol정보
-        self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)    
 
+    def __init__(self, initial_balance: float = 1_000):
+        self.active_orders: List[TradingLog] = []  # 현재 거래중인 항목
+        self.order_index_map: Dict[str, int] = {}  #
+        self.active_symbols: List[str] = []  # 거래중인 symbol정보
+        self.trade_analysis = TradeAnalysis(initial_balance=initial_balance)
 
     # symbol별 idx map을 생성하고 현재 거래중인 항목을 list형태로 업데이트한다.
     def __refresh_order_map(self):
@@ -125,7 +123,7 @@ class TradeOrderManager:
 
         # 거래 log정보를 list형태로 변수 저장한다.
         order_signal = order.to_list()
-        
+
         # log정보를 기준으로 현재 거래중으로 데이터를 반영한다.
         # wallet 업데이트도 함께 처리됨.
         self.trade_analysis.add_open_position(order_signal)
@@ -141,7 +139,7 @@ class TradeOrderManager:
         if idx is not None:
             order_signal = self.active_orders[idx].to_list()
         else:
-            raise ValueError(f'index값이 없음 - {idx}')
+            raise ValueError(f"index값이 없음 - {idx}")
         # 거래중인 정보를 활용하여 closed_position함수를 실행한다.
         self.trade_analysis.add_closed_position(order_signal)
         # 현재 거래중인 정보에서 해당 내역을 제거한다.
@@ -155,17 +153,17 @@ class TradeOrderManager:
     ):
         # 업데이트가 필요한 자료의 index값을 조회한다.
         idx = self.order_index_map.get(symbol)
-        
+
         # idx값이 없으면 본 함수를 종료한다. (오류대처용)
         if idx is None:
             return
-        
+
         # 거래중인 항목에 대하여 현재 데이터를 업데이트 한다.
         # class object형태로 추가된 자료이므로 update 함수 명령이 가능하다.
         self.active_orders[idx].update_trade_data(
             current_price=current_price, current_time=current_time
         )
-        
+
         # 이 아래 코드를 왜 사용하지???
         # trade_order_data = self.active_orders[idx].to_list()
         # self.trade_analysis.add_open_position(trade_order_data)
@@ -173,17 +171,18 @@ class TradeOrderManager:
     # 진행중인 주문내역 정보를 반환한다.
     def get_order(self, symbol: str):
         idx = self.order_index_map.get(symbol)
-        
+
         if idx is not None:
             return self.active_orders[idx]
         else:
-            raise ValueError(f'index값이 없음 - {idx}')
+            raise ValueError(f"index값이 없음 - {idx}")
 
 
 class DataManager:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
+
     FUTURES = "FUTURES"
     SPOT = "SPOT"
 
@@ -255,11 +254,13 @@ class DataManager:
         # 시작 타임스탬프
         start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
         # interval 및 MAX_LIMIT 적용으로 계산된 최대 종료 타임스탬프
-        
+
         if interval_step is not None:
-            max_possible_end_timestamp = start_timestamp + (interval_step * MAX_LIMIT) - 1
+            max_possible_end_timestamp = (
+                start_timestamp + (interval_step * MAX_LIMIT) - 1
+            )
         else:
-            raise ValueError(f'interval step값 없음 - {interval_step}')
+            raise ValueError(f"interval step값 없음 - {interval_step}")
         # 지정된 종료 타임스탬프
         end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
 
@@ -586,7 +587,7 @@ class DataManager:
 
 class ProcessManager:
     """
-    각종 연산이 필요한 함수들의 집함한다. 
+    각종 연산이 필요한 함수들의 집함한다.
     """
 
     def __init__(self):
@@ -639,7 +640,6 @@ class ProcessManager:
         return (True, get_max_trade_qty, target_leverage)
 
 
-
 class ResultEvaluator:
     def __init__(self, data):
         # with open(file_path, 'r') as file:
@@ -656,17 +656,21 @@ class ResultEvaluator:
     def create_dataframe(self):
         if not self.closed_positions:
             # 빈 딕셔너리일 경우 0으로 채운 기본 데이터프레임 반환
-            return pd.DataFrame([{
-                "Symbol": None,
-                "Close Time": None,
-                "Profit/Loss": 0.0,
-                "Entry Price": 0.0,
-                "Exit Price": 0.0,
-                "Volume": 0.0,
-                "Entry Fee": 0.0,
-                "Exit Fee": 0.0,
-                "Total Fee": 0.0
-            }])
+            return pd.DataFrame(
+                [
+                    {
+                        "Symbol": None,
+                        "Close Time": None,
+                        "Profit/Loss": 0.0,
+                        "Entry Price": 0.0,
+                        "Exit Price": 0.0,
+                        "Volume": 0.0,
+                        "Entry Fee": 0.0,
+                        "Exit Fee": 0.0,
+                        "Total Fee": 0.0,
+                    }
+                ]
+            )
 
         # 데이터가 있을 경우 데이터프레임 생성
         records = []

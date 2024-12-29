@@ -5,10 +5,12 @@ import utils
 import datetime
 from typing import Final, Dict, List, Union, Optional
 
+
 class BinanceHandler:
     """
     Binance OPEN API 데이터를 수신한다. 별도의 API KEY가 필요 없다.
     """
+
     def __init__(self, base_url: str, intervals: Union[list, str]):
         self.BASE_URL: str = base_url
         self.asyncio_queue: asyncio.Queue = asyncio.Queue()
@@ -16,7 +18,9 @@ class BinanceHandler:
 
         self.stop_event = asyncio.Event()
         # KLINE(OHLCV) 데이터를 수신하기 위한 interval 값으로, 앞에 'kline_' 접두사를 추가로 붙여야 한다.
-        self.intervals: Final[List] = [intervals if isinstance(intervals, str) else intervals]
+        self.intervals: Final[List] = [
+            intervals if isinstance(intervals, str) else intervals
+        ]
         # OPEN API 데이터 수신을 위한 ENDPOINT, kline의 경우 for 함수를 이용하여 별도로 붙였다.
         self.ENDPOINT: Final[List[str]] = [
             "ticker",
@@ -78,7 +82,7 @@ class BinanceHandler:
             message = await ws.receive()
             if message.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(message.data)
-                #DEBUG
+                # DEBUG
                 print(data)
                 await self.asyncio_queue.put(data)
             elif message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
@@ -139,14 +143,16 @@ class BinanceHandler:
 
 
 class SpotHandler(BinanceHandler):
-    def __init__(self, intervals:Union[str, list]):
-        super().__init__(base_url="wss://stream.binance.com:9443/ws/", intervals=intervals)
+    def __init__(self, intervals: Union[str, list]):
+        super().__init__(
+            base_url="wss://stream.binance.com:9443/ws/", intervals=intervals
+        )
 
 
 class FuturesHandler(BinanceHandler):
-    def __init__(self, intervals:Union[str, list]):
+    def __init__(self, intervals: Union[str, list]):
         super().__init__(base_url="wss://fstream.binance.com/ws/", intervals=intervals)
- 
+
 
 if __name__ == "__main__":
     intervals_all = utils._info_kline_intervals()

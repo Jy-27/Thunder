@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Union, Final, Any
 from functools import lru_cache
 from dataclasses import dataclass, fields, field, asdict
+
 # from BinanceTradeClient import SpotTrade, FuturesTrade
 from MarketDataFetcher import FuturesMarket, SpotMarket
 from BinanceTradeClient import FuturesOrder, SpotOrder
@@ -21,32 +22,32 @@ from plotly.subplots import make_subplots
 
 
 ##=--=####=---=###=--=####=---=###=--=##
-#-=##=---==-*   M E  M O  *-==---=##=-#
+# -=##=---==-*   M E  M O  *-==---=##=-#
 ##=--=####=---=###=--=####=---=###=--=##
 
 # TickerDataManager.get_ticker_above_price에 적용될 dummy data 생성 함수 만들기
-    # fetch_ticker_price 대용
+# fetch_ticker_price 대용
 # TickerDataManager.get_tickers_above_value 적용될 dummy data 생성 함수 만들기
-    # fetch_24hr_ticker 대용
+# fetch_24hr_ticker 대용
 # TickerDataManager.get_tickers_above_change 적용될 dummy data 생성 함수 만들기
-    # fetch_24hr_ticker 대용
+# fetch_24hr_ticker 대용
 
 # 목표 // 백테스티 더미에티어를 반영하여 target_ticker가 적용되는지 여부를 확인한다.abs
 # 타겟 티켓도 아닌데 발주 진행건으로 분류되는 것은 결과 데이터에 영향을 미친다.
 
+
 def trade_log_attr_maps():
     # DataProcess.TradingLog의 속성 가져오기
     trading_log_vars = vars(TradingLog)
-    
+
     # __match_args__가 존재하는지 확인
-    if '__match_args__' not in trading_log_vars:
+    if "__match_args__" not in trading_log_vars:
         return {}  # 존재하지 않으면 빈 딕셔너리 반환
-    
-    attr_ = trading_log_vars['__match_args__']
-    
+
+    attr_ = trading_log_vars["__match_args__"]
+
     # 속성 이름과 인덱스 매핑
     return {attr: idx for idx, attr in enumerate(attr_)}
-
 
 
 @dataclass
@@ -68,7 +69,7 @@ class TradingLog:
     fee_rate: float = 0.05  # 수수료율
     init_stop_rate: float = 0.015  # 초기(진입시) 손절율
     use_scale_stop: bool = True  # final 손절율 or scale손절율 적용 여부
-    adj_timer: bool = False # interval 시간 간격마다 adj_start_price 변동 적용여부
+    adj_timer: bool = False  # interval 시간 간격마다 adj_start_price 변동 적용여부
     adj_rate: Optional[float] = (
         0.0007  # scale_stop_ratio option, 시계흐름에 따른 시작가 변화적용율
     )
@@ -89,9 +90,9 @@ class TradingLog:
     initial_value: Optional[float] = None  # 초기 가치
     current_value: Optional[float] = None  # 현재 가치
     net_profit_loss: Optional[float] = None  # 수수료 제외한 손익
-    net_profit_loss_rate: Optional[float] = None # 수수료 제외 손익률
+    net_profit_loss_rate: Optional[float] = None  # 수수료 제외 손익률
     gross_profit_loss: Optional[float] = None  # 수수료를 포함한 손익
-    gross_profit_loss_rate: Optional[float] = None # 수수료 포함 손익률
+    gross_profit_loss_rate: Optional[float] = None  # 수수료 포함 손익률
     break_even_price: Optional[float] = None  # 손익분기점 가격
     entry_fee: Optional[Union[float, int]] = None  # 진입 수수료
     exit_fee: Optional[Union[float, int]] = None  # 종료 수수료
@@ -166,18 +167,19 @@ class TradingLog:
 
         # 총 수수료를 계산한다.
         total_fees = self.entry_fee + self.exit_fee
-        
-        
+
         if self.position == 1:
             # 수수료를 제외한 손익금
-            self.net_profit_loss = (self.current_price - self.entry_price) * self.quantity
+            self.net_profit_loss = (
+                self.current_price - self.entry_price
+            ) * self.quantity
 
         elif self.position == 2:
             # 수수료를 제외한 손익금
-            self.net_profit_loss = (self.entry_price - self.current_price) * self.quantity
+            self.net_profit_loss = (
+                self.entry_price - self.current_price
+            ) * self.quantity
 
-            
-        
         # 수수료 제외 손익률
         self.net_profit_loss_rate = self.net_profit_loss / self.initial_value
         # 수수료를 포함한 손익금(총 수수료 반영)
@@ -242,7 +244,7 @@ class TradingLog:
 
         # 포지션이 롱이면,
         if self.position == 1:
-            # 손절 반영 시작값은 시작가 기준 
+            # 손절 반영 시작값은 시작가 기준
             self.adj_start_price = self.entry_price * (1 - start_rate)
             self.stop_price = self.adj_start_price + (
                 (self.high_price - self.adj_start_price) * (1 - self.stop_rate)
@@ -317,17 +319,24 @@ class TradeAnaylsis:
         self.cash_balance: float = initial_balance  # 사용 가능한 예수금
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
-        self.trade_count: int = 0# 총 체결 횟수
+        self.trade_count: int = 0  # 총 체결 횟수
         # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
-    def validate_open_position(self, symbol:str):
+    def validate_open_position(self, symbol: str):
         if symbol in self.open_positions:
             return True
         else:
             return False
 
     # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
-    def validate_loss_scenario(self, symbol: str, scenario: int, chance: int, step_interval: str, current_timestamp: Optional[int] = None):
+    def validate_loss_scenario(
+        self,
+        symbol: str,
+        scenario: int,
+        chance: int,
+        step_interval: str,
+        current_timestamp: Optional[int] = None,
+    ):
         """
         1. 기능: 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
         2. 매개변수:
@@ -342,7 +351,7 @@ class TradeAnaylsis:
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
         if symbol not in self.closed_positions:
             return True
-        
+
         # 거래 종료 데이터 np.array화
         data_array = np.array(self.closed_positions[symbol], float)
 
@@ -358,16 +367,14 @@ class TradeAnaylsis:
         # print(data_array[0][1])
         # 조건 필터링
         mask = (
-            (data_array[:, 1] >= target_timestamp) &  # last_timestamp > target_timestamp
-            (data_array[:, 16] == scenario) &  # trade_scenario == scenario
-            (data_array[:, 13] < 0)  # gross_profit_loss < 0
+            (data_array[:, 1] >= target_timestamp)  # last_timestamp > target_timestamp
+            & (data_array[:, 16] == scenario)  # trade_scenario == scenario
+            & (data_array[:, 13] < 0)  # gross_profit_loss < 0
         )
         filtered_count = np.sum(mask)  # 조건을 만족하는 데이터 개수
 
         # 허용된 chance보다 크면 이면 False 반환
         return filtered_count < chance
-
-
 
     # TradingLog 클라스를 컨테이너 데이터에 저장한다.
     def add_log_data(self, log_data: TradingLog):
@@ -376,7 +383,7 @@ class TradeAnaylsis:
         # container name은 symbol로 정하고 데이터는 TradingLog를 넣는다.
         self.data_container.set_data(data_name=symbol, data=log_data)
         trade_data = self.__extract_valid_data(data=log_data)
-        self.trade_count +=1
+        self.trade_count += 1
         self.open_positions[symbol] = trade_data
         self.update_data()
 
@@ -403,23 +410,23 @@ class TradeAnaylsis:
     # 필요한 값만 추출하여 리스트 형태로 반환한다.
     def __extract_valid_data(self, data: TradingLog):
         return [
-            data.start_timestamp,#0 시작 타임스템프
-            data.last_timestamp,#1  종료 타임스템프
-            data.position,#2    포지션 (1:long, 2:short)
-            data.leverage,#3    레버리지
-            data.quantity,#4    수량
-            data.entry_price,#5 진입가격
-            data.high_price,#6  최고가격
-            data.low_price,#7   최저가격
-            data.current_price,#8   현재가격 또는 마지막 가격
-            data.stop_price,#9  stoploss 가격
-            data.initial_value,#10  초기 진입 평가 금액
-            data.current_value,#11  현재 평가 금액
-            data.net_profit_loss,#12    수수료 제외 PnL
-            data.gross_profit_loss,#13  수수료 포함 PnL
-            data.entry_fee,#14  진입 수수료
-            data.exit_fee,#15   종료 수수료
-            data.trade_scenario#16  시나리오 종류
+            data.start_timestamp,  # 0 시작 타임스템프
+            data.last_timestamp,  # 1  종료 타임스템프
+            data.position,  # 2    포지션 (1:long, 2:short)
+            data.leverage,  # 3    레버리지
+            data.quantity,  # 4    수량
+            data.entry_price,  # 5 진입가격
+            data.high_price,  # 6  최고가격
+            data.low_price,  # 7   최저가격
+            data.current_price,  # 8   현재가격 또는 마지막 가격
+            data.stop_price,  # 9  stoploss 가격
+            data.initial_value,  # 10  초기 진입 평가 금액
+            data.current_value,  # 11  현재 평가 금액
+            data.net_profit_loss,  # 12    수수료 제외 PnL
+            data.gross_profit_loss,  # 13  수수료 포함 PnL
+            data.entry_fee,  # 14  진입 수수료
+            data.exit_fee,  # 15   종료 수수료
+            data.trade_scenario,  # 16  시나리오 종류
         ]
 
     def remove_order_data(self, symbol: str):
@@ -453,15 +460,15 @@ class TradeAnaylsis:
 
         open_data_array = np.array(object=open_trade_data, dtype=float)
         if open_data_array.ndim == 1:
-            open_data_array = open_data_array.reshape(1, -1) 
+            open_data_array = open_data_array.reshape(1, -1)
 
         if open_data_array.size == 0:
             open_pnl = 0
             active_value = 0
         else:
             open_pnl = np.sum(open_data_array[:, 13])
-            active_value = np.sum(open_data_array[:,10])
-            
+            active_value = np.sum(open_data_array[:, 10])
+
         if closed_data_array.size == 0:
             closed_pnl = 0
         else:
@@ -476,16 +483,17 @@ class TradeAnaylsis:
         self.profit_loss = closed_pnl + open_pnl
         self.total_balance = self.profit_loss + self.initial_balance
         # self.profit_loss_ratio = self.profit_loss / self.initial_balance
-        self.profit_loss_ratio = (self.total_balance - self.initial_balance)/self.initial_balance
-
+        self.profit_loss_ratio = (
+            self.total_balance - self.initial_balance
+        ) / self.initial_balance
 
 
 ##=---=####=---=####=---=####=---=####=---=####=---=##
-#=-=##=---=###=----=###=----=###=----=###=----=###=-=# 
+# =-=##=---=###=----=###=----=###=----=###=----=###=-=#
 ##=---=####=---=####=---=####=---=####=---=####=---=##
-#-=###=----=#=- BACK TEST METHOD ZONE -=##=----=###=-#
+# -=###=----=#=- BACK TEST METHOD ZONE -=##=----=###=-#
 ##=---=####=---=####=---=####=---=####=---=####=---=##
-#=-=##=---=###=----=###=----=###=----=###=----=###=-=# 
+# =-=##=---=###=----=###=----=###=----=###=----=###=-=#
 ##=---=####=---=####=---=####=---=####=---=####=---=##
 
 
@@ -493,6 +501,7 @@ class TestDataManager:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
+
     FUTURES = "FUTURES"
     SPOT = "SPOT"
 
@@ -526,7 +535,6 @@ class TestDataManager:
         self.parent_directory = os.path.dirname(os.getcwd())
 
     # def create_dummy_signal(self, signal_type:str):
-        
 
     # 장기간 kline data수집을 위한 date간격을 생성하여 timestamp형태로 반환한다.
     def __generate_timestamp_ranges(
@@ -539,8 +547,8 @@ class TestDataManager:
 
         # 시작 및 종료 날짜 문자열 처리
         # 시간 정보는 반드시 00:00:00 > 23:59:59로 세팅해야 한다. 그렇지 않을경우 수신에 문제 발생.
-        start_date = start_date# + " 00:00:00"
-        end_date = end_date# + " 23:59:59"
+        start_date = start_date  # + " 00:00:00"
+        end_date = end_date  # + " 23:59:59"
 
         # interval에 따른 밀리초 단위 스텝 가져오기
         interval_step = utils._get_interval_ms_seconds(interval)
@@ -551,11 +559,13 @@ class TestDataManager:
         # 시작 타임스탬프
         start_timestamp = utils._convert_to_timestamp_ms(date=start_date)
         # interval 및 MAX_LIMIT 적용으로 계산된 최대 종료 타임스탬프
-        
+
         if interval_step is not None:
-            max_possible_end_timestamp = start_timestamp + (interval_step * MAX_LIMIT) - 1
+            max_possible_end_timestamp = (
+                start_timestamp + (interval_step * MAX_LIMIT) - 1
+            )
         else:
-            raise ValueError(f'interval step값 없음 - {interval_step}')
+            raise ValueError(f"interval step값 없음 - {interval_step}")
         # 지정된 종료 타임스탬프
         end_timestamp = utils._convert_to_timestamp_ms(date=end_date)
 
@@ -880,13 +890,12 @@ class TestDataManager:
         return kline_data_array, closing_sync, indices_data
 
 
-
 class TestProcessManager:
     """
-    각종 연산이 필요한 함수들의 집함한다. 
+    각종 연산이 필요한 함수들의 집함한다.
     """
 
-    def __init__(self, max_leverage:int):
+    def __init__(self, max_leverage: int):
         self.ins_trade_futures_client = FuturesOrder()
         self.ins_trade_spot_client = SpotOrder()
         # self.ins_trade_stopper = DataProcess.TradeStopper()
@@ -935,8 +944,6 @@ class TestProcessManager:
 
         return (True, get_max_trade_qty, target_leverage)
 
-    
-
 
 class OrderConstraint:
     """주문시 제약사항을 생성한다."""
@@ -951,7 +958,9 @@ class OrderConstraint:
     #     self.safety_account_ratio = 0.32
 
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
-    def calc_fund(self, funds: float, safety_ratio: float = 0.35, count_max:int =6) -> dict:
+    def calc_fund(
+        self, funds: float, safety_ratio: float = 0.35, count_max: int = 6
+    ) -> dict:
         """
         총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
 
@@ -990,10 +999,10 @@ class OrderConstraint:
                 count += 1
                 if target > funds:
                     break
-        
-        #count최대값을 지정한다. 너무 높면 회당 주문금액이 낮아진다.
+
+        # count최대값을 지정한다. 너무 높면 회당 주문금액이 낮아진다.
         count = min(count, count_max)
-        
+
         # 안전 금액 및 유효 금액 계산
         safety_value = last_valid_target * safety_ratio
         usable_value = last_valid_target - safety_value
@@ -1028,7 +1037,9 @@ class ResultEvaluator:
         :param trade_analysis_ins: trade_analysis_ins 객체
         """
         self.trade_analysis_ins = trade_analysis_ins
-        self.closed_positions = trade_analysis_ins.closed_positions or {}  # 청산된 포지션 초기화
+        self.closed_positions = (
+            trade_analysis_ins.closed_positions or {}
+        )  # 청산된 포지션 초기화
         self.initial_balance = trade_analysis_ins.initial_balance
         self.total_balance = trade_analysis_ins.total_balance
         self.profit_loss = trade_analysis_ins.profit_loss
@@ -1043,32 +1054,47 @@ class ResultEvaluator:
         """
         if not self.closed_positions:
             print("Info: No data in closed_positions. Returning an empty DataFrame.")
-            return pd.DataFrame(columns=[
-                "Symbol", "Scenario", "Position", "Start Timestamp", "End Timestamp", 
-                "Leverage", "Quantity", "Entry Price", "Exit Price", 
-                "Net Profit/Loss", "Gross Profit/Loss", "Entry Fee", "Exit Fee", "Total Fee"
-            ])
+            return pd.DataFrame(
+                columns=[
+                    "Symbol",
+                    "Scenario",
+                    "Position",
+                    "Start Timestamp",
+                    "End Timestamp",
+                    "Leverage",
+                    "Quantity",
+                    "Entry Price",
+                    "Exit Price",
+                    "Net Profit/Loss",
+                    "Gross Profit/Loss",
+                    "Entry Fee",
+                    "Exit Fee",
+                    "Total Fee",
+                ]
+            )
 
         # 데이터 기록 생성
         records = []
         for symbol, trades in self.closed_positions.items():
             for trade in trades:
-                records.append({
-                    "Symbol": symbol,
-                    "Scenario": trade[16],  # 시나리오 종류
-                    "Position": "Long" if trade[2] == 1 else "Short",
-                    "Start Timestamp": trade[0],
-                    "End Timestamp": trade[1],
-                    "Leverage": trade[3],
-                    "Quantity": trade[4],
-                    "Entry Price": trade[5],
-                    "Exit Price": trade[8],
-                    "Net Profit/Loss": trade[12],
-                    "Gross Profit/Loss": trade[13],
-                    "Entry Fee": trade[14],
-                    "Exit Fee": trade[15],
-                    "Total Fee": trade[14] + trade[15],  # 총 수수료 계산
-                })
+                records.append(
+                    {
+                        "Symbol": symbol,
+                        "Scenario": trade[16],  # 시나리오 종류
+                        "Position": "Long" if trade[2] == 1 else "Short",
+                        "Start Timestamp": trade[0],
+                        "End Timestamp": trade[1],
+                        "Leverage": trade[3],
+                        "Quantity": trade[4],
+                        "Entry Price": trade[5],
+                        "Exit Price": trade[8],
+                        "Net Profit/Loss": trade[12],
+                        "Gross Profit/Loss": trade[13],
+                        "Entry Fee": trade[14],
+                        "Exit Fee": trade[15],
+                        "Total Fee": trade[14] + trade[15],  # 총 수수료 계산
+                    }
+                )
 
         return pd.DataFrame(records)
 
@@ -1116,11 +1142,15 @@ class ResultEvaluator:
 
         # Subplots 생성
         fig = make_subplots(
-            rows=total_rows, cols=total_cols,
+            rows=total_rows,
+            cols=total_cols,
             subplot_titles=[
-                f"{scenario}_{position}" for scenario in scenarios for position in positions
-            ] + [f"Combined_{position}" for position in positions],
-            vertical_spacing=0.1
+                f"{scenario}_{position}"
+                for scenario in scenarios
+                for position in positions
+            ]
+            + [f"Combined_{position}" for position in positions],
+            vertical_spacing=0.1,
         )
 
         # X축의 기본 심볼 목록
@@ -1132,16 +1162,18 @@ class ResultEvaluator:
         for row, scenario in enumerate(scenarios, start=1):
             for col, position in enumerate(positions, start=1):
                 data = summary_reset[
-                    (summary_reset["Scenario"] == scenario) &
-                    (summary_reset["Position"] == position)
+                    (summary_reset["Scenario"] == scenario)
+                    & (summary_reset["Position"] == position)
                 ]
 
                 # 데이터가 없으면 기본값 생성
                 if data.empty:
-                    data = pd.DataFrame({
-                        "Symbol": all_symbols,
-                        "Gross_PnL": [0] * len(all_symbols),
-                    })
+                    data = pd.DataFrame(
+                        {
+                            "Symbol": all_symbols,
+                            "Gross_PnL": [0] * len(all_symbols),
+                        }
+                    )
 
                 fig.add_trace(
                     go.Bar(
@@ -1149,27 +1181,38 @@ class ResultEvaluator:
                         y=data["Gross_PnL"],
                         name=f"{scenario}_{position}",
                         marker=dict(
-                            color=["#2ca02c" if v > 0 else "#d62728" for v in data["Gross_PnL"]],
-                            line=dict(color="black", width=2)  # 검정 테두리 추가
+                            color=[
+                                "#2ca02c" if v > 0 else "#d62728"
+                                for v in data["Gross_PnL"]
+                            ],
+                            line=dict(color="black", width=2),  # 검정 테두리 추가
                         ),
-                        text=[f"{v:.2f}" for v in data["Gross_PnL"]],  # 소수점 2자리 표현
+                        text=[
+                            f"{v:.2f}" for v in data["Gross_PnL"]
+                        ],  # 소수점 2자리 표현
                         textposition="auto",
                     ),
-                    row=row, col=col
+                    row=row,
+                    col=col,
                 )
 
         # 합계 데이터 추가
         for col, position in enumerate(positions, start=1):
-            total_data = summary_reset[
-                summary_reset["Position"] == position
-            ].groupby("Symbol").sum().reset_index()
+            total_data = (
+                summary_reset[summary_reset["Position"] == position]
+                .groupby("Symbol")
+                .sum()
+                .reset_index()
+            )
 
             # 데이터가 없으면 기본값 생성
             if total_data.empty:
-                total_data = pd.DataFrame({
-                    "Symbol": all_symbols,
-                    "Gross_PnL": [0] * len(all_symbols),
-                })
+                total_data = pd.DataFrame(
+                    {
+                        "Symbol": all_symbols,
+                        "Gross_PnL": [0] * len(all_symbols),
+                    }
+                )
 
             fig.add_trace(
                 go.Bar(
@@ -1177,13 +1220,19 @@ class ResultEvaluator:
                     y=total_data["Gross_PnL"],
                     name=f"Combined_{position}",
                     marker=dict(
-                        color=["#1f77b4" if v > 0 else "#ff7f0e" for v in total_data["Gross_PnL"]],
-                        line=dict(color="black", width=2)  # 검정 테두리 추가
+                        color=[
+                            "#1f77b4" if v > 0 else "#ff7f0e"
+                            for v in total_data["Gross_PnL"]
+                        ],
+                        line=dict(color="black", width=2),  # 검정 테두리 추가
                     ),
-                    text=[f"{v:.2f}" for v in total_data["Gross_PnL"]],  # 소수점 2자리 표현
+                    text=[
+                        f"{v:.2f}" for v in total_data["Gross_PnL"]
+                    ],  # 소수점 2자리 표현
                     textposition="auto",
                 ),
-                row=total_rows, col=col
+                row=total_rows,
+                col=col,
             )
 
         # 레이아웃 업데이트

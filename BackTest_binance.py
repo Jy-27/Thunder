@@ -41,9 +41,11 @@ class BackTester:
         quote_type: str = "usdt",
     ):
         self.symbols = [symbol.upper() for symbol in symbols]
+        # intervals값은 Analysis에서 전담으로 관리하다. 분석 항목기준으로 interval을 구성했다.
         self.intervals = Analysis.IntervalConfig.target_interval
         self.start_date = start_date
         self.end_date = end_date
+        # 전체 금액에서 안전금액 비율
         self.safety_balance_ratio = safety_balance_ratio
         self.stop_loss_rate = stop_loss_rate
         self.is_download = is_download
@@ -52,13 +54,18 @@ class BackTester:
         self.adj_interval = adj_interval
         self.is_use_scale_stop = is_use_scale_stop
         self.max_leverage = max_leverage
+        # 반복적인 손실발생시 해당 시나리오는 브레이크 타임을 갖는다.
         self.is_order_break = is_order_break
+        # 시나리오 브레이크임 진입전 손실 횟수
         self.loss_chance: Optional[int] = loss_chance if self.is_order_break else None
+        # 브레이크타임을 시간 지정 : interval값을 밀리미터로 변환.
         self.step_interval: Optional[str] = (
             step_interval if self.is_order_break else None
         )
-        self.test_mode = True
-        self.closing_sync_data = None
+        # TradingLog에 기록한다. 앞으로 어떻게 사용할지 고민중...
+        self.test_mode: bool = True
+        # 데이터를 pickle로 저장 및 로딩해야하며, 컨테이너화 하지 않는다.
+        self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
         self.test_manager_ins = DataProcess.TestDataManager(
             symbols=self.symbols,
             intervals=self.intervals,
@@ -85,22 +92,46 @@ class BackTester:
         # interval별 데이털르 저장하는 데이터셋
         self.interval_dataset = utils.DataContainer()
 
+    # 저장데이터의 주소값을 확보한다.
     def __get_data_path(self):
+        """
+        1. 기능 : 백테스트에 적용될 kline_data의 주소값을 반환한다.
+        2. 매개변수 : 해당없음.
+        """
+        # 파일명 - 속성명에 지정함.
         file_name = self.test_manager_ins.kline_closing_sync_data
+        # 폴더명 - 속성명에 지정함.
         folder_name = self.test_manager_ins.storeage
+        # 상위폴도명 - 함수로 확보
         base_directory = os.path.dirname(os.getcwd())
+        # 주소 합성 - 상위폴더 + 폴더명 + 파일명
         path = os.path.join(base_directory, folder_name, file_name)
+        # 주소 반환.
         return path
 
+    # closing_sync_data의 유효성을 점검한다.
     def __validate_base_data(self):
-        # symbol정보만 점검함. interval 정보는 확인이 가능하나 귀찮음. (np.array화 하여 [0]index timestamp를 기준으로 전체 찾고 시작과 긑의 값 차이를 비교하여 interval 밀리초를 계산)
+        """
+        1. 기능 : closing_sync_data의 유효성을 점검한다. symbol정보만 점검하며, interval데이터는 검토하지 않는다.
+                (할 수 있응나 귀찮아서. [np.array화 하여 [0]index timestamp를 기준으로 전체 찾고 시작과 긑의 값 차이를 비교하여 interval 밀리초를 계산])
+        2. 매개변수 : 해당없음.
+        """
+        # 속성에 데이터가 없다면,
         if not self.closing_sync_data:
+            # 에러 발생
             raise ValueError(f"closing_sync_data가 비어있음.")
+        #
         for symbol, _ in self.closing_sync_data.items():
             if not symbol in self.symbols:
                 raise ValueError(f"closing_sync_data의 symbol정보 불일치: {symbol}")
 
-    async def get_base_data(self):
+    # 백테스트에 사용될 데이터를 로딩 또는 수신한다.
+    async def get_base_data(self, is_save: bool = False):
+        """
+        1. 기능 : 백테스트에 사용될 데이터를 로딩 또는 수신한다.
+        2. 매개변수
+            1) is_save : 데이터를 저장할지 여부를 결정한다.
+        """
         # 기존 데이터 로딩시
         if not self.is_download:
             # 파일 주소를 생성하고
@@ -118,41 +149,72 @@ class BackTester:
                     return
         # 신규 다운로드 선택시
         else:
-            data = await self.test_manager_ins.generate_kline_interval_data(save=False)
+            # kline data를 수신한다.
+            data = await self.test_manager_ins.generate_kline_interval_data(
+                is_save=save
+            )
+            # 데이터를 np.array타입으로 변환한다.
             data_array = utils._convert_kline_data_array(data)
+            # closing_sync 데이터를 생성 및 속성에 저장한다.
             self.closing_sync_data = self.test_manager_ins.generate_kline_closing_sync(
                 kline_data=data_array, save=True
             )
 
+    # closing_sync 데이터의 index 데이터를 생성한다.
     async def get_indices_data(self):
+        """
+        1. 기능 : closing_sync_data의 index데이터를 생성한다.
+        2. 매개변수 : 해당없음.
+        """
+
+        # symbol map, interval map, closing_indices데이터를 생성(self.get_base_data로 생성된 속성값 적용.)
         self.symbol_map, self.interval_map, self.closing_indices_data = (
             utils._convert_to_container(self.closing_sync_data)
         )
+        # closing_sync index데이터를 생성 및 속성에 저장한다.
         self.test_manager_ins.get_indices_data(
             data_container=self.closing_indices_data, lookback_days=1
         )
 
+    # 현재 진행중인 포지션이 있다면, 최종 정보를 업데트한다.(단가, 현재타임스템프)
+    # 업데이트 후 StopLoss 조건 성립시 포지션 종료 신호(True)를 반환한다.
     def update_trade_info(self, symbol: str, data):
+        """
+        1. 기능 : 진행중인 포지션이 있다면, 최종 데이터를 업데이트한다. 업데이트 후 포지션 종료 여부를 반환한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+            2) data : closing_sync_data 해당 index조회 값.
+        """
+
+        # 현재 가격
         price = data[-1][4]
+        # 현재 타임스템프
         close_timestamp = data[-1][6]
+        # 해당 symbol이 현재 진행중인 포지션이 있는지 확인한다.
         if symbol in self.trade_analysis_ins.open_positions:
+            # 현재 포지션 유지중이라면 데이터를 업데이트한다.
+            # 포지션 종료신호를 반환한다. (True / False)
             return self.trade_analysis_ins.update_log_data(
                 symbol=symbol, price=price, timestamp=close_timestamp
             )
+        # 현재 포지션이 없다면,
         else:
+            # 아무것도 하지 않고 포지션 종료 거절신호(False)를 반환한다.
             return False
 
-    def analyze_data(self, data):
-        self.analysis_ins.case_1_data_length(data)
-        self.analysis_ins.case_2_candle_length(data)
-        self.analysis_ins.case_3_continuous_trend_position(data)
-        self.analysis_ins.case_7_ocillator_value(data)
-        self.analysis_ins.case_8_sorted_indices(data, 2, 3)
-
-    async def __validate_open_position(
+    # position open전 주문 유효 점검 및 주문가능수량을 반환한다.
+    async def __validate_open_signal(
         self, symbol: str, price: float
     ):  # , leverage: int):
-        if symbol in self.trade_analysis_ins.open_positions:
+        """
+        1. 기능 : position open전 주문 유효 점검 및 주문 가능 수량을 계산 반환한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+            2) price : 진입가격
+        3. 추가사항
+            - 주문 전 open_position 사전 점검하기는 한다만...혹시 모르니 추가했다.
+        """
+        if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
             total_balance = self.trade_analysis_ins.total_balance
@@ -185,12 +247,20 @@ class BackTester:
             else:
                 return True, qty, lv
 
+    # symbol값 기준 포지션 유지여부 확인
     def __validate_cloes_position(self, symbol: str):
+        """
+        1. 기능 : symbol값 기준 포지션 유지여부를 확인한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+        """
+
         if symbol in self.trade_analysis_ins.open_positions:
             return True
         else:
             return False
 
+    # open 주문을 생성한다.
     async def active_open_position(
         self,
         symbol: str,
@@ -200,14 +270,30 @@ class BackTester:
         scenario_type: int,
         leverage: Optional[int] = None,
     ):
-        is_open_signal, quantity, leverage = await self.__validate_open_position(
+        """
+        1. 기능 : position open 주문을 생성한다.
+        2. 매개변수
+            1) symbol : 쌍거래 symbol
+            2) price : 진입가격
+            3) position : 1:long, 2:short
+            4) start_timestamp : 시작 타임스템프
+            5) secnario_type : int() / 시나리오 종류
+            6) leverage : 레버리지
+        """
+
+        # 주문전 유효성 검사
+        is_open_signal, quantity, leverage = await self.__validate_open_signal(
             symbol=symbol, price=price
         )
 
+        # 주문 유혀성 검토 결과 False면,
         if not is_open_signal:
+            # 함수 종료
             return
 
+        # 브레이크 타임 설정시
         if self.is_order_break:
+            # 기존 거래내역을 검토해서 브레이크 타임 적용여부 검토
             is_loss_scnario = self.trade_analysis_ins.validate_loss_scenario(
                 symbol=symbol,
                 scenario=scenario_type,
@@ -215,9 +301,12 @@ class BackTester:
                 step_interval=self.step_interval,
                 current_timestamp=start_timestamp,
             )
+            # 브레이크 타임 해당될경우
             if not is_loss_scnario:
+                # 함수 종료
                 return
 
+        # 브레이크 타임 검토 후 미적용시 주문정보 생성.
         log_data = DataProcess.TradingLog(
             symbol=symbol,
             start_timestamp=start_timestamp,
@@ -234,13 +323,22 @@ class BackTester:
             adj_interval=self.adj_interval,
             use_scale_stop=self.is_use_scale_stop,
         )
+        # 주문 정보를 추가
         self.trade_analysis_ins.add_log_data(log_data=log_data)
 
+    # 포지션 종료를 위한 함수.
     def active_close_position(self, symbol: str):
+        # 포지션 종료 신호를 수신해도 symbol값 기준으로 position 유효성 검토한다.
         if self.__validate_cloes_position(symbol=symbol):
+            # 유효성 확인시 해당 내용을 제거한다.
             self.trade_analysis_ins.remove_order_data(symbol=symbol)
 
+    # 백테스트 시작시 현재 설정정보를 출력한다.
     def start_masage(self):
+        """
+        1. 기능 : 백테스트 시작시 현재 설정 정보를 출력한다.
+        2. 매개변수 : 해당없음.
+        """
         header = "=" * 100
         print(f"\n {header}\n")
         print(f"    ***-=-=-<< BACK TESTING >>-=-=-***\n")
@@ -257,12 +355,18 @@ class BackTester:
         print(f"\n {header}\n")
         print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL")
 
+    # 백테스트 실행.
     async def run(self):
+        """
+        1. 기능 : 각종 기능을 집합하여 시계 데이터 loop 생성하고 가상의 거래를 진행한다.
+        2. 매개변수 : 해당없음.
+        """
         await self.get_base_data()
         self.__validate_base_data()
         await self.get_indices_data()
         self.start_masage()
 
+        ### 데이터 타임루프 시작 ###
         for idx, data in enumerate(
             self.closing_indices_data.get_data(self.target_run_interval)
         ):
@@ -309,7 +413,9 @@ class BackTester:
                     continue
 
                 ### interval data를 데이터셋으로 구성 ###
-                self.interval_dataset.set_data(data_name=f"interval_{interval}", data=data)
+                self.interval_dataset.set_data(
+                    data_name=f"interval_{interval}", data=data
+                )
 
             ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
             self.analysis_ins.set_dataset(container_data=self.interval_dataset)

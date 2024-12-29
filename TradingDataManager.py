@@ -16,6 +16,7 @@ from pprint import pprint
 from collections import defaultdict
 from MarketDataFetcher import SpotMarket, FuturesMarket
 from Analysis import AnalysisManager
+
 # from DataProcess import TradeStopper, OrderConstraint
 from DataProcess import OrderConstraint, DataInfo
 
@@ -78,7 +79,7 @@ class TradeManager:
         self.handler_instance = handler_instance  # asyncio._queue << 속성 여기에 있음.
         self.client_instance = client_instance
         self.market_instance = market_instance
-        self.analysis_instance = AnalysisManager(intervals = self.KLINE_INTERVALS)
+        self.analysis_instance = AnalysisManager(intervals=self.KLINE_INTERVALS)
         # self.process_instance = TradeStopper(profit_ratio=0.015, risk_ratio=0.85)
         self.constraint_instance = OrderConstraint()
 
@@ -182,8 +183,6 @@ class TradeManager:
                 await self.update_all_klines()
                 # self.kline_data_update_flag = True
 
-                
-
             except Exception as e:
                 # 예외 발생 시 로깅 및 오류 메시지 출력
                 print(f"Error in ticker_update_loop: {e}")
@@ -207,12 +206,14 @@ class TradeManager:
         amount_field_name = {"FuturesTrade": "positionAmt", "SpotTrade": "free"}.get(
             self.market_type
         )
-        symbol_field_name = {"FuturesTrade": "symbol", "SpotTrade": "asset"}.get(self.market_type)
+        symbol_field_name = {"FuturesTrade": "symbol", "SpotTrade": "asset"}.get(
+            self.market_type
+        )
 
         # # 주요 데이터 필드가 존재하지 않을 경우 함수 종료
         raw_data = self.account_balance_raw.get(primary_field_name, [])
-        
-        #DEBUG
+
+        # DEBUG
         # print(self.market_type)
         # print(raw_data)
         # if not raw_data:
@@ -306,10 +307,10 @@ class TradeManager:
                 time_now = utils._get_time_component()
                 print(f"WebSocket 접속 시도 - {time_now}")
                 # WebSocket 데이터 수신 무한 루프 시작
-                
-                #debug
+
+                # debug
                 # print(len(self.active_tickers))
-                
+
                 await self.handler_instance.connect_kline_limit(
                     symbols=self.active_tickers, intervals=ws_intervals
                 )
@@ -462,8 +463,6 @@ class TradeManager:
                 2
             )  # utils._wait_time_sleep을 asyncio.sleep으로 대체하여 비동기 방식으로 대기
 
-
-
         # 모든 활성화된 티커에 대해 데이터를 수집 및 업데이트
         for ticker in self.active_tickers:
             for interval in self.KLINE_INTERVALS:
@@ -501,7 +500,6 @@ class TradeManager:
             # print(self.kline_data_update_flag)
             # print(datetime.datetime.now())
 
-            
             if current_time_minute in interval_map.get("minutes"):
                 for time_unit in time_units:
                     for times, intervals in interval_map.get(time_unit).items():
@@ -652,28 +650,28 @@ class TradeManager:
 
     #     # 마지막 값만 본다.
     #     get_intervals = [interval for interval in self.kline_data.get(self.active_tickers[-1])]
-        
+
     #     is_interval = set(get_intervals) == set(self.KLINE_INTERVALS)
     #     if not is_interval:
     #         print('interval 없음.')
     #         return False
-        
+
     #     target_idx = -1
     #     target_data = self.kline_data[self.active_tickers[target_idx]][self.KLINE_INTERVALS[target_idx]]
     #     data_length = len(target_data)
-        
+
     #     # print(self.interval_days)
     #     if self.interval_days is None:
     #         print('interval dasy 없음.')
     #         return False
-        
+
     #     abs_data_len = self._get_kline_limit_by_days(interval=self.KLINE_INTERVALS[-1], days=self.interval_days)
     #     is_data_emtpy = data_length >= abs_data_len
 
     #     if not is_data_emtpy:
     #         print('data길이 짧음 없음.')
     #         return False
-        
+
     #     return True
 
     def __validate(self) -> bool:
@@ -701,20 +699,22 @@ class TradeManager:
                     continue
 
                 # data길이 안맞을때 그냥 넘김. 이것은 패딩처리로 추후 수정 필요함.
-                kline_data_array = utils._convert_to_array(kline_data=self.kline_data, is_slice=True)
+                kline_data_array = utils._convert_to_array(
+                    kline_data=self.kline_data, is_slice=True
+                )
                 # print(kline_data_array)
                 # if not kline_data_array[2]:
                 #     continue
-                
+
                 symbol_map, interval_map, container_data = utils._convert_to_container(
                     kline_data_array
                 )
-                
+
                 if isinstance(symbol_map, int):
-                    print('symbol_map이 int로 지정됨.')
+                    print("symbol_map이 int로 지정됨.")
                     asyncio.sleep(5)
                     continue
-                
+
                 for symbol, idx_s in symbol_map.items():
                     for interval in interval_map.keys():
                         get_data = container_data.get_data(f"interval_{interval}")[
@@ -733,8 +733,9 @@ class TradeManager:
                             kline_data_lv3=get_data
                         )
                         self.analysis_instance.case_8_sorted_indices(
-                            kline_data_lv3=get_data, high_col=2, low_col=3)
-                        
+                            kline_data_lv3=get_data, high_col=2, low_col=3
+                        )
+
                     scenario_1 = self.analysis_instance.scenario_2()
                     self.analysis_instance.reset_cases()
 
@@ -750,38 +751,38 @@ class TradeManager:
     # original code
     # async def analysis_loop(self):
     #     target_interval = "5m"
-        # while True:
-        #     async with self.lock:
-        #         print(self.kline_data_update_flag)
-        #         asyncio.sleep(0)
-                
-            #     self.analysis_instance.update_data(
-            #         kline_data=self.kline_data,
-            #         intervals=self.KLINE_INTERVALS,
-            #         tickers=self.active_tickers,
-            #     )
-            #     for ticker in self.analysis_instance.tickers:
-            #         is_kline_data = self.analysis_instance._validate_kline_data(ticker)
-            #         if not is_kline_data:
-            #             continue
-            #         case_1 = self.analysis_instance.case1_conditions(ticker)
-            #         # DEBUG
-            #         if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
-            #             print(f"{ticker} - {case_1}")
+    # while True:
+    #     async with self.lock:
+    #         print(self.kline_data_update_flag)
+    #         asyncio.sleep(0)
 
-            #             order_position = case_1[0]
-            #             order_leverage = case_1[3]
-            #             if order_leverage is None or order_leverage < 3:
-            #                 # order_leverage = 5
-            #                 continue
+    #     self.analysis_instance.update_data(
+    #         kline_data=self.kline_data,
+    #         intervals=self.KLINE_INTERVALS,
+    #         tickers=self.active_tickers,
+    #     )
+    #     for ticker in self.analysis_instance.tickers:
+    #         is_kline_data = self.analysis_instance._validate_kline_data(ticker)
+    #         if not is_kline_data:
+    #             continue
+    #         case_1 = self.analysis_instance.case1_conditions(ticker)
+    #         # DEBUG
+    #         if case_1 and case_1[2] and case_1[4] and case_1[3] < 24:
+    #             print(f"{ticker} - {case_1}")
 
-            #             await self.submit_open_order_signal(
-            #                 symbol=ticker,
-            #                 position=order_position,
-            #                 leverage=order_leverage,
-            #             )
-            #             # self.save_to_json(file_path=path, new_data=result)
-            # await utils._wait_time_sleep(time_unit="second", duration=20)
+    #             order_position = case_1[0]
+    #             order_leverage = case_1[3]
+    #             if order_leverage is None or order_leverage < 3:
+    #                 # order_leverage = 5
+    #                 continue
+
+    #             await self.submit_open_order_signal(
+    #                 symbol=ticker,
+    #                 position=order_position,
+    #                 leverage=order_leverage,
+    #             )
+    #             # self.save_to_json(file_path=path, new_data=result)
+    # await utils._wait_time_sleep(time_unit="second", duration=20)
 
 
 class SpotTrade(TradeManager):
@@ -873,7 +874,7 @@ class FuturesTrade(TradeManager):
         # )
 
         # api서버 과요청 방지
-        await utils._wait_time_sleep(time_unit="second",duration=2)
+        await utils._wait_time_sleep(time_unit="second", duration=2)
 
     # TEST ZONE
     # 포지션 종료 신호를 발송한다.
@@ -884,7 +885,7 @@ class FuturesTrade(TradeManager):
             1) symbol : 쌍거래 symbol정보
         """
         # DEBUG PRINT
-        print('종료신호 발생')
+        print("종료신호 발생")
         position_data = self.account_balance_summary.get(symbol, None)
         if not position_data:
             return
@@ -914,6 +915,7 @@ if __name__ == "__main__":
     os.system("clear")
 
     obj = FuturesTrade()
+
     async def main_run():
         await obj.fetch_active_positions()
 

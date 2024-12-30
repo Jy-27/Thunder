@@ -22,24 +22,26 @@ import inspect
 으로 신호 정의함.
 """
 
+
 @dataclass
 class IntervalConfig:
     KLINE_INTERVAL = utils._info_kline_intervals()  # 클래스 변수
-    target_interval = ['1m', '3m', '5m', '15m']
+    target_interval = ["1m", "3m", "5m", "15m"]
     # target_interval: list[str] = None  # 인스턴스 변수
-    
+
     interval_maps: dict = None  # interval_maps를 속성으로 선언
 
-    def __post_init__(self):       
+    def __post_init__(self):
         # target_interval 유효성 검사
         for interval in self.target_interval:
             if interval not in self.KLINE_INTERVAL:
                 raise ValueError(f"interval 값이 유효하지 않음: {interval}")
-        
-        # interval_maps 속성 초기화
-        self.interval_maps = {f'interval_{data}': idx for idx, data in enumerate(self.target_interval)}
 
-class 
+        # interval_maps 속성 초기화
+        self.interval_maps = {
+            f"interval_{data}": idx for idx, data in enumerate(self.target_interval)
+        }
+
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
@@ -53,7 +55,7 @@ class AnalysisManager:
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
         self.intervals = IntervalConfig.target_interval
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
-        self.data_container:Optional[utils.DataContainer] = None
+        self.data_container: Optional[utils.DataContainer] = None
         self.case_1 = []
         self.case_2 = []
         self.case_3 = []
@@ -77,11 +79,10 @@ class AnalysisManager:
     # 데이터 셋을 생성한다.
     def set_dataset(self, container_data):
         self.data_container = container_data
-        
+
     # 데이터 셋을 초기화 한다.
     def clear_dataset(self):
         self.data_container.clear_all_data()
-
 
     """
     case들을 속성값에 저장시 반드시 tuple or list로 한번 감싼 후 추가할 것.
@@ -296,12 +297,12 @@ class AnalysisManager:
     ):
         high_idx = np.argmax(kline_data_lv3[:, high_col])
         low_idx = np.argmin(kline_data_lv3[:, low_col])
-        
+
         last_idx = len(kline_data_lv3) - 1
-        
+
         is_high = high_idx == last_idx
         is_low = low_idx == last_idx
-        
+
         self.case_8.append([is_high, is_low])
 
     def case_9_rsi(
@@ -357,7 +358,14 @@ class AnalysisManager:
 
         self.case_9.append(rsi)
 
-    def case_10_macd(self, data, short_window=12, long_window=26, signal_window=9, volume_threshold=500):
+    def case_10_macd(
+        self,
+        data,
+        short_window=12,
+        long_window=26,
+        signal_window=9,
+        volume_threshold=500,
+    ):
         """
         NumPy 기반 MACD 계산과 거래 전략 수행
         :param prices: ndarray, 종가 데이터
@@ -369,10 +377,10 @@ class AnalysisManager:
         :return: 신호 배열 ('buy', 'sell', None), MACD, Signal, Histogram (ndarray)
         """
         # EMA 계산 함수
-        
-        prices=data[:,4]
-        volumes=data[:,9]
-        
+
+        prices = data[:, 4]
+        volumes = data[:, 9]
+
         def ema(values, window):
             alpha = 2 / (window + 1)
             ema_values = np.zeros_like(values)
@@ -395,7 +403,11 @@ class AnalysisManager:
         # print(histogram)
 
         # 거래 전략 신호 계산
-        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        buy_signals = (
+            (macd > signal)
+            & (np.roll(macd, 1) <= np.roll(signal, 1))
+            & (volumes > volume_threshold)
+        )
         # print(buy_signals)
         sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
         # print(sell_signals)
@@ -407,9 +419,6 @@ class AnalysisManager:
         else:
             self.case_10.append(0)
 
-
-
-
     def calculate_macd_numpy(prices, short_window=12, long_window=26, signal_window=9):
         """
         NumPy 기반 MACD, Signal, Histogram 계산
@@ -419,6 +428,7 @@ class AnalysisManager:
         :param signal_window: Signal EMA 기간 (기본값: 9)
         :return: MACD, Signal, Histogram (ndarray)
         """
+
         # EMA 계산
         def ema(values, window):
             alpha = 2 / (window + 1)
@@ -435,7 +445,9 @@ class AnalysisManager:
         histogram = macd - signal
         return macd, signal, histogram
 
-    def macd_trading_strategy_numpy(prices, volumes, macd, signal, volume_threshold=500):
+    def macd_trading_strategy_numpy(
+        prices, volumes, macd, signal, volume_threshold=500
+    ):
         """
         NumPy 기반 MACD 전략으로 매수/매도 신호 계산
         :param prices: ndarray, 종가 데이터
@@ -445,21 +457,25 @@ class AnalysisManager:
         :param volume_threshold: 거래량 임계값 (기본값: 500)
         :return: 신호 배열 ('buy', 'sell', None)
         """
-        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        buy_signals = (
+            (macd > signal)
+            & (np.roll(macd, 1) <= np.roll(signal, 1))
+            & (volumes > volume_threshold)
+        )
         sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
-        
+
         signals = np.full(prices.shape, None, dtype=object)
         signals[buy_signals] = 1
         signals[sell_signals] = 2
         return signals
 
     # 시나리오의 number값을 int 타입으로 반환한다.
-    def __get_scenario_number(self)->int:
+    def __get_scenario_number(self) -> int:
         stack = inspect.stack()
         parent_function_name = stack[1].function
-        return int(parent_function_name.split('_')[-1])
+        return int(parent_function_name.split("_")[-1])
 
-    def scenario_3(self) -> Tuple[bool, ]:
+    def scenario_3(self) -> Tuple[bool,]:
         scenario_n = self.__get_scenario_number()
         is_order_signal = self.case_10[0]
         leverage = 10
@@ -493,13 +509,20 @@ class AnalysisManager:
             if not increase or not decrease:  # 리스트가 비어있는지 확인
                 return (False, 0, 0, scenario_n)
 
-
         # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
-        is_case_3_long_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] - 1)
-        is_case_3_long_count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
+        is_case_3_long_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][
+            end_idx
+        ] == (self.case_1[target_interval_5m] - 1)
+        is_case_3_long_count = (
+            np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
+        )
 
-        is_case_3_short_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] - 1)
-        is_case_3_short_count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
+        is_case_3_short_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][
+            end_idx
+        ] == (self.case_1[target_interval_5m] - 1)
+        is_case_3_short_count = (
+            np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
+        )
 
         if is_case_3_long_last_idx and is_case_3_long_count:
             position = 1
@@ -509,7 +532,6 @@ class AnalysisManager:
 
         else:
             return (False, 0, 0, scenario_n)
-            
 
         # # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
         # if self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (
@@ -552,7 +574,7 @@ class AnalysisManager:
         # data_length = self.case_1[target_interval_15m] - 1
 
         hour_range_idx = -4 * 4
-        leverage=10
+        leverage = 10
 
         if position == 1 and self.case_8[target_interval_15m][long_idx]:
             return (True, position, leverage, 2)

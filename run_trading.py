@@ -1,4 +1,4 @@
-from BackTest_binance import *
+from SimulateTrading import *
 import DataProcess
 
 

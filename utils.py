@@ -650,8 +650,14 @@ def _std_print(message: str):
     sys.stdout.write(f"\r{message}")  # 커서를 줄의 시작으로 이동 후 메시지 출력
     sys.stdout.flush()
 
-
+# kline_data를 interval별로 묶어서 np.ndarray타입으로 반환한다.
 def _convert_kline_data_array(kline_data: Dict) -> Dict[str, Dict[str, np.ndarray]]:
+    """
+    1. 기능 : kline_data를 하나의 np.ndarray형태로 구성 및 반환한다.
+    2. 매개변수
+        1) kline_data : 수집된 kline_data
+    
+    """
     result = {}
     for symbol, kline_data_symbol in kline_data.items():
         if not isinstance(kline_data_symbol, dict) or not kline_data_symbol:
@@ -668,9 +674,16 @@ def _convert_kline_data_array(kline_data: Dict) -> Dict[str, Dict[str, np.ndarra
             )
     return result
 
-
-def _get_interval_ms_seconds(interval: str):
-    INTERVAL_MS_SECONDS: Final[dict] = {
+# interval별 초 정보를 반환한다.
+def _get_interval_ms_seconds(interval: str) -> int:
+    """
+    1. 기능 : interval별로 초 정보를 반환한다.
+    2. 매개변수
+        1) interval : interval값
+    3. 추가사항
+        >> 1달은 일수가 28일 ~ 31일 사이므로 명확하게 초로 나타내기 어려움.
+    """
+    INTERVAL_MS_SECONDS: Final[Dict[str, int]] = {
         "1m": 60_000,
         "3m": 180_000,
         "5m": 300_000,
@@ -689,4 +702,33 @@ def _get_interval_ms_seconds(interval: str):
     }
     if not interval in INTERVAL_MS_SECONDS:
         raise ValueError(f"interval 값이 유효하지 않음: {interval}")
-    return INTERVAL_MS_SECONDS[interval]
+    return int(INTERVAL_MS_SECONDS[interval])
+
+# interval별 분 정보를 반환한다.
+def _get_interval_minutes(interval:str) -> int:
+    """
+    1. 기능 : interval별로 분 정보를 반환한다.
+    2. 매개변수
+        1) interval : interval값
+    3. 추가사항
+        >> 1달은 일수가 28일 ~ 31일 사이므로 명확하게 분으로 나타내기 어려움.
+    """
+    INTERVAL_MINITES:Final[Dict[str, int]] = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "8h": 480,
+            "12h": 720,
+            "1d": 1_440,
+            "3d": 4_320,
+            "1w":10_080
+        }
+    if not interval in INTERVAL_MINITES:
+        raise ValueError(f"interval 값이 유효하지 않음: {interval}")
+    return int(INTERVAL_MINITES[interval])

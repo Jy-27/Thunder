@@ -6,19 +6,19 @@ if __name__ == "__main__":
     symbols = [
         "btcusdt",
         "xrpusdt",
-        "adausdt",
-        "linkusdt",
-        "sandusdt",
-        "bnbusdt",
-        "dogeusdt",
-        "solusdt",
+        # "adausdt",
+        # "linkusdt",
+        # "sandusdt",
+        # "bnbusdt",
+        # "dogeusdt",
+        # "solusdt",
     ]  # 확인하고자 하는 심볼 정보
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
-    start_date = "2024-11-1 00:00:00"  # 시작 시간
+    start_date = "2024-11-27 00:00:00"  # 시작 시간
     end_date = "2024-12-28 23:59:59"  # 종료 시간
     safety_balance_ratio = 0.02  # 잔고 안전금액 지정 비율
     stop_loss_rate = 0.35  # 스톱 로스 비율
-    is_download = True  # 기존 데이터로 할경우 False, 신규 다운로드 True
+    is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     adj_timer = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     adj_rate = 0.0007
     use_scale_stop = True  # final손절(False), Scale손절(True)
@@ -57,3 +57,6 @@ if __name__ == "__main__":
     asyncio.run(backtest_ins.run())
     analyze_statistics = DataProcess.ResultEvaluator(backtest_ins.trade_analysis_ins)
     analyze_statistics.run_analysis()
+
+
+

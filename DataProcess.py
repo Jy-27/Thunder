@@ -792,23 +792,23 @@ class TestDataManager:
             백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
         """
         # 하루의 총 분
-        minutes_in_a_day = 1_440
+        minutes_in_a_day = utils._get_interval_minutes('1d')
 
-        # interval에 따른 간격(분) 정의
-        interval_to_minutes = {
-            "1m": 1,
-            "3m": 3,
-            "5m": 5,
-            "15m": 15,
-            "30m": 30,
-            "1h": 60,
-            "2h": 120,
-            "4h": 240,
-            "6h": 360,
-            "8h": 480,
-            "12h": 720,
-            "1d": 1440,
-        }
+        # # interval에 따른 간격(분) 정의
+        # interval_to_minutes = {
+        #     "1m": 1,
+        #     "3m": 3,
+        #     "5m": 5,
+        #     "15m": 15,
+        #     "30m": 30,
+        #     "1h": 60,
+        #     "2h": 120,
+        #     "4h": 240,
+        #     "6h": 360,
+        #     "8h": 480,
+        #     "12h": 720,
+        #     "1d": 1440,
+        # }
 
         indices_data = []
 
@@ -817,6 +817,8 @@ class TestDataManager:
 
         for interval in intervals:
             indices_data = []
+            interval_to_minutes = utils._get_interval_minutes(interval)
+            
             # 데이터에서 각 인덱스 처리
             for current_index, data_point in enumerate(
                 data_container.get_data(data_name=f"interval_{interval}")[0]
@@ -827,14 +829,14 @@ class TestDataManager:
                     # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
                     start_index = current_index - minutes_in_a_day * lookback_days
                     start_index = (
-                        start_index // interval_to_minutes.get(interval)
-                    ) * interval_to_minutes.get(interval)
+                        start_index // interval_to_minutes
+                    ) * interval_to_minutes
                     if start_index < 0:
                         start_index = 0
 
                     # np.arange 생성
                     interval_range = np.arange(
-                        start_index, current_index, interval_to_minutes.get(interval)
+                        start_index, current_index, interval_to_minutes
                     )
 
                     # current_index가 마지막 인덱스보다 크면 추가
@@ -860,12 +862,12 @@ class TestDataManager:
         #         for series_index in range(len(data_container.get_data(data_name=f'interval_{interval}'))):
         #             # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
         #             start_index = current_index - minutes_in_a_day * lookback_days
-        #             start_index = (start_index // interval_to_minutes.get(interval)) * interval_to_minutes.get(interval)
+        #             start_index = (start_index // interval_to_minutes) * interval_to_minutes
         #             if start_index < 0:
         #                 start_index = 0
 
         #             # np.arange 생성
-        #             interval_range = np.arange(start_index, current_index, interval_to_minutes.get(interval))
+        #             interval_range = np.arange(start_index, current_index, interval_to_minutes)
 
         #             # current_index가 마지막 인덱스보다 크면 추가
         #             if current_index not in interval_range:

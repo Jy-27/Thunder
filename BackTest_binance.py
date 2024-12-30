@@ -151,13 +151,13 @@ class BackTester:
         else:
             # kline data를 수신한다.
             data = await self.test_manager_ins.generate_kline_interval_data(
-                is_save=save
+                save=is_save
             )
             # 데이터를 np.array타입으로 변환한다.
             data_array = utils._convert_kline_data_array(data)
             # closing_sync 데이터를 생성 및 속성에 저장한다.
             self.closing_sync_data = self.test_manager_ins.generate_kline_closing_sync(
-                kline_data=data_array, save=True
+                kline_data=data_array, save=is_save
             )
 
     # closing_sync 데이터의 index 데이터를 생성한다.
@@ -532,6 +532,25 @@ if __name__ == "__main__":
 
 다만 실시간 티켓정보 업데이트가 필요한데, 데이터의 양과 메모리의 한계 때문에 
 백테스트의 경우 티커 초기값을 지정한다.
+
+
+
+단계별 또는 total_balance기준 일정 비율 적용여부를 검토한다.
+
+단계별시 특정 스탭별로 정해진 금액으로만 포지션 진행하고
+total_balance기준 일정 비율 적용은 간단하게 total_balance X Rate를 반영한다.
+
+DataProcess.OrderConstraint에 해당 내용을 반영한다.
+
+calc_fund의 기능을 분리한다.
+
+
+특정 금액 초과시 이체기능 추가.
+익절 금액 보존 위함.
+
+포지션 유지 수량도 재검토 한다.
+
+
 
 
 # 실제 트레이딩 메모

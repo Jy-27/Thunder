@@ -4,8 +4,9 @@ import utils
 import copy
 from collections import defaultdict
 from typing import List, Dict, Optional, Union, Any, Tuple, Final
+from dataclasses import dataclass, fields, field, asdict
 from numpy.typing import NDArray
-
+import inspect
 
 """
 시나리오 1. 
@@ -21,31 +22,38 @@ from numpy.typing import NDArray
 으로 신호 정의함.
 """
 
+@dataclass
+class IntervalConfig:
+    KLINE_INTERVAL = utils._info_kline_intervals()  # 클래스 변수
+    target_interval = ['1m', '3m', '5m', '15m']
+    # target_interval: list[str] = None  # 인스턴스 변수
+    
+    interval_maps: dict = None  # interval_maps를 속성으로 선언
+
+    def __post_init__(self):       
+        # target_interval 유효성 검사
+        for interval in self.target_interval:
+            if interval not in self.KLINE_INTERVAL:
+                raise ValueError(f"interval 값이 유효하지 않음: {interval}")
+        
+        # interval_maps 속성 초기화
+        self.interval_maps = {f'interval_{data}': idx for idx, data in enumerate(self.target_interval)}
+
+class 
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self, back_test: bool = False):  # , symbols: list):
+    def __init__(self, intervals: List, back_test: bool = False):  # , symbols: list):
         self.back_test = back_test
         self.symbols = []
         self.kline_data = {}
         self.intervals = []
-        self.OHLCV_COLUMNS: Final[List[str]] = [
-            "Open Time",  # 0
-            "Open",  # 1
-            "High",  # 2
-            "Low",  # 3
-            "Close",  # 4
-            "Volume",  # 5
-            "Close Time",  # 6
-            "Quote Asset Volume",  # 7
-            "Number of Trades",  # 8
-            "Taker Buy Base Asset Volume",  # 9
-            "Taker Buy Quote Asset Volume",  # 10
-            "Ignore",  # 11
-        ]
+        self.maps_interval = {interval: idx for idx, interval in enumerate(intervals)}
+        self.OHLCV_COLUMNS: Final[List[str]] = utils._info_kline_columns()
         self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-
+        self.intervals = IntervalConfig.target_interval
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
+        self.data_container:Optional[utils.DataContainer] = None
         self.case_1 = []
         self.case_2 = []
         self.case_3 = []
@@ -61,10 +69,19 @@ class AnalysisManager:
         self.case_13 = []
         self.case_14 = []
 
-    # def set_data_length(self, kline_data_v3)
+    # 속성값의 case를 초기화 한다.
     def reset_cases(self):
         for i in range(1, 15):
             getattr(self, f"case_{i}").clear()
+
+    # 데이터 셋을 생성한다.
+    def set_dataset(self, container_data):
+        self.data_container = container_data
+        
+    # 데이터 셋을 초기화 한다.
+    def clear_dataset(self):
+        self.data_container.clear_all_data()
+
 
     """
     case들을 속성값에 저장시 반드시 tuple or list로 한번 감싼 후 추가할 것.
@@ -274,17 +291,18 @@ class AnalysisManager:
             )
         )
 
-    def case_8_sorted_indices(self, kline_data_lv3: np.ndarray, col: int):
-        long_sort = self.__sort_indices_by_column_ascending(
-            kline_data_lv3=kline_data_lv3, col=col
-        )
-        short_sort = self.__sort_indices_by_column_descending(
-            kline_data_lv3=kline_data_lv3, col=col
-        )
-        # print(long_sort)
-        # print(short_sort)
-
-        self.case_8.append([long_sort, short_sort])
+    def case_8_sorted_indices(
+        self, kline_data_lv3: np.ndarray, high_col: int, low_col: int
+    ):
+        high_idx = np.argmax(kline_data_lv3[:, high_col])
+        low_idx = np.argmin(kline_data_lv3[:, low_col])
+        
+        last_idx = len(kline_data_lv3) - 1
+        
+        is_high = high_idx == last_idx
+        is_low = low_idx == last_idx
+        
+        self.case_8.append([is_high, is_low])
 
     def case_9_rsi(
         self, kline_data_lv3: np.ndarray, col: int, window: int = 14
@@ -339,9 +357,118 @@ class AnalysisManager:
 
         self.case_9.append(rsi)
 
+    def case_10_macd(self, data, short_window=12, long_window=26, signal_window=9, volume_threshold=500):
+        """
+        NumPy 기반 MACD 계산과 거래 전략 수행
+        :param prices: ndarray, 종가 데이터
+        :param volumes: ndarray, 거래량 데이터
+        :param short_window: Short EMA 기간 (기본값: 12)
+        :param long_window: Long EMA 기간 (기본값: 26)
+        :param signal_window: Signal EMA 기간 (기본값: 9)
+        :param volume_threshold: 거래량 임계값 (기본값: 500)
+        :return: 신호 배열 ('buy', 'sell', None), MACD, Signal, Histogram (ndarray)
+        """
+        # EMA 계산 함수
+        
+        prices=data[:,4]
+        volumes=data[:,9]
+        
+        def ema(values, window):
+            alpha = 2 / (window + 1)
+            ema_values = np.zeros_like(values)
+            ema_values[0] = values[0]
+            for i in range(1, len(values)):
+                ema_values[i] = alpha * values[i] + (1 - alpha) * ema_values[i - 1]
+            return ema_values
+
+        # MACD 계산
+        ema_short = ema(prices, short_window)
+        ema_long = ema(prices, long_window)
+        macd = ema_short - ema_long
+        signal = ema(macd, signal_window)
+        histogram = macd - signal
+
+        # print(ema_short)
+        # print(ema_long)
+        # print(macd)
+        # print(signal)
+        # print(histogram)
+
+        # 거래 전략 신호 계산
+        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        # print(buy_signals)
+        sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
+        # print(sell_signals)
+
+        if buy_signals[-1]:
+            self.case_10.append(1)
+        elif sell_signals[-1]:
+            self.case_10.append(2)
+        else:
+            self.case_10.append(0)
+
+
+
+
+    def calculate_macd_numpy(prices, short_window=12, long_window=26, signal_window=9):
+        """
+        NumPy 기반 MACD, Signal, Histogram 계산
+        :param prices: ndarray, 종가 데이터
+        :param short_window: Short EMA 기간 (기본값: 12)
+        :param long_window: Long EMA 기간 (기본값: 26)
+        :param signal_window: Signal EMA 기간 (기본값: 9)
+        :return: MACD, Signal, Histogram (ndarray)
+        """
+        # EMA 계산
+        def ema(values, window):
+            alpha = 2 / (window + 1)
+            ema_values = np.zeros_like(values)
+            ema_values[0] = values[0]
+            for i in range(1, len(values)):
+                ema_values[i] = alpha * values[i] + (1 - alpha) * ema_values[i - 1]
+            return ema_values
+
+        ema_short = ema(prices, short_window)
+        ema_long = ema(prices, long_window)
+        macd = ema_short - ema_long
+        signal = ema(macd, signal_window)
+        histogram = macd - signal
+        return macd, signal, histogram
+
+    def macd_trading_strategy_numpy(prices, volumes, macd, signal, volume_threshold=500):
+        """
+        NumPy 기반 MACD 전략으로 매수/매도 신호 계산
+        :param prices: ndarray, 종가 데이터
+        :param volumes: ndarray, 거래량 데이터
+        :param macd: ndarray, MACD 값
+        :param signal: ndarray, Signal 값
+        :param volume_threshold: 거래량 임계값 (기본값: 500)
+        :return: 신호 배열 ('buy', 'sell', None)
+        """
+        buy_signals = (macd > signal) & (np.roll(macd, 1) <= np.roll(signal, 1)) & (volumes > volume_threshold)
+        sell_signals = (macd < signal) & (np.roll(macd, 1) >= np.roll(signal, 1))
+        
+        signals = np.full(prices.shape, None, dtype=object)
+        signals[buy_signals] = 1
+        signals[sell_signals] = 2
+        return signals
+
+    # 시나리오의 number값을 int 타입으로 반환한다.
+    def __get_scenario_number(self)->int:
+        stack = inspect.stack()
+        parent_function_name = stack[1].function
+        return int(parent_function_name.split('_')[-1])
+
+    def scenario_3(self) -> Tuple[bool, ]:
+        scenario_n = self.__get_scenario_number()
+        is_order_signal = self.case_10[0]
+        leverage = 10
+        if is_order_signal > 0:
+            return (True, is_order_signal, leverage, scenario_n)
+        else:
+            return (False, is_order_signal, leverage, scenario_n)
+
     def scenario_2(self):
-        target_interval_5m = 2
-        target_interval_1h = 3
         """
         적용 interval : 5m, 1h
         조건
@@ -349,9 +476,13 @@ class AnalysisManager:
             2) candle 의 몸통부분이 전체의 70% 이상.  >> case_2
             3) 오실리언 벨류 플러스 일경우. >> case_7
             4) 전고점 or 전저점 돌파.   >> case_8
-        
+
         leverage : 2) 전고점 or 전저점 돌파 시간 diff
         """
+
+        scenario_n = self.__get_scenario_number()
+        target_interval_5m = self.maps_interval["5m"]
+        target_interval_15m = self.maps_interval["15m"]
 
         long_idx = 0
         short_idx = 1
@@ -360,107 +491,119 @@ class AnalysisManager:
         # case_3연산시 조건에 안맞는 부분이 있을 수 있다. 그럴 경우를 대비한 검사.
         for i, (increase, decrease) in enumerate(self.case_3):
             if not increase or not decrease:  # 리스트가 비어있는지 확인
-                return (False, 0, 0)
+                return (False, 0, 0, scenario_n)
+
 
         # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
-        if self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (
-            self.case_1[target_interval_5m] - 1
-        ):
-            position = 1
-            count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0]
+        is_case_3_long_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] - 1)
+        is_case_3_long_count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
 
-        elif self.case_3[target_interval_5m][short_idx][end_idx][end_idx] == (
-            self.case_1[target_interval_5m] - 1
-        ):
+        is_case_3_short_last_idx = self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (self.case_1[target_interval_5m] - 1)
+        is_case_3_short_count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0] >= 3
+
+        if is_case_3_long_last_idx and is_case_3_long_count:
+            position = 1
+
+        elif is_case_3_short_last_idx and is_case_3_short_count:
             position = 2
-            count = np.diff(self.case_3[target_interval_5m][short_idx])[end_idx][0]
+
         else:
-            return (False, 0, 0)
+            return (False, 0, 0, scenario_n)
+            
+
+        # # 연속증가 / 연속 하락 구간을 찾는다. 없을 경우 fail
+        # if self.case_3[target_interval_5m][long_idx][end_idx][end_idx] == (
+        #     self.case_1[target_interval_5m] - 1
+        # ):
+        #     count = np.diff(self.case_3[target_interval_5m][long_idx])[end_idx][0]
+
+        # elif self.case_3[target_interval_5m][short_idx][end_idx][end_idx] == (
+        #     self.case_1[target_interval_5m] - 1
+        # ):
+        #     position = 2
+        #     count = np.diff(self.case_3[target_interval_5m][short_idx])[end_idx][0]
+        # else:
+        #     return (False, 0, 0, 2)
 
         # candle길이 검토
-        target_length_ratio = 0.75
+        target_length_ratio = 0.5
         target_idx = -3
         # candle 몸통 비율 검토
         target_candle_data = self.case_2[target_interval_5m][target_idx:]
         if np.all(target_candle_data == 0):
-            return (False, 0, 0)
+            return (False, 0, 0, scenario_n)
 
         # 분모 검사 추가
         if np.any(target_candle_data[:, 3] == 0):
-            return (False, 0, 0)
+            return (False, 0, 0, scenario_n)
 
         length_ratio = target_candle_data[:, 2] / target_candle_data[:, 3]
         # 몸통 길이 비율이 target_length_ratio 보다 이상
         if not np.all(length_ratio >= target_length_ratio):
-            return (False, 0, 0)
+            return (False, 0, 0, scenario_n)
 
         # 오실리언 벨유 플러스 여부 확인
         is_ocillator_value = self.case_7[target_interval_5m][-1] > 0
 
         if not is_ocillator_value:
-            return (False, 0, 0)
+            return (False, 0, 0, scenario_n)
 
         # 전고점 / 전저점 돌파여부 확인
-        # data_length = self.case_1[target_interval_1h] - 1
+        # data_length = self.case_1[target_interval_15m] - 1
 
-        if position == 1:
-            sort_ascending = self.case_8[target_interval_1h][long_idx]
-            if max(sort_ascending) == sort_ascending[end_idx]:
-                leverage = np.diff(sort_ascending)[-1]
-            else:
-                return (False, 0, 0)
+        hour_range_idx = -4 * 4
+        leverage=10
 
-        elif position == 2:
-            sort_descending = self.case_8[target_interval_1h][short_idx]
-            if min(sort_descending) == sort_descending[end_idx]:
-                leverage = np.abs(np.diff(sort_descending)[-1])
-            else:
-                return (False, 0, 0)
-        return (True, position, leverage)
-
-    def scenario_1(self):
-        """
-        적용 interval : 5m, 1h
-        조건
-            1) 연속 3회 상승 or 하락.
-            2) 전고점 or 전저점 돌파.
-            3) candle 의 몸통부분이 전체의 70% 이상.
-            4) 오실리언 벨류 플러스 일경우.
-
-        leverage : 2) 전고점 or 전저점 돌파 시간 diff
-        """
-
-        target_diff = 3
-        interval_5m = 2
-
-        is_case_5 = self.case_5[interval_5m] > 5
-
-        case_3_data_increase = self.case_3[interval_5m][0]
-        case_3_data_decrease = self.case_3[interval_5m][1]
-
-        # 데이터가 없을경우 False를 반환한다.
-        if not case_3_data_increase or not case_3_data_decrease:
-            return (False, 0, 0)
-
-        target_data_max_idx = self.case_1[interval_5m] - 1
-        if case_3_data_increase[-1][-1] == target_data_max_idx:
-            diff_data = np.diff(case_3_data_increase)[-1][0]
-            is_case_3 = (True, 1, diff_data)
-        elif case_3_data_decrease[-1][-1] == target_data_max_idx:
-            diff_data = np.diff(case_3_data_increase)[-1][0]
-            is_case_3 = (True, 2, diff_data)
+        if position == 1 and self.case_8[target_interval_15m][long_idx]:
+            return (True, position, leverage, 2)
+        elif position == 2 and self.case_8[target_interval_15m][short_idx]:
+            return (True, position, leverage, 2)
         else:
-            is_case_3 = (False, 0, 0)
+            return (False, 0, 0, scenario_n)
 
-        if (
-            is_case_5
-            and is_case_3[0]
-            and is_case_3[2] >= target_diff
-            and self.case_4[0] > 5
-        ):
-            return is_case_3
-        else:
-            return (False, 0, 0)
+    # def scenario_1(self):
+    #     """
+    #     적용 interval : 5m, 1h
+    #     조건
+    #         1) 연속 3회 상승 or 하락.
+    #         2) 전고점 or 전저점 돌파.
+    #         3) candle 의 몸통부분이 전체의 70% 이상.
+    #         4) 오실리언 벨류 플러스 일경우.
+
+    #     leverage : 2) 전고점 or 전저점 돌파 시간 diff
+    #     """
+
+    #     target_diff = 3
+    #     interval_5m = 2
+
+    #     is_case_5 = self.case_5[interval_5m] > 5
+
+    #     case_3_data_increase = self.case_3[interval_5m][0]
+    #     case_3_data_decrease = self.case_3[interval_5m][1]
+
+    #     # 데이터가 없을경우 False를 반환한다.
+    #     if not case_3_data_increase or not case_3_data_decrease:
+    #         return (False, 0, 0, 2)
+
+    #     target_data_max_idx = self.case_1[interval_5m] - 1
+    #     if case_3_data_increase[-1][-1] == target_data_max_idx:
+    #         diff_data = np.diff(case_3_data_increase)[-1][0]
+    #         is_case_3 = (True, 1, diff_data)
+    #     elif case_3_data_decrease[-1][-1] == target_data_max_idx:
+    #         diff_data = np.diff(case_3_data_increase)[-1][0]
+    #         is_case_3 = (True, 2, diff_data)
+    #     else:
+    #         is_case_3 = (False, 0, 0)
+
+    #     if (
+    #         is_case_5
+    #         and is_case_3[0]
+    #         and is_case_3[2] >= target_diff
+    #         and self.case_4[0] > 5
+    #     ):
+    #         return is_case_3
+    #     else:
+    #         return (False, 0, 0, 2)
 
 
 class Disposer:

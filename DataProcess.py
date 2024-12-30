@@ -306,7 +306,12 @@ class TradingLog:
         return list(self.__dict__.values())
 
 
-class TradeAnaylsis:
+# 전체 자산 관리와 거래 기록 관리
+class PortfolioManager:
+    """
+    전체 자산 관리와 거래기록을 관리한다. 
+    """
+    
     def __init__(self, initial_balance: float = 1_000):
         self.data_container = utils.DataContainer()
         self.trade_history: List[TradingLog] = []
@@ -327,54 +332,6 @@ class TradeAnaylsis:
             return True
         else:
             return False
-
-    # 손실 거래발생시 특정 조건을 지정하여 시나리오 진입 신호 발생에도 거래 불가 신호를 생성한다.
-    def validate_loss_scenario(
-        self,
-        symbol: str,
-        scenario: int,
-        chance: int,
-        step_interval: str,
-        current_timestamp: Optional[int] = None,
-    ):
-        """
-        1. 기능: 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
-        2. 매개변수:
-            1) symbol : 쌍거래 symbol
-            2) scenario : 적용될 시나리오
-            3) data_range : 검토할 데이터의 범위 (최대 데이터 개수)
-            4) chance : 허용되는 최대 손실 횟수
-            5) step_interval : 시간 간격(ms) 계산용
-            6) current_timestamp : 현재 시간, None일 경우 현재 시간을 생성
-        """
-
-        # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
-        if symbol not in self.closed_positions:
-            return True
-
-        # 거래 종료 데이터 np.array화
-        data_array = np.array(self.closed_positions[symbol], float)
-
-        # 현재 타임스탬프 설정
-        if current_timestamp is None:
-            current_timestamp = int(time.time() * 1_000)
-
-        # interval별 밀리초 계산
-        ms_seconds = utils._get_interval_ms_seconds(step_interval)
-        target_timestamp = current_timestamp - ms_seconds
-
-        # print(utils._convert_to_datetime(target_timestamp))
-        # print(data_array[0][1])
-        # 조건 필터링
-        mask = (
-            (data_array[:, 1] >= target_timestamp)  # last_timestamp > target_timestamp
-            & (data_array[:, 16] == scenario)  # trade_scenario == scenario
-            & (data_array[:, 13] < 0)  # gross_profit_loss < 0
-        )
-        filtered_count = np.sum(mask)  # 조건을 만족하는 데이터 개수
-
-        # 허용된 chance보다 크면 이면 False 반환
-        return filtered_count < chance
 
     # TradingLog 클라스를 컨테이너 데이터에 저장한다.
     def add_log_data(self, log_data: TradingLog):
@@ -501,7 +458,6 @@ class TestDataManager:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
-
     FUTURES = "FUTURES"
     SPOT = "SPOT"
 
@@ -949,7 +905,19 @@ class TestProcessManager:
 
 class OrderConstraint:
     """주문시 제약사항을 생성한다."""
-
+    def __init__(self, increase_type:str, chance:int, step_interval:str, safety_ratio:float=0.2, position_limit:int=3):
+        self.increase_type = increase_type
+        self.safety_ratio = safety_ratio
+        self.position_limit = position_limit
+        
+        self.chance: int = chance,
+        self.step_interval: str= step_interval,
+        
+        self.total_balance:Optional[float] = None
+        self.closed_trade_data:Optional[List[Any]] = None
+        
+        self.__verify_config()
+        
     # def __init__ (self):
     #     self.target_count_min = 1
     #     self.target_count_max = 10
@@ -959,10 +927,71 @@ class OrderConstraint:
 
     #     self.safety_account_ratio = 0.32
 
+    def __verify_config(self):
+        increase_types= ["stepwise", "proportional"]
+        if not self.increase_type in increase_types or not isinstance(self.increase_type, str):
+            raise ValueError(f'increase_type 유효하지 않음:{self.increase_type}')
+
+        if self.safety_ratio >= 1 or not isinstance(self.safety_ratio, float):
+            raise ValueError(f'sefty ratio가 유효하지 않음:{self.safety_ratio}')
+        
+        if not isinstance(self.position_limit, int):
+            raise ValueError(f'position_limit이 유효하지 않음:{self.position_limit}')
+    
+    def update_trading_data(self, closed_position:PortfolioManager, total_balance:PortfolioManager):
+        self.total_balance = total_balance
+        self.closed_trade_data = closed_position
+    
+    # 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
+    def validate_failed_scenario(
+        self,
+        symbol: str,
+        scenario: int,
+        closed_position:PortfolioManager,
+        current_timestamp: Optional[int] = None,
+    ):
+        """
+        1. 기능: 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
+        2. 매개변수:
+            1) symbol : 쌍거래 symbol
+            2) scenario : 적용될 시나리오
+            3) closed_position : PortfolioManager의 속성값
+            6) current_timestamp : 현재 시간, None일 경우 현재 시간을 생성
+        """
+
+        # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
+        if symbol not in self.closed_positions:
+            return True
+
+        # 거래 종료 데이터 np.array화
+        data_array = np.array(self.closed_positions[symbol], float)
+
+        # 현재 타임스탬프 설정
+        if current_timestamp is None:
+            current_timestamp = int(time.time() * 1_000)
+
+        # interval별 밀리초 계산
+        ms_seconds = utils._get_interval_ms_seconds(self.step_interval)
+        target_timestamp = current_timestamp - ms_seconds
+
+        # print(utils._convert_to_datetime(target_timestamp))
+        # print(data_array[0][1])
+        # 조건 필터링
+        mask = (
+            (data_array[:, 1] >= target_timestamp)  # last_timestamp > target_timestamp
+            & (data_array[:, 16] == scenario)  # trade_scenario == scenario
+            & (data_array[:, 13] < 0)  # gross_profit_loss < 0
+        )
+        filtered_count = np.sum(mask)  # 조건을 만족하는 데이터 개수
+
+        # 허용된 chance보다 크면 이면 False 반환
+        return filtered_count < self.chance
+    
+    
+
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
     def calc_fund(
-        self, funds: float, safety_ratio: float = 0.35, count_max: int = 6
-    ) -> dict:
+        self, funds: float) -> dict:
         """
         총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
 
@@ -975,7 +1004,7 @@ class OrderConstraint:
         """
         # 자금이 10 미만일 경우 초기값 반환
 
-        init_safety_value = round(10 * safety_ratio, 3)
+        init_safety_value = round(10 * self.safety_ratio, 3)
         init_usable_value = 10 - init_safety_value
         init_trade_value = min(6, init_usable_value)
 
@@ -1003,7 +1032,7 @@ class OrderConstraint:
                     break
 
         # count최대값을 지정한다. 너무 높면 회당 주문금액이 낮아진다.
-        count = min(count, count_max)
+        count = min(count, self.position_limit)
 
         # 안전 금액 및 유효 금액 계산
         safety_value = last_valid_target * safety_ratio

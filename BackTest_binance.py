@@ -19,6 +19,7 @@ class BackTester:
         seed_money: Union[int, float],
         start_date: Union[int, float],
         end_date: Union[int, float],
+        increase_type: str = "stepwise", #"stepwise"계단식 // "proportional"비율 증가식
         max_trade_number: int = 3,
         init_stop_rate: float = 0.015,
         adj_interval: str = "3m",
@@ -46,7 +47,6 @@ class BackTester:
         self.start_date = start_date
         self.end_date = end_date
         # 전체 금액에서 안전금액 비율
-        self.safety_balance_ratio = safety_balance_ratio
         self.stop_loss_rate = stop_loss_rate
         self.is_download = is_download
         self.adj_timer = adj_timer
@@ -77,10 +77,10 @@ class BackTester:
         )
         self.analysis_ins = Analysis.AnalysisManager(intervals=self.intervals)
         self.seed_money = seed_money
-        self.trade_analysis_ins = DataProcess.TradeAnaylsis(
+        self.trade_analysis_ins = DataProcess.PortfolioManager(
             initial_balance=self.seed_money
         )
-        self.constraint = DataProcess.OrderConstraint()
+        self.constraint = DataProcess.OrderConstraint(increase_type=increase_type, chance=self.loss_chance, safety_ratio=safety_balance_ratio, step_interval=self.step_interval, position_limit=self.loss_chance)
         self.symbol_map = None
         self.interval_map = None
         self.closing_indices_data = None
@@ -220,8 +220,6 @@ class BackTester:
             total_balance = self.trade_analysis_ins.total_balance
             conctraint = self.constraint.calc_fund(
                 funds=total_balance,
-                safety_ratio=self.safety_balance_ratio,
-                count_max=self.max_trade_number,
             )
             trade_balance = conctraint.get("tradeValue")
             trade_count = conctraint.get("count")
@@ -294,11 +292,13 @@ class BackTester:
         # 브레이크 타임 설정시
         if self.is_order_break:
             # 기존 거래내역을 검토해서 브레이크 타임 적용여부 검토
-            is_loss_scnario = self.trade_analysis_ins.validate_loss_scenario(
+            
+            self.constraint.update_trading_data(closed_position=self.trade_analysis_ins.closed_positions,
+                                                total_balance= self.trade_analysis_ins.total_balance)
+            is_loss_scnario = self.constraint.validate_failed_scenario(
                 symbol=symbol,
                 scenario=scenario_type,
-                chance=self.loss_chance,
-                step_interval=self.step_interval,
+                closed_position=self.trade_analysis_ins.closed_positions,
                 current_timestamp=start_timestamp,
             )
             # 브레이크 타임 해당될경우

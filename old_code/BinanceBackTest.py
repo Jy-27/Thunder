@@ -53,7 +53,7 @@ class BackTester:
         self.test_data_manager_ins = DataProcess.TestProcessManager()
         self.analysis_ins = Analysis.AnalysisManager(intervals=self.intervals)
         self.seed_money = seed_money
-        self.trade_analysis_ins = DataProcess.TradeAnaylsis(
+        self.trade_analysis_ins = DataProcess.PortfolioManager(
             initial_balance=self.seed_money
         )
         self.constraint = DataProcess.OrderConstraint()

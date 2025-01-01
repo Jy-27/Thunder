@@ -66,13 +66,13 @@ class BackTester:
         self.test_mode: bool = True
         # 데이터를 pickle로 저장 및 로딩해야하며, 컨테이너화 하지 않는다.
         self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
-        self.test_manager_ins = DataProcess.TestDataManager(
+        self.test_manager_ins = DataProcess.BacktestDataFactory(
             symbols=self.symbols,
             intervals=self.intervals,
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        self.test_data_manager_ins = DataProcess.TestProcessManager(
+        self.test_data_manager_ins = DataProcess.BacktestProcessor(
             max_leverage=self.max_leverage
         )
         self.analysis_ins = Analysis.AnalysisManager(intervals=self.intervals)
@@ -361,7 +361,7 @@ class BackTester:
         1. 기능 : 각종 기능을 집합하여 시계 데이터 loop 생성하고 가상의 거래를 진행한다.
         2. 매개변수 : 해당없음.
         """
-        await self.get_base_data()
+        await self.get_base_data(is_save=True)
         self.__validate_base_data()
         await self.get_indices_data()
         self.start_masage()
@@ -382,9 +382,29 @@ class BackTester:
             self.analysis_ins.reset_cases()
             self.interval_dataset.clear_all_data()
 
+            
+            """
+            동작원리 고민중...
+            
+            np.array변환을 한번에 하기 위하여 다차원 list데이터가 필요하다.
+                변수1 >> 데이터 수신속도에 따라서 같은 interval이라 하더라도 데이터의 길이가 다를경우 np.array처리시 오류발생.
+            
+            순서는 interval loop
+                >> symbol.interval_data
+            """
+            
+            
             for interval in self.intervals:
                 maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]
                 data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
+
+                print(maps_[0])
+                print(maps_[1])
+                print(self.symbols[maps_[0]])
+                print(self.symbols)
+                print(data[0][1])
+
+                raise ValueError(f'그냥')
 
                 ### 데이터셋으로 저장한다 ###
 

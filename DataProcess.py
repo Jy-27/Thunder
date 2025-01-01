@@ -454,7 +454,7 @@ class PortfolioManager:
 ##=---=####=---=####=---=####=---=####=---=####=---=##
 
 
-class TestDataManager:
+class BacktestDataFactory:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
@@ -749,23 +749,6 @@ class TestDataManager:
         """
         # 하루의 총 분
         minutes_in_a_day = utils._get_interval_minutes('1d')
-
-        # # interval에 따른 간격(분) 정의
-        # interval_to_minutes = {
-        #     "1m": 1,
-        #     "3m": 3,
-        #     "5m": 5,
-        #     "15m": 15,
-        #     "30m": 30,
-        #     "1h": 60,
-        #     "2h": 120,
-        #     "4h": 240,
-        #     "6h": 360,
-        #     "8h": 480,
-        #     "12h": 720,
-        #     "1d": 1440,
-        # }
-
         indices_data = []
 
         data_container_name = data_container.get_all_data_names()
@@ -848,7 +831,7 @@ class TestDataManager:
         return kline_data_array, closing_sync, indices_data
 
 
-class TestProcessManager:
+class BacktestProcessor:
     """
     각종 연산이 필요한 함수들의 집함한다.
     """

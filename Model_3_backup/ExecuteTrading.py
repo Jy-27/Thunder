@@ -17,8 +17,8 @@ from collections import defaultdict
 from MarketDataFetcher import SpotMarket, FuturesMarket
 from Analysis import AnalysisManager
 
-# from DataProcess import TradeStopper, OrderConstraint
-from DataProcess import OrderConstraint, DataInfo
+# from TradeComputation import TradeStopper, OrderConstraint
+from TradeComputation import OrderConstraint, DataInfo
 
 import BinanceTradeClient as my_client
 import asyncio

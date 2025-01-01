@@ -143,6 +143,7 @@ class TradeManager:
         1. 기능 : 기준값에 충족하는 tickers를 반환.
         2. 매개변수 : 해당없음.
         """
+
         mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
         filtered_ticker_data = await self._collect_filtered_ticker_data()
         # 공통 필터링된 티커 요소를 리스트로 반환받음

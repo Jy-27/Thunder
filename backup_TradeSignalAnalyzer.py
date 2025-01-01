@@ -24,37 +24,44 @@ import inspect
 
 
 @dataclass
-class IntervalConfig:
-    KLINE_INTERVAL = utils._info_kline_intervals()  # 클래스 변수
-    target_interval = ["1m", "3m", "5m", "15m"]
-    # target_interval: list[str] = None  # 인스턴스 변수
-
-    interval_maps: dict = None  # interval_maps를 속성으로 선언
+class BaseConfig:
+    test_mode: bool
+    ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
+    OHLCV_COLUMNS: Final[List[str]] = utils._info_kline_columns()
+    ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
+    selected_intervals = ["3m", "5m", "15m"]
 
     def __post_init__(self):
         # target_interval 유효성 검사
-        for interval in self.target_interval:
-            if interval not in self.KLINE_INTERVAL:
+        for interval in self.selected_intervals:
+            if interval not in self.ALL_KLINE_INTERVALS:
                 raise ValueError(f"interval 값이 유효하지 않음: {interval}")
 
+        # test모드의 경우 interval '1m' 을 추가함.
+        if self.test_mode:
+            self.intervals = ['1m'] + self.selected_intervals#.insert(0, '1m')
+        elif not self.test_mode:
+            self.intervals = self.selected_intervals
+        
+        
         # interval_maps 속성 초기화
-        self.interval_maps = {
-            f"interval_{data}": idx for idx, data in enumerate(self.target_interval)
+        self.intervals_idx_map = {
+            f"interval_{data}": idx for idx, data in enumerate(self.intervals)
         }
 
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
-    def __init__(self, intervals: List, back_test: bool = False):  # , symbols: list):
-        self.back_test = back_test
+    def __init__(self, back_test: bool = False):  # , symbols: list):
+        # interval 값 세팅
+        self.base_config = BaseConfig(test_mode=back_test)
+        self.intervals = self.base_config.intervals
+        self.interval_idx_map = self.base_config.intervals_idx_map
         self.symbols = []
         self.kline_data = {}
-        self.intervals = []
-        self.maps_interval = {interval: idx for idx, interval in enumerate(intervals)}
-        self.OHLCV_COLUMNS: Final[List[str]] = utils._info_kline_columns()
-        self.ACTIVE_COLUMNS_INDEX: List[int] = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-        self.intervals = IntervalConfig.target_interval
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
+        
+        # data:np.ndarray // data_name=f'interval_{interval}' 데이터전달.
         self.data_container: Optional[utils.DataContainer] = None
         self.case_1 = []
         self.case_2 = []
@@ -81,6 +88,7 @@ class AnalysisManager:
         self.data_container = container_data
 
     # 데이터 셋을 초기화 한다.
+    # 결과 반환시 클리어 처리한다.
     def clear_dataset(self):
         self.data_container.clear_all_data()
 

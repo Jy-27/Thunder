@@ -1,14 +1,16 @@
-import DataProcess
+import TradeComputation
+import TickerDataFetcher
 import os
 import utils
 import asyncio
 import nest_asyncio
 import pickle
-import Analysis
+import TradeSignalAnalyzer
 from pprint import pprint
 import matplotlib.pyplot as plt
 from matplotlib import style, ticker
 from typing import Optional, List, Union
+import numpy as np
 
 
 class BackTester:
@@ -19,7 +21,7 @@ class BackTester:
         seed_money: Union[int, float],
         start_date: Union[int, float],
         end_date: Union[int, float],
-        increase_type: str = "stepwise", #"stepwise"계단식 // "proportional"비율 증가식
+        increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
         max_trade_number: int = 3,
         init_stop_rate: float = 0.015,
         adj_interval: str = "3m",
@@ -42,8 +44,7 @@ class BackTester:
         quote_type: str = "usdt",
     ):
         self.symbols = [symbol.upper() for symbol in symbols]
-        # intervals값은 Analysis에서 전담으로 관리하다. 분석 항목기준으로 interval을 구성했다.
-        self.intervals = Analysis.IntervalConfig.target_interval
+        # intervals값은 TradeSignalAnalyzer에서 전담으로 관리하다. 분석 항목기준으로 interval을 구성했다.
         self.start_date = start_date
         self.end_date = end_date
         # 전체 금액에서 안전금액 비율
@@ -66,31 +67,49 @@ class BackTester:
         self.test_mode: bool = True
         # 데이터를 pickle로 저장 및 로딩해야하며, 컨테이너화 하지 않는다.
         self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
-        self.test_manager_ins = DataProcess.BacktestDataFactory(
+        self.signal_analyzer_ins = TradeSignalAnalyzer.AnalysisManager(
+            back_test=self.test_mode
+        )
+        self.intervals = self.signal_analyzer_ins.base_config.intervals
+        self.lookback_days = self.signal_analyzer_ins.base_config.lookback_days
+        self.backtest_data_ins = TradeComputation.BacktestDataFactory(
             symbols=self.symbols,
             intervals=self.intervals,
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        self.test_data_manager_ins = DataProcess.BacktestProcessor(
+        self.test_data_manager_ins = TradeComputation.BacktestProcessor(
             max_leverage=self.max_leverage
         )
-        self.analysis_ins = Analysis.AnalysisManager(intervals=self.intervals)
         self.seed_money = seed_money
-        self.trade_analysis_ins = DataProcess.PortfolioManager(
+        self.portfolio_ins = TradeComputation.PortfolioManager(
             initial_balance=self.seed_money
         )
-        self.constraint = DataProcess.OrderConstraint(increase_type=increase_type, chance=self.loss_chance, safety_ratio=safety_balance_ratio, step_interval=self.step_interval, position_limit=self.loss_chance)
+        self.constraint = TradeComputation.OrderConstraint(
+            increase_type=increase_type,
+            chance=self.loss_chance,
+            safety_ratio=safety_balance_ratio,
+            step_interval=self.step_interval,
+            position_limit=self.loss_chance,
+        )
         self.symbol_map = None
         self.interval_map = None
         self.closing_indices_data = None
         self.target_run_interval = "map_1m"
         self.max_trade_number = max_trade_number
-        self.start_step = start_step
+        self.start_step = utils._get_interval_minutes(self.intervals[-1])
         self.init_stop_rate = init_stop_rate
 
         # interval별 데이털르 저장하는 데이터셋
         self.interval_dataset = utils.DataContainer()
+
+        # ticker 관련 instance
+        self.ticker_ins = TickerDataFetcher.FuturesTickers()
+        self.comparison = comparison  # above : 이상, below : 이하
+        self.absolute = absolute  # True : 비율 절대값, False : 비율 실제값
+        self.value = value  # 거래대금 : 단위 USD
+        self.target_percent = percent  # 변동 비율폭 : 음수 가능
+        self.quote_type = quote_type  # 쌍거래 거래화폐
 
     # 저장데이터의 주소값을 확보한다.
     def __get_data_path(self):
@@ -99,9 +118,9 @@ class BackTester:
         2. 매개변수 : 해당없음.
         """
         # 파일명 - 속성명에 지정함.
-        file_name = self.test_manager_ins.kline_closing_sync_data
+        file_name = self.backtest_data_ins.kline_closing_sync_data
         # 폴더명 - 속성명에 지정함.
-        folder_name = self.test_manager_ins.storeage
+        folder_name = self.backtest_data_ins.storeage
         # 상위폴도명 - 함수로 확보
         base_directory = os.path.dirname(os.getcwd())
         # 주소 합성 - 상위폴더 + 폴더명 + 파일명
@@ -150,13 +169,13 @@ class BackTester:
         # 신규 다운로드 선택시
         else:
             # kline data를 수신한다.
-            data = await self.test_manager_ins.generate_kline_interval_data(
+            data = await self.backtest_data_ins.generate_kline_interval_data(
                 save=is_save
             )
             # 데이터를 np.array타입으로 변환한다.
-            data_array = utils._convert_kline_data_array(data)
+            data_array = utils._convert_kline_data_array(data)           
             # closing_sync 데이터를 생성 및 속성에 저장한다.
-            self.closing_sync_data = self.test_manager_ins.generate_kline_closing_sync(
+            self.closing_sync_data = self.backtest_data_ins.generate_kline_closing_sync(
                 kline_data=data_array, save=is_save
             )
 
@@ -172,8 +191,8 @@ class BackTester:
             utils._convert_to_container(self.closing_sync_data)
         )
         # closing_sync index데이터를 생성 및 속성에 저장한다.
-        self.test_manager_ins.get_indices_data(
-            data_container=self.closing_indices_data, lookback_days=1
+        self.backtest_data_ins.get_indices_data(
+            data_container=self.closing_indices_data, lookback_days=self.lookback_days
         )
 
     # 현재 진행중인 포지션이 있다면, 최종 정보를 업데트한다.(단가, 현재타임스템프)
@@ -191,10 +210,10 @@ class BackTester:
         # 현재 타임스템프
         close_timestamp = data[-1][6]
         # 해당 symbol이 현재 진행중인 포지션이 있는지 확인한다.
-        if symbol in self.trade_analysis_ins.open_positions:
+        if symbol in self.portfolio_ins.open_positions:
             # 현재 포지션 유지중이라면 데이터를 업데이트한다.
             # 포지션 종료신호를 반환한다. (True / False)
-            return self.trade_analysis_ins.update_log_data(
+            return self.portfolio_ins.update_log_data(
                 symbol=symbol, price=price, timestamp=close_timestamp
             )
         # 현재 포지션이 없다면,
@@ -217,7 +236,7 @@ class BackTester:
         if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
-            total_balance = self.trade_analysis_ins.total_balance
+            total_balance = self.portfolio_ins.total_balance
             conctraint = self.constraint.calc_fund(
                 funds=total_balance,
             )
@@ -237,8 +256,8 @@ class BackTester:
                 market_type="futures",
             )
             margin_ = (qty / leverage) * price
-            is_cash_margin = self.trade_analysis_ins.cash_balance > margin_
-            is_trade_count = self.trade_analysis_ins.number_of_stocks < trade_count
+            is_cash_margin = self.portfolio_ins.cash_balance > margin_
+            is_trade_count = self.portfolio_ins.number_of_stocks < trade_count
 
             if not status or not is_cash_margin or not is_trade_count:
                 return False, 0, 0
@@ -253,10 +272,77 @@ class BackTester:
             1) symbol : 쌍거래 symbol
         """
 
-        if symbol in self.trade_analysis_ins.open_positions:
+        if symbol in self.portfolio_ins.open_positions:
             return True
         else:
             return False
+
+    # interval값을 활용하여 24hr 데이터를 생성한다. Ticker 필터행위 효과를 만든다.
+    def __generate_dummy_24hr_tickers(self, symbol: str, data: np.ndarray):
+        tickers_summary = []
+
+        interval_duration = utils._get_interval_minutes("1d")
+
+        idx_quote_volume = 7
+        idx_price_change_percent = 4
+        idx_close_time = 6
+
+        end_timestamp = data[-1][idx_close_time]
+        start_timestamp = end_timestamp - interval_duration
+
+        # 데이터 필터링
+        filtered_data = data[data[:, 0] <= start_timestamp]
+
+        # 거래금액 계산
+        quote_volume = np.sum(filtered_data[:, idx_quote_volume])
+
+        # 증감률 계산
+        start_price = filtered_data[0, idx_price_change_percent]
+        last_price = filtered_data[-1, idx_price_change_percent]
+        change_percent = (
+            utils._calculate_percentage_change(start_price, last_price) * 100
+        )
+
+        # 결과값 리스트에 추가
+        ticker_summary = {
+            "symbol": symbol,
+            "priceChangePercent": change_percent,
+            "quoteVolume": quote_volume,
+        }
+        tickers_summary.append(ticker_summary)
+
+        return tickers_summary
+
+    # 조건에 맞는 symbol을 필터링한다. 실제 거래에서는 조건에 맞는 심볼만 수집했지만, 백테스트는 조건에 맞지 않으면 제외시킨다.abs
+    # def select_symbols_backtest(self):
+
+    # ticker 필터하여 리스트로 반환. << 조건에 맞는것만.
+    async def validate_ticker_conditions(self, symbol: str, data: np.ndarray):
+        dummy_24hr_tickers = self.__generate_dummy_24hr_tickers(
+            symbol=symbol, data=data
+        )
+        # print(type(dummy_24hr_tickers))
+        # print(dummy_24hr_tickers)
+        # raise ValueError('stop')
+        # 비동기 작업: 값을 기준으로 필터링된 티커와 변동률 기준 티커 가져오기
+        above_value_tickers = await self.ticker_ins.get_tickers_above_value(
+            target_value=self.value,
+            comparison=self.comparison,
+            dummy_data=dummy_24hr_tickers,
+        )
+        above_change_tickers = await self.ticker_ins.get_tickers_above_change(
+            target_percent=self.target_percent,
+            comparison=self.comparison,
+            absolute=self.absolute,
+            dummy_data=dummy_24hr_tickers,
+        )
+
+        common_filtered_tickers = utils._find_common_elements(
+            above_value_tickers, above_change_tickers
+        )
+        # 병합 및 중복 제거
+        # return list(set(above_value_tickers + above_change_tickers))
+        return symbol in common_filtered_tickers
 
     # open 주문을 생성한다.
     async def active_open_position(
@@ -292,13 +378,15 @@ class BackTester:
         # 브레이크 타임 설정시
         if self.is_order_break:
             # 기존 거래내역을 검토해서 브레이크 타임 적용여부 검토
-            
-            self.constraint.update_trading_data(closed_position=self.trade_analysis_ins.closed_positions,
-                                                total_balance= self.trade_analysis_ins.total_balance)
+
+            self.constraint.update_trading_data(
+                closed_position=self.portfolio_ins.closed_positions,
+                total_balance=self.portfolio_ins.total_balance,
+            )
             is_loss_scnario = self.constraint.validate_failed_scenario(
                 symbol=symbol,
                 scenario=scenario_type,
-                closed_position=self.trade_analysis_ins.closed_positions,
+                closed_positions=self.portfolio_ins.closed_positions,
                 current_timestamp=start_timestamp,
             )
             # 브레이크 타임 해당될경우
@@ -307,7 +395,7 @@ class BackTester:
                 return
 
         # 브레이크 타임 검토 후 미적용시 주문정보 생성.
-        log_data = DataProcess.TradingLog(
+        log_data = TradeComputation.TradingLog(
             symbol=symbol,
             start_timestamp=start_timestamp,
             entry_price=price,
@@ -324,14 +412,14 @@ class BackTester:
             use_scale_stop=self.is_use_scale_stop,
         )
         # 주문 정보를 추가
-        self.trade_analysis_ins.add_log_data(log_data=log_data)
+        self.portfolio_ins.add_log_data(log_data=log_data)
 
     # 포지션 종료를 위한 함수.
     def active_close_position(self, symbol: str):
         # 포지션 종료 신호를 수신해도 symbol값 기준으로 position 유효성 검토한다.
         if self.__validate_cloes_position(symbol=symbol):
             # 유효성 확인시 해당 내용을 제거한다.
-            self.trade_analysis_ins.remove_order_data(symbol=symbol)
+            self.portfolio_ins.remove_order_data(symbol=symbol)
 
     # 백테스트 시작시 현재 설정정보를 출력한다.
     def start_masage(self):
@@ -342,16 +430,20 @@ class BackTester:
         header = "=" * 100
         print(f"\n {header}\n")
         print(f"    ***-=-=-<< BACK TESTING >>-=-=-***\n")
-        print(f"    1.  StartDate  : {self.start_date}")
-        print(f"    2.  EndDate    : {self.end_date}")
-        print(f"    3.  Symbols    : {self.symbols}")
-        print(f"    4.  SeedMoney  : {self.seed_money:,.2f} USDT")
-        print(f"    5.  leverage   : {self.max_leverage}x")
-        print(f"    6.  Intervals  : {self.intervals}")
-        print(f"    7.  ScaleStop  : {self.is_use_scale_stop}")
-        print(f"    8.  StopRate   : {self.stop_loss_rate*100:.2f} %")
-        print(f"    9.  AdjTimer   : {self.adj_timer}")
-        print(f"    10. OrderBreak : {self.is_order_break}")
+        print(f"    1.  StartDate   : {self.start_date}")
+        print(f"    2.  EndDate     : {self.end_date}")
+        print(f"    3.  Symbols     : {self.symbols}")
+        print(f"    4.  SeedMoney   : {self.seed_money:,.1f} USDT")
+        print(f"    5.  leverage    : {self.max_leverage}x")
+        print(f"    6.  Intervals   : {self.intervals}")
+        print(f"    7.  ScaleStop   : {self.is_use_scale_stop}")
+        print(f"    8.  StopRate    : {self.stop_loss_rate*100:.2f} %")
+        print(f"    9.  AdjTimer    : {self.adj_timer}")
+        print(f"    10. OrderBreak  : {self.is_order_break}")
+        print(f"    11. 24hrValue   : {self.value:,.0f} USDT")
+        print(f"    12. 24hrPercent : {self.target_percent*100:.1f} %")
+        print(f"    13. Comparison  : {self.comparison}")
+        print(f"    14. Absolute    : {self.absolute}")
         print(f"\n {header}\n")
         print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL")
 
@@ -366,11 +458,13 @@ class BackTester:
         await self.get_indices_data()
         self.start_masage()
 
+        end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
+
         ### 데이터 타임루프 시작 ###
         for idx, data in enumerate(
             self.closing_indices_data.get_data(self.target_run_interval)
         ):
-            if idx <= self.start_step:
+            if idx <= self.start_step or idx >= end_step:
                 # utils._std_print(idx)
                 continue
             # interval 기준이므로 end_timestamp는 for문 이탈시 가장 큰 값을 가진다.
@@ -378,11 +472,10 @@ class BackTester:
             # timestamp_min값을 초기화 한다.
             timestamp_min = []
 
+            # 원본 코드
             ### 분석에 사용될 데이터셋 초기화 ###
-            self.analysis_ins.reset_cases()
             self.interval_dataset.clear_all_data()
-
-            
+            # dummy_data = {}
             """
             동작원리 고민중...
             
@@ -392,22 +485,16 @@ class BackTester:
             순서는 interval loop
                 >> symbol.interval_data
             """
-            
-            
+
             for interval in self.intervals:
-                maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]
+                maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]                
                 data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
 
-                print(maps_[0])
-                print(maps_[1])
-                print(self.symbols[maps_[0]])
-                print(self.symbols)
-                print(data[0][1])
-
-                raise ValueError(f'그냥')
+                # print(data)
+                # raise ValueError(f'{len(data)}')
 
                 ### 데이터셋으로 저장한다 ###
-
+                # TEST 진행시 첫번째가 왜 symols[0]이 아닌지 의문 발생시 위의 self.start_step이 있음을 인지할 것.
                 symbol = self.symbols[maps_[0]]
                 price = data[-1][4]
                 end_timestamp = data[-1][6]
@@ -425,51 +512,50 @@ class BackTester:
                     ### trane 출력 ###
                     date = utils._convert_to_datetime(end_timestamp)
                     utils._std_print(
-                        f"{date}    {self.trade_analysis_ins.number_of_stocks}         {self.trade_analysis_ins.trade_count:,.0f}          {self.trade_analysis_ins.profit_loss_ratio*100:,.2f} %         {self.trade_analysis_ins.profit_loss:,.2f}"
+                        f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
                     )
-
-                ### 포지션 보유시 연산 pass ###
-                if self.trade_analysis_ins.validate_open_position(symbol):
-                    continue
-
-                ### interval data를 데이터셋으로 구성 ###
+                    ### 포지션 보유시 연산 pass ###
+                    if self.portfolio_ins.validate_open_position(symbol):
+                        continue
+                
+                
                 self.interval_dataset.set_data(
                     data_name=f"interval_{interval}", data=data
                 )
+                    # 티켓 분류 조건 부합여부를 점검한다.
+                    # 조건에 맞지 않으면 루프를 지나친다.
 
-            ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-            self.analysis_ins.set_dataset(container_data=self.interval_dataset)
+                # 원본 코드
+                ### interval data를 데이터셋으로 구성 ###
+                # dummy_data[interval] = data
+                # print(data)
 
-            if self.trade_analysis_ins.validate_open_position(symbol):
+
+            if not await self.validate_ticker_conditions(
+                symbol=symbol, data=data
+            ) or self.portfolio_ins.validate_open_position(symbol):
                 continue
 
-            ### 진입 검토 ###
-            # scenario_2 = self.analysis_ins.scenario_2()
-            # scenario_3 = self.analysis_ins.scenario_3()
+            # 원본 코드
+            ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
+            self.signal_analyzer_ins.data_container = self.interval_dataset
+            # self.signal_analyzer_ins.dummy_d = dummy_data
 
-            # 사용 후 초기화
-
+            trade_signal = self.signal_analyzer_ins.scenario_run()
+            if not trade_signal[0]:
+                continue
+            
             current_timestamp = min(timestamp_min)
 
-            # if scenario_2[0]:
-            #     await self.active_open_position(
-            #         symbol=symbol,
-            #         price=price,
-            #         position=scenario_2[1],
-            #         leverage=scenario_2[2],
-            #         start_timestamp=current_timestamp,
-            #         scenario_type=scenario_2[3],
-            #     )
+            await self.active_open_position(
+                symbol=symbol,
+                price=price,
+                position=trade_signal[1],
+                leverage=self.max_leverage,
+                start_timestamp=current_timestamp,
+                scenario_type=trade_signal[2],
+            )
 
-            # if scenario_3[0]:
-            #     await self.active_open_position(
-            #         symbol=symbol,
-            #         price=price,
-            #         position=scenario_3[1],
-            #         leverage=scenario_3[2],
-            #         start_timestamp=current_timestamp,
-            #         scenario_type=scenario_3[3],
-            #     )
 
         print("\n\nEND")
 
@@ -478,35 +564,32 @@ if __name__ == "__main__":
     symbols = [
         "btcusdt",
         "xrpusdt",
-        "adausdt",
-        "linkusdt",
-        "sandusdt",
-        "bnbusdt",
-        "dogeusdt",
-        "solusdt",
+        # "adausdt",
+        # "linkusdt",
+        # "sandusdt",
+        # "bnbusdt",
+        # "dogeusdt",
+        # "solusdt",
     ]  # 확인하고자 하는 심볼 정보
-
-    ### interval값은 앞으로 analysis class에 전담하는걸로.
-    ### interval class에서 역으로 데이터헨들로쪽으로 정보 공유.
-    intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
-
-    start_date = "2024-11-01 00:00:00"  # 시작 시간
-    end_date = "2024-12-24 23:59:59"  # 종료 시간
+    # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
+    ### 수신받을 데이터의 기간 ###
+    start_date = "2024-12-15 00:00:00"  # 시작 시간
+    end_date = "2024-12-28 23:59:59"  # 종료 시간
     safety_balance_ratio = 0.02  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.05  # 스톱 로스 비율
-    is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
+    stop_loss_rate = 0.35  # 스톱 로스 비율
+    is_download = True  # 기존 데이터로 할경우 False, 신규 다운로드 True
     adj_timer = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     adj_rate = 0.0007
     use_scale_stop = True  # final손절(False), Scale손절(True)
-    seed_money = 350
+    seed_money = 69690
     max_trade_number = 3
     start_step = 5_000
     leverage = 10
     init_stop_rate = 0.015
     adj_interval = "3m"
     is_order_break = True
-    loss_chance = 2
-    step_interval = "2h"
+    loss_chance = 1
+    step_interval = "4h"
 
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하
@@ -517,7 +600,7 @@ if __name__ == "__main__":
 
     backtest_ins = BackTester(
         symbols=symbols,
-        intervals=intervals,
+        # intervals=intervals,
         start_date=start_date,
         end_date=end_date,
         safety_balance_ratio=safety_balance_ratio,
@@ -529,7 +612,7 @@ if __name__ == "__main__":
         seed_money=seed_money,
         max_trade_number=max_trade_number,
         start_step=start_step,
-        leverage=leverage,
+        max_leverage=leverage,
         init_stop_rate=init_stop_rate,
         adj_interval=adj_interval,
         is_order_break=is_order_break,
@@ -543,55 +626,5 @@ if __name__ == "__main__":
     )
 
     asyncio.run(backtest_ins.run())
-    analyze_statistics = DataProcess.ResultEvaluator(backtest_ins.trade_analysis_ins)
+    analyze_statistics = TradeComputation.ResultEvaluator(backtest_ins.portfolio_ins)
     analyze_statistics.run_analysis()
-
-"""
-최대한 백테스트에서 구현한 후 해당 내용을 본 트레이딩에 적용한다.
-백테스트와 실제 트레이딩간의 설정값을 지정방법에 차이점을 두지 않는다.
-
-다만 실시간 티켓정보 업데이트가 필요한데, 데이터의 양과 메모리의 한계 때문에 
-백테스트의 경우 티커 초기값을 지정한다.
-
-
-
-단계별 또는 total_balance기준 일정 비율 적용여부를 검토한다.
-
-단계별시 특정 스탭별로 정해진 금액으로만 포지션 진행하고
-total_balance기준 일정 비율 적용은 간단하게 total_balance X Rate를 반영한다.
-
-DataProcess.OrderConstraint에 해당 내용을 반영한다.
-
-calc_fund의 기능을 분리한다.
-
-
-특정 금액 초과시 이체기능 추가.
-익절 금액 보존 위함.
-
-포지션 유지 수량도 재검토 한다.
-
-
-
-
-# 실제 트레이딩 메모
-    >> kline_data를 지정된 interval값에 맞게 수신하고, websocket 데이터를 실시간으로 수신받되
-        data container 또는 Dict자료형을 활용하여 가장 마지막값만 저장한다.(마지막값 계속 업데이트)
-        연산이 필요할때만 kline_data마지막 index값에 마지막값을 대입하며, 두 데이터간 start_timestamp / end_timestamp가 동일할경우에만
-        업데이트하고 동일하지 않으면서 start_timeatamp가 마지막값의 start_timestamp 보다 클 경우에는 마지막값에 "추가" 한다.
-        
-        추가된 데이터를 interval별로 묶어서 numpy처리 후 data container에 저장한다.
-            주의사항 : websocket데이터의 수신값중 거래내역이 없을경우 수신데이터가 없으며, 해당값을 반영하여 np.array처리시 길이 문제 때문에 오류가 발생한다.
-                    패딩 / 슬라이스 둘중 더 효과적인 방법을 사용하여 데이터를 만든다.
-        
-        데이터 분석을 마친 후 data container를 초기화 시킨다.
-        
-        현재 검토중인 time step은 20초이다. 초단위를 낮출경우 캔들의 길이 검토에 오해석이 있을 수 있으므로 낮은값이 무조건 좋은것은 아니다.
-        
-        다중 scenario에서 첫번째 중복되는 조건이 발생할 수 있으므로 이를 주의깊게 검토하고, 공통된 조건이 발생할 경우 대표 데이터를 속성값에 등록하여
-        반복 연산을 피할 수 있도록 한다.
-        
-        scenario의 반환값은 (상태, 포지션, 레버리지, 수량)을 기초로 하고 있으나, (상태, 포지션)만 반환하는건 어떤지 검토가 필요하다.
-        
-        각 함수별로 단일 기능을 수행하고 각 단일기능을 묶을 매니저급 함수를 생성하는것을 검토해야한다.
-
-"""

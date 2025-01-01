@@ -1,12 +1,12 @@
 import asyncio
 import utils
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 from MarketDataFetcher import SpotMarket, FuturesMarket
 
 
 class TickerDataManager:
     def __init__(self, api_instance):
-        self.api_instance = api_instance
+        self.api_ins = api_instance
 
     # Ticker 리스트 전체를 반환.
     async def get_tickers_all(self):
@@ -14,7 +14,7 @@ class TickerDataManager:
         1. 기능 : Binance의 Ticker리스트 전체를 수신한다.
         2. 매개변수 : 해당없음.
         """
-        ticker_data = await self.api_instance.fetch_ticker_price()
+        ticker_data = await self.api_ins.fetch_ticker_price()
         tickers = [data.get("symbol") for data in ticker_data]
         return tickers
 
@@ -29,7 +29,7 @@ class TickerDataManager:
             2) Quote : USDT ...
             symbol BTC(coin) / USDT(Quote)
         """
-        ticker_data = await self.api_instance.fetch_ticker_price()
+        ticker_data = await self.api_ins.fetch_ticker_price()
         filtered_tickers = set()  # 중복 방지를 위해 set 사용
         for ticker_info in ticker_data:
             symbol = ticker_info.get("symbol")
@@ -49,7 +49,7 @@ class TickerDataManager:
                 >> 'Qutote' : XXX/BTC
         """
         filtered_tickers = set()  # 중복 방지를 위해 set 사용
-        exchange_data = await self.api_instance.fetch_exchange_info()
+        exchange_data = await self.api_ins.fetch_exchange_info()
 
         asset = {"quote": "quoteAsset", "base": "baseAsset"}.get(asset_type.lower())
 
@@ -66,7 +66,6 @@ class TickerDataManager:
         self,
         target_price: float,
         comparison: str = "above",
-        dummy_data: Optional[List[Dick[str, Union[str, int]]]] = None,
     ) -> List:
         """
         1. 기능 : 특정 현재가 기준 이상 / 이하에 해당하는 Ticker리스트를 반환한다.
@@ -80,10 +79,8 @@ class TickerDataManager:
         if comparison not in ["above", "below"]:
             raise ValueError("comparison은 'above' 또는 'below' 중 하나여야 합니다.")
 
-        if dummy_data is None:
-            ticker_data = await self.api_instance.fetch_ticker_price()
-        else:
-            ticker_data = dummy_data
+        ticker_data = await self.api_ins.fetch_ticker_price()
+
         filtered_tickers = set()
 
         for ticker_info in ticker_data:
@@ -96,7 +93,10 @@ class TickerDataManager:
 
     # 특정 거래대금 이상 또는 이하에 해당하는 Ticker 반환.
     async def get_tickers_above_value(
-        self, target_value: float, comparison: str = "above"
+        self,
+        target_value: float,
+        comparison: str = "above",
+        dummy_data: Optional[List[Dict[str, Union[str, int, float]]]] = None,
     ) -> List:
         """
         1. 기능 : 24시간 거래기준하여 특정 거래대금 이상 또는 이하에 해당하는 Ticker리스트를 반환한다.
@@ -108,7 +108,12 @@ class TickerDataManager:
         """
         if comparison not in ["above", "below"]:
             raise ValueError("comparison은 'above' 또는 'below' 중 하나여야 합니다.")
-        ticker_data = await self.api_instance.fetch_24hr_ticker()
+
+        if dummy_data is None:
+            ticker_data = await self.api_ins.fetch_24hr_ticker()
+        else:
+            ticker_data = dummy_data
+
         filtered_tickers = set()
 
         for ticker_info in ticker_data:
@@ -121,7 +126,11 @@ class TickerDataManager:
 
     # Ticker의 변동률을 기준하여 리스트 반환.abs
     async def get_tickers_above_change(
-        self, percent: float, comparison: str = "above", absolute: bool = False
+        self,
+        target_percent: float,
+        comparison: str = "above",
+        absolute: bool = False,
+        dummy_data: Optional[List[Dict[str, Union[str, int, float]]]] = None,
     ) -> List:
         """
         1. 기능 : 24시간 거래기준하여 특정 변동률 이상 또는 이하에 해당하는 Ticker리스트를 반환한다.
@@ -132,7 +141,11 @@ class TickerDataManager:
                 >> 'below' : 이하
                     "이상" // "이하" 겹치는 값은 인지하고 있음.
         """
-        ticker_data = await self.api_instance.fetch_24hr_ticker()
+        if dummy_data is None:
+            ticker_data = await self.api_ins.fetch_24hr_ticker()
+        else:
+            ticker_data = dummy_data
+
         comparison_type = ["above", "below"]
 
         if not absolute and comparison not in comparison_type:
@@ -142,7 +155,7 @@ class TickerDataManager:
 
         filtered_tickers = set()
         literal_data = utils._collections_to_literal(ticker_data)
-        target_percent = percent * 100
+        target_percent = target_percent * 100
         for data in literal_data:
             change_percent = data.get("priceChangePercent")
             symbol = data.get("symbol")
@@ -168,47 +181,47 @@ class FuturesTickers(TickerDataManager):
 
 
 if __name__ == "__main__":
-    spot_obj = SpotTickers()
-    futures_obj = FuturesTickers()
+    spot_ins = SpotTickers()
+    futures_ins = FuturesTickers()
 
-    spot_tickers_all = asyncio.run(spot_obj.get_tickers_all())
+    spot_tickers_all = asyncio.run(spot_ins.get_tickers_all())
     print(f"TEST 1. Spot Tickers : {spot_tickers_all}")
-    futures_tickers_all = asyncio.run(futures_obj.get_tickers_all())
+    futures_tickers_all = asyncio.run(futures_ins.get_tickers_all())
     print(f"TEST 2. Futures Tickers : {futures_tickers_all}")
 
-    spot_asset_tickers = asyncio.run(spot_obj.get_asset_tickers(quote="USDT"))
+    spot_asset_tickers = asyncio.run(spot_ins.get_asset_tickers(quote="USDT"))
     print(f"TEST 3. Spot Asset Tickers : {spot_asset_tickers}")
-    futures_asset_tickers = asyncio.run(futures_obj.get_asset_tickers(quote="USDT"))
+    futures_asset_tickers = asyncio.run(futures_ins.get_asset_tickers(quote="USDT"))
     print(f"TEST 4. Futures Asset Tickers : {futures_asset_tickers}")
 
-    spot_crypto_assets = asyncio.run(spot_obj.get_crypto_assets(asset_type="base"))
+    spot_crypto_assets = asyncio.run(spot_ins.get_crypto_assets(asset_type="base"))
     print(f"TEST 5. Spot Crypto Assets : {spot_crypto_assets}")
     futures_crypto_assets = asyncio.run(
-        futures_obj.get_crypto_assets(asset_type="base")
+        futures_ins.get_crypto_assets(asset_type="base")
     )
     print(f"TEST 6. Futures Crypto Assets : {futures_crypto_assets}")
 
-    spot_above_price = asyncio.run(spot_obj.get_tickers_above_price(target_price=50))
+    spot_above_price = asyncio.run(spot_ins.get_tickers_above_price(target_price=50))
     print(f"TEST 7. Spot Above Price : {spot_above_price}")
     futures_above_price = asyncio.run(
-        futures_obj.get_tickers_above_price(target_price=50)
+        futures_ins.get_tickers_above_price(target_price=50)
     )
     print(f"TEST 8. Futures Above Price : {futures_above_price}")
 
     spot_above_value = asyncio.run(
-        spot_obj.get_tickers_above_value(target_value=150_000_000)
+        spot_ins.get_tickers_above_value(target_value=150_000_000)
     )
     print(f"TEST 9. Spot Above Value : {spot_above_value}")
     futures_above_value = asyncio.run(
-        futures_obj.get_tickers_above_value(target_value=150_000_000)
+        futures_ins.get_tickers_above_value(target_value=150_000_000)
     )
     print(f"TEST 10. Futures Above Value : {futures_above_value}")
 
     spot_above_change = asyncio.run(
-        spot_obj.get_tickers_above_change(target_percent=0.05)
+        spot_ins.get_tickers_above_change(target_percent=0.05)
     )
     print(f"TEST 11. Spot Above Change : {spot_above_change}")
     futures_above_change = asyncio.run(
-        futures_obj.get_tickers_above_change(target_percent=0.05)
+        futures_ins.get_tickers_above_change(target_percent=0.05)
     )
     print(f"TEST 12. Futures Above Change : {futures_above_change}")

@@ -103,7 +103,7 @@ class BinanceHandler:
                 print("WebSocket connection opened.")
                 await self.__handler_message(ws)
 
-    # websocket break 신고 발생기
+    # websocket break 신호 발생기
     async def generator_control_signal(self, sleep_duration: int = 1):
         """
         1. 기능 : tickers 업데이트 stop 신호 발생 또는 진행 신호 발생

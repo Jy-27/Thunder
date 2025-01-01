@@ -648,6 +648,7 @@ class BacktestDataFactory:
         # dummy_data = [0 for _ in range(10)]
         # 최종 반환 데이터를 초기화
         output_data = {}
+        start_step = utils._get_interval_minutes(self.intervals[-1])
 
         for symbol, kline_data_symbol in kline_data.items():
             # 최종 반환 데이터에 심볼별 키 초기화
@@ -655,7 +656,7 @@ class BacktestDataFactory:
 
             # 가장 작은 단위 interval 데이터를 기준으로 기준 데이터를 생성
             reference_data = kline_data[symbol][intervals_list[0]]
-
+            
             for interval, kline_data_interval in kline_data_symbol.items():
                 if interval == intervals_list[0]:
                     # np.arange길이 맞추기 위해 dummy data 삽입
@@ -669,18 +670,21 @@ class BacktestDataFactory:
                 output_data[symbol][interval] = {}
 
                 for idx, reference_entry in enumerate(reference_data):
+                    if idx <= start_step:
+                        continue
                     target_open_timestamp = reference_entry[0]
                     target_close_timestamp = reference_entry[6]
-
                     # 기준 조건에 맞는 데이터 검색
                     condition = np.where(
                         (kline_data_interval[:, 0] <= target_open_timestamp)
                         & (kline_data_interval[:, 6] >= target_close_timestamp)
                     )[0]
 
-                    # DEBUG CODE
+                    # # DEBUG CODE
                     # if len(condition) != 1:
                     #     print(f"{symbol} - {interval} - {condition}")
+                    # if not condition:
+                    #     continue
 
                     reference_open_timestamp = kline_data_interval[condition, 0][0]
                     reference_close_timestamp = kline_data_interval[condition, 6][0]
@@ -749,6 +753,23 @@ class BacktestDataFactory:
         """
         # 하루의 총 분
         minutes_in_a_day = utils._get_interval_minutes('1d')
+
+        # # interval에 따른 간격(분) 정의
+        # interval_to_minutes = {
+        #     "1m": 1,
+        #     "3m": 3,
+        #     "5m": 5,
+        #     "15m": 15,
+        #     "30m": 30,
+        #     "1h": 60,
+        #     "2h": 120,
+        #     "4h": 240,
+        #     "6h": 360,
+        #     "8h": 480,
+        #     "12h": 720,
+        #     "1d": 1440,
+        # }
+
         indices_data = []
 
         data_container_name = data_container.get_all_data_names()
@@ -893,8 +914,8 @@ class OrderConstraint:
         self.safety_ratio = safety_ratio
         self.position_limit = position_limit
         
-        self.chance: int = chance,
-        self.step_interval: str= step_interval,
+        self.chance: int = chance
+        self.step_interval: str= step_interval
         
         self.total_balance:Optional[float] = None
         self.closed_trade_data:Optional[List[Any]] = None
@@ -930,7 +951,7 @@ class OrderConstraint:
         self,
         symbol: str,
         scenario: int,
-        closed_position:PortfolioManager,
+        closed_positions:PortfolioManager,
         current_timestamp: Optional[int] = None,
     ):
         """
@@ -943,11 +964,11 @@ class OrderConstraint:
         """
 
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
-        if symbol not in self.closed_positions:
+        if symbol not in closed_positions:
             return True
 
         # 거래 종료 데이터 np.array화
-        data_array = np.array(self.closed_positions[symbol], float)
+        data_array = np.array(closed_positions[symbol], float)
 
         # 현재 타임스탬프 설정
         if current_timestamp is None:
@@ -1018,7 +1039,7 @@ class OrderConstraint:
         count = min(count, self.position_limit)
 
         # 안전 금액 및 유효 금액 계산
-        safety_value = last_valid_target * safety_ratio
+        safety_value = last_valid_target * self.safety_ratio
         usable_value = last_valid_target - safety_value
         trade_value = usable_value / count if count > 0 else 0
 

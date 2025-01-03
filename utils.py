@@ -737,6 +737,29 @@ def _get_interval_minutes(interval: str) -> int:
     return int(INTERVAL_MINITES[interval])
 
 
+def get_interval_start_hour(interval: str) -> int:
+    """시작시간을 09시 00분 으로 세팅하는게 제일 속편하다"""
+    INTERVAL_START_HOUR = {
+        "1m": 0,
+        "3m": 0,
+        "5m": 0,
+        "15m": 0,
+        "30m": 0,
+        "1h": 0,
+        "2h": 1,
+        "4h": 1,
+        "8h": 1,
+        "12h": 9,
+        "1d": 9,
+        "3d": 9,
+        "1w": 9,
+        "1M": 9,
+    }
+    if not interval in INTERVAL_START_HOUR:
+        raise ValueError(f"interval 값이 유효하지 않음: {interval}")
+    return int(INTERVAL_START_HOUR[interval])
+
+
 def _calculate_percentage_change(
     start_value: Union[float, int], end_value: Union[float, int]
 ) -> Union[float, int]:

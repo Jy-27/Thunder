@@ -67,6 +67,8 @@ class BackTester:
         self.test_mode: bool = True
         # 데이터를 pickle로 저장 및 로딩해야하며, 컨테이너화 하지 않는다.
         self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
+        # 백테스트에 사용될 kline_data의 길이 지정(단위 : day)
+        self.backtest_date_range = 2
         self.signal_analyzer_ins = TradeSignalAnalyzer.AnalysisManager(
             back_test=self.test_mode
         )
@@ -92,10 +94,10 @@ class BackTester:
             step_interval=self.step_interval,
             position_limit=self.loss_chance,
         )
-        self.symbol_map = None
-        self.interval_map = None
+        # self.symbol_map = None
+        # self.interval_map = None
         self.closing_indices_data = None
-        self.target_run_interval = "map_1m"
+        # self.target_run_interval = "map_1m"
         self.max_trade_number = max_trade_number
         self.start_step = utils._get_interval_minutes(self.intervals[-1])
         self.init_stop_rate = init_stop_rate
@@ -165,7 +167,7 @@ class BackTester:
                 # 해당 파일을 불러온다.
                 with open(path, "rb") as file:
                     self.closing_sync_data = pickle.load(file)
-                    return
+                    # return
         # 신규 다운로드 선택시
         else:
             # kline data를 수신한다.
@@ -173,26 +175,15 @@ class BackTester:
                 save=is_save
             )
             # 데이터를 np.array타입으로 변환한다.
-            data_array = utils._convert_kline_data_array(data)           
+            data_array = utils._convert_kline_data_array(data)
             # closing_sync 데이터를 생성 및 속성에 저장한다.
             self.closing_sync_data = self.backtest_data_ins.generate_kline_closing_sync(
                 kline_data=data_array, save=is_save
             )
 
-    # closing_sync 데이터의 index 데이터를 생성한다.
-    async def get_indices_data(self):
-        """
-        1. 기능 : closing_sync_data의 index데이터를 생성한다.
-        2. 매개변수 : 해당없음.
-        """
-
-        # symbol map, interval map, closing_indices데이터를 생성(self.get_base_data로 생성된 속성값 적용.)
-        self.symbol_map, self.interval_map, self.closing_indices_data = (
-            utils._convert_to_container(self.closing_sync_data)
-        )
-        # closing_sync index데이터를 생성 및 속성에 저장한다.
-        self.backtest_data_ins.get_indices_data(
-            data_container=self.closing_indices_data, lookback_days=self.lookback_days
+        self.closing_indices_data = self.backtest_data_ins.get_indices_data(
+            closing_sync_data=self.closing_sync_data,
+            lookback_days=self.backtest_date_range,
         )
 
     # 현재 진행중인 포지션이 있다면, 최종 정보를 업데트한다.(단가, 현재타임스템프)
@@ -455,88 +446,47 @@ class BackTester:
         """
         await self.get_base_data(is_save=True)
         self.__validate_base_data()
-        await self.get_indices_data()
+        # await self.get_indices_data(self.closing_sync_data)
         self.start_masage()
 
-        end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
+        # 최소단위 interval값 기준 데이터 길이를 확보한다.
+        data_length = len(self.closing_sync_data[self.symbols[0]][self.intervals[0]])
 
-        ### 데이터 타임루프 시작 ###
-        for idx, data in enumerate(
-            self.closing_indices_data.get_data(self.target_run_interval)
-        ):
-            if idx <= self.start_step or idx >= end_step:
-                # utils._std_print(idx)
-                continue
-            # interval 기준이므로 end_timestamp는 for문 이탈시 가장 큰 값을 가진다.
-            # list에 값을 추가하여 for문 종료시 min값(1분) 확보한다.
-            # timestamp_min값을 초기화 한다.
-            timestamp_min = []
 
-            # 원본 코드
-            ### 분석에 사용될 데이터셋 초기화 ###
-            self.interval_dataset.clear_all_data()
-            # dummy_data = {}
-            """
-            동작원리 고민중...
-            
-            np.array변환을 한번에 하기 위하여 다차원 list데이터가 필요하다.
-                변수1 >> 데이터 수신속도에 따라서 같은 interval이라 하더라도 데이터의 길이가 다를경우 np.array처리시 오류발생.
-            
-            순서는 interval loop
-                >> symbol.interval_data
-            """
+        # Loop 시작
+        for index in range(data_length):
+            for symbol in self.symbols:
+                timestamp_min = []
+                for interval in self.intervals:
+                    select_indices_ = self.closing_indices_data.get_data(f'interval_{interval}')[index]
+                    select_data = self.closing_sync_data[symbol][interval][select_indices_]
+                    
+                    price = select_data[-1][4]
+                    end_timestamp = select_data[-1][6]
+                    timestamp_min.append(end_timestamp)
+        
+                    if interval == self.intervals[0]:
+                        update_and_stop_signal = self.update_trade_info(
+                            symbol=symbol, data=select_data
+                            )
+                        
+                        if update_and_stop_signal:
+                            self.active_close_position(symbol=symbol)
+                        ### trane 출력 ###
+                        date = utils._convert_to_datetime(end_timestamp)
+                        utils._std_print(
+                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
+                        )
 
-            for interval in self.intervals:
-                maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]                
-                data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
-
-                # print(data)
-                # raise ValueError(f'{len(data)}')
-
-                ### 데이터셋으로 저장한다 ###
-                # TEST 진행시 첫번째가 왜 symols[0]이 아닌지 의문 발생시 위의 self.start_step이 있음을 인지할 것.
-                symbol = self.symbols[maps_[0]]
-                price = data[-1][4]
-                end_timestamp = data[-1][6]
-
-                timestamp_min.append(end_timestamp)
-
-                ### 업데이트 및 이탈 검토 ###
-                if interval == self.intervals[0]:
-                    # 현재 정보 업데이트와 동시에 stop signal 정보를 조회한다.
-                    update_and_stop_signal = self.update_trade_info(
-                        symbol=symbol, data=data
+                    self.interval_dataset.set_data(
+                        data_name=f"interval_{interval}", data=select_data
                     )
-                    if update_and_stop_signal:
-                        self.active_close_position(symbol=symbol)
-                    ### trane 출력 ###
-                    date = utils._convert_to_datetime(end_timestamp)
-                    utils._std_print(
-                        f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
-                    )
-                    ### 포지션 보유시 연산 pass ###
-                    if self.portfolio_ins.validate_open_position(symbol):
-                        continue
-                
-                
-                self.interval_dataset.set_data(
-                    data_name=f"interval_{interval}", data=data
-                )
-                    # 티켓 분류 조건 부합여부를 점검한다.
-                    # 조건에 맞지 않으면 루프를 지나친다.
-
-                # 원본 코드
-                ### interval data를 데이터셋으로 구성 ###
-                # dummy_data[interval] = data
-                # print(data)
-
-
+            # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
             if not await self.validate_ticker_conditions(
-                symbol=symbol, data=data
-            ) or self.portfolio_ins.validate_open_position(symbol):
+                symbol=symbol, data=select_data
+                ) or self.portfolio_ins.validate_open_position(symbol):
                 continue
-
-            # 원본 코드
+        
             ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
             self.signal_analyzer_ins.data_container = self.interval_dataset
             # self.signal_analyzer_ins.dummy_d = dummy_data
@@ -544,7 +494,7 @@ class BackTester:
             trade_signal = self.signal_analyzer_ins.scenario_run()
             if not trade_signal[0]:
                 continue
-            
+
             current_timestamp = min(timestamp_min)
 
             await self.active_open_position(
@@ -556,8 +506,109 @@ class BackTester:
                 scenario_type=trade_signal[2],
             )
 
-
         print("\n\nEND")
+        
+        
+        
+        
+        # # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
+
+        # ### 데이터 타임루프 시작 ###
+        # for idx, data in enumerate(
+        #     self.closing_indices_data.get_data(self.target_run_interval)
+        # ):
+        #     if idx <= self.start_step:  # or idx >= end_step:
+        #         # utils._std_print(idx)
+        #         continue
+        #     # interval 기준이므로 end_timestamp는 for문 이탈시 가장 큰 값을 가진다.
+        #     # list에 값을 추가하여 for문 종료시 min값(1분) 확보한다.
+        #     # timestamp_min값을 초기화 한다.
+        #     timestamp_min = []
+
+        #     # 원본 코드
+        #     ### 분석에 사용될 데이터셋 초기화 ###
+        #     self.interval_dataset.clear_all_data()
+        #     # dummy_data = {}
+        #     """
+        #     동작원리 고민중...
+            
+        #     np.array변환을 한번에 하기 위하여 다차원 list데이터가 필요하다.
+        #         변수1 >> 데이터 수신속도에 따라서 같은 interval이라 하더라도 데이터의 길이가 다를경우 np.array처리시 오류발생.
+            
+        #     순서는 interval loop
+        #         >> symbol.interval_data
+        #     """
+
+        #     for interval in self.intervals:
+        #         maps_ = self.closing_indices_data.get_data(f"map_{interval}")[idx]
+        #         data = self.closing_indices_data.get_data(f"interval_{interval}")[maps_]
+        #         # print(idx)
+        #         # print(maps_)
+        #         # print(data)
+        #         # raise ValueError(f'{len(data)}')
+
+        #         ### 데이터셋으로 저장한다 ###
+        #         # TEST 진행시 첫번째가 왜 symols[0]이 아닌지 의문 발생시 위의 self.start_step이 있음을 인지할 것.
+        #         symbol = self.symbols[maps_[0]]
+        #         price = data[-1][4]
+        #         end_timestamp = data[-1][6]
+
+        #         timestamp_min.append(end_timestamp)
+
+        #         ### 업데이트 및 이탈 검토 ###
+        #         if interval == self.intervals[0]:
+        #             # 현재 정보 업데이트와 동시에 stop signal 정보를 조회한다.
+        #             update_and_stop_signal = self.update_trade_info(
+        #                 symbol=symbol, data=data
+        #             )
+        #             if update_and_stop_signal:
+        #                 self.active_close_position(symbol=symbol)
+        #             ### trane 출력 ###
+        #             date = utils._convert_to_datetime(end_timestamp)
+        #             utils._std_print(
+        #                 f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
+        #             )
+        #             ### 포지션 보유시 연산 pass ###
+        #             if self.portfolio_ins.validate_open_position(symbol):
+        #                 continue
+
+        #         self.interval_dataset.set_data(
+        #             data_name=f"interval_{interval}", data=data
+        #         )
+        #         # 티켓 분류 조건 부합여부를 점검한다.
+        #         # 조건에 맞지 않으면 루프를 지나친다.
+
+        #         # 원본 코드
+        #         ### interval data를 데이터셋으로 구성 ###
+        #         # dummy_data[interval] = data
+        #         # print(data)
+
+        #     if not await self.validate_ticker_conditions(
+        #         symbol=symbol, data=data
+        #     ) or self.portfolio_ins.validate_open_position(symbol):
+        #         continue
+
+        #     # 원본 코드
+        #     ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
+        #     self.signal_analyzer_ins.data_container = self.interval_dataset
+        #     # self.signal_analyzer_ins.dummy_d = dummy_data
+
+        #     trade_signal = self.signal_analyzer_ins.scenario_run()
+        #     if not trade_signal[0]:
+        #         continue
+
+        #     current_timestamp = min(timestamp_min)
+
+        #     await self.active_open_position(
+        #         symbol=symbol,
+        #         price=price,
+        #         position=trade_signal[1],
+        #         leverage=self.max_leverage,
+        #         start_timestamp=current_timestamp,
+        #         scenario_type=trade_signal[2],
+        #     )
+
+        # print("\n\nEND")
 
 
 if __name__ == "__main__":

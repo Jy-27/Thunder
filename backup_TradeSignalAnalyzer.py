@@ -39,11 +39,10 @@ class BaseConfig:
 
         # test모드의 경우 interval '1m' 을 추가함.
         if self.test_mode:
-            self.intervals = ['1m'] + self.selected_intervals#.insert(0, '1m')
+            self.intervals = ["1m"] + self.selected_intervals  # .insert(0, '1m')
         elif not self.test_mode:
             self.intervals = self.selected_intervals
-        
-        
+
         # interval_maps 속성 초기화
         self.intervals_idx_map = {
             f"interval_{data}": idx for idx, data in enumerate(self.intervals)
@@ -60,7 +59,7 @@ class AnalysisManager:
         self.symbols = []
         self.kline_data = {}
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
-        
+
         # data:np.ndarray // data_name=f'interval_{interval}' 데이터전달.
         self.data_container: Optional[utils.DataContainer] = None
         self.case_1 = []

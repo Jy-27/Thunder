@@ -309,9 +309,9 @@ class TradingLog:
 # 전체 자산 관리와 거래 기록 관리
 class PortfolioManager:
     """
-    전체 자산 관리와 거래기록을 관리한다. 
+    전체 자산 관리와 거래기록을 관리한다.
     """
-    
+
     def __init__(self, initial_balance: float = 1_000):
         self.data_container = utils.DataContainer()
         self.trade_history: List[TradingLog] = []
@@ -458,6 +458,7 @@ class BacktestDataFactory:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
+
     FUTURES = "FUTURES"
     SPOT = "SPOT"
 
@@ -629,119 +630,136 @@ class BacktestDataFactory:
             )
         return aggregated_results
 
+    # 생성한 closing_sync_data를 interval index데이터를 구성한다.(전체)
+    def __generate_full_indices(self, closing_sync_data):
+        # symbols를 획득
+        symbols = list(closing_sync_data.keys())
+        # Intervals를 획득
+        intervals = list(closing_sync_data[symbols[0]])
+        # 기본 데이터를 지정
+        base_data = closing_sync_data[symbols[0]]
+        # 마지막 index값 조회
+        max_index = len(base_data[intervals[0]])
+        
+        # 인덱스 데이터를 저장할 자료를 초기화
+        indices_data = {}
+        # interval 루프
+        for interval in intervals:
+            # interval별 miute를 활용하여 step으로 지정
+            interval_step = utils._get_interval_minutes(interval)
+            # arange를 통해서 interval의 기준 index 지정.
+            indices_data[interval] = np.arange(start=0, stop=max_index, step=interval_step)
+        # 결과 반환.
+        return indices_data
+
     # 1분봉 종가 가격을 각 interval에 반영한 테스트용 더미 데이터를 생성한다.
-    def generate_kline_closing_sync(self, kline_data: Dict, save: bool = False):
+    def generate_kline_closing_sync(self, kline_data: Dict, save: bool = False) -> Dict[str, Dict[str, np.ndarray]]:
         """
         1. 기능 : 백테스트시 데이터의 흐름을 구현하기 위하여 1분봉의 누적데이터를 반영 및 1분봉의 길이와 맞춘다.
         2. 매개변수
             1) kline_data : kline_data 를 numpy.array화 하여 적용
             2) save : 생성된 데이터 저장여부.
 
-
+        3. 처음부터 인터별간 데이터의 길이는 다르지만, open_timestamp와 end_timestamp가 일치한다. kline_data수신기에는 이상이 없다.
+            dummy_data가 불필요하다는 소리....해당 함수를 완전 재구성해야한다. 그동안 잘못된 데이터로 백테스를 수행하였다. 데이터의 신뢰성을
+            먼저 확보해야만 한다.
         """
+
         # 심볼 및 interval 값을 리스트로 변환
         symbols_list = list(kline_data.keys())
         intervals_list = list(kline_data[symbols_list[0]].keys())
+        closing_sync_data = {}
 
-        # np.arange시 전체 shift처리위하여 dummy data를 추가함.
-        dummy_data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        # dummy_data = [0 for _ in range(10)]
-        # 최종 반환 데이터를 초기화
-        output_data = {}
-        start_step = utils._get_interval_minutes(self.intervals[-1])
+        kline_array = utils._convert_to_array(kline_data)
 
-        for symbol, kline_data_symbol in kline_data.items():
-            # 최종 반환 데이터에 심볼별 키 초기화
-            output_data[symbol] = {}
+        ### np.ndarray로 구성된 dict자료형태를 Loop 순환 ###
+        for symbol, symbol_data in kline_array.items():
+            closing_sync_data[symbol] = {}
 
-            # 가장 작은 단위 interval 데이터를 기준으로 기준 데이터를 생성
-            reference_data = kline_data[symbol][intervals_list[0]]
-            
-            for interval, kline_data_interval in kline_data_symbol.items():
-                if interval == intervals_list[0]:
-                    # np.arange길이 맞추기 위해 dummy data 삽입
-                    new_row = np.insert(
-                        reference_data, 0, dummy_data, axis=0
-                    )  # reference_data.insert(0, dummy_data)
-                    output_data[symbol][interval] = new_row
+            ### base data 생성(각 symbol별 첫번째 interval값 기준 ###
+            base_data = symbol_data[
+                self.intervals[0]
+            ]  # 첫번재 index데이터값 기준으로 생성함.
+
+            ### interval Loop 대입 ###
+            for interval in self.intervals:
+                ### interval 첫번재 index값은 continue처리한다.(base_data값은 위에 선언 했으므로)
+                if interval == self.intervals[0]:
+                    closing_sync_data[symbol][interval] = base_data
                     continue
 
-                combined_data = []
-                output_data[symbol][interval] = {}
+                timestamp_range = utils._get_interval_ms_seconds(interval) - 1
+                ### 목표 interval 데이터값을 조회한다.###
+                interval_data = kline_array[symbol][interval]
 
-                for idx, reference_entry in enumerate(reference_data):
-                    if idx <= start_step:
-                        continue
-                    target_open_timestamp = reference_entry[0]
-                    target_close_timestamp = reference_entry[6]
-                    # 기준 조건에 맞는 데이터 검색
+                ### 데이터를 저장할 임시 변수를 초기화 한다. ###
+                temp_data = []
+
+                ### base data를 활용하여 index를 구현하고, index별 데이터를 순환한다.###
+                for index, data in enumerate(base_data):
+                    open_timestamp = data[0]  # 시작 타임스템프
+                    open_price = data[1]  # 시작 가격
+                    high_price = data[2]  # 최고 가격
+                    low_price = data[3]  # 최저 가격
+                    close_price = data[4]  # 마지막 가격
+                    volume = data[5]  # 거래량(단위 : coin)
+                    close_timestamp = data[6]  # 종료 타임스템프
+                    volume_total_usdt = data[7]  # 거래량(단위 : usdt)
+                    trades_count = data[8]  # 총 거래횟수
+                    taker_asset_volume = data[9]  # 시장가 주문 거래량(단위 : coin)
+                    taker_quote_volume = data[10]  # 시장가 주문 거래량(단위 : usdt)
+
+                    ### base_data가 적용되는 interval_data의 index값을 확보한다.
                     condition = np.where(
-                        (kline_data_interval[:, 0] <= target_open_timestamp)
-                        & (kline_data_interval[:, 6] >= target_close_timestamp)
-                    )[0]
+                        (interval_data[:, 0] <= open_timestamp)
+                        & (interval_data[:, 6] >= close_timestamp)
+                    )
 
-                    # # DEBUG CODE
-                    # if len(condition) != 1:
-                    #     print(f"{symbol} - {interval} - {condition}")
-                    # if not condition:
-                    #     continue
+                    ### interval 전체 데이터에서 해당 interval 데이터만 추출한다. ###
+                    ### 용도는 start_timestap / end_timestamp추출 및 new_data에 적용을 위함. ###
+                    target_data = interval_data[condition]
 
-                    reference_open_timestamp = kline_data_interval[condition, 0][0]
-                    reference_close_timestamp = kline_data_interval[condition, 6][0]
+                    target_open_timestamp = target_data[0, 0]  # 단일값이 확실할 경우
+                    target_close_timestamp = target_data[0, 6]  # 단일값이 확실할 경우
 
-                    if len(combined_data) == 0 or not np.array_equal(
-                        combined_data[-1][0], reference_open_timestamp
-                    ):
-                        new_entry = [
-                            reference_open_timestamp,
-                            reference_entry[1],
-                            reference_entry[2],
-                            reference_entry[3],
-                            reference_entry[4],
-                            reference_entry[5],
-                            reference_close_timestamp,
-                            reference_entry[7],
-                            reference_entry[8],
-                            reference_entry[9],
-                            reference_entry[10],
-                            0,
-                        ]
-                    elif np.array_equal(reference_data[6], reference_close_timestamp):
-                        new_entry = kline_data_interval
+                    new_data_condition = np.where(
+                        (base_data[:, 0] >= target_open_timestamp)
+                        & (base_data[:, 6] <= close_timestamp)
+                    )  # close_timestamp는 현재 data종료 시간 기준으로 해야한다.
+
+                    new_base_data = base_data[new_data_condition]
+
+                    timestamp_diff = new_base_data[-1, 6] - new_base_data[0, 0]
+                    if timestamp_range == timestamp_diff:
+                        new_data = target_data[0]
                     else:
-                        previous_entry = combined_data[-1]
-                        new_entry = [
-                            reference_open_timestamp,
-                            previous_entry[1],
-                            max(previous_entry[2], reference_entry[2]),
-                            min(previous_entry[3], reference_entry[3]),
-                            reference_entry[4],
-                            previous_entry[5] + reference_entry[5],
-                            reference_close_timestamp,
-                            previous_entry[7] + reference_entry[7],
-                            previous_entry[8] + reference_entry[8],
-                            previous_entry[9] + reference_entry[9],
-                            previous_entry[10] + reference_entry[10],
+                        new_data = [
+                            target_open_timestamp,
+                            new_base_data[0, 1],
+                            np.max(new_base_data[:, 2]),
+                            np.min(new_base_data[:, 3]),
+                            new_base_data[-1, 4],
+                            np.sum(new_base_data[:, 5]),
+                            target_close_timestamp,
+                            np.sum(new_base_data[:, 7]),
+                            np.sum(new_base_data[:, 8]),
+                            np.sum(new_base_data[:, 9]),
+                            np.sum(new_base_data[:, 10]),
                             0,
                         ]
-                    combined_data.append(new_entry)
-
-                combined_data.insert(0, dummy_data)
-                output_data[symbol][interval] = np.array(
-                    object=combined_data, dtype=float
-                )
+                    temp_data.append(new_data)
+                closing_sync_data[symbol][interval] = np.array(temp_data, float)
         if save:
             path = os.path.join(
                 self.parent_directory, self.storeage, self.kline_closing_sync_data
             )
             with open(file=path, mode="wb") as file:
-                pickle.dump(output_data, file)
-        return output_data
+                pickle.dump(closing_sync_data, file)
+        return closing_sync_data
 
     # generate_kline_closing_sync index 자료를 생성한다.
     def get_indices_data(
-        self, data_container, lookback_days: int = 2, save: bool = False
-    ):
+        self, closing_sync_data:Dict[str, Dict[str, np.ndarray]] , lookback_days: int = 2) -> utils.DataContainer:
         """
         1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
         2. 매개변수
@@ -752,67 +770,34 @@ class BacktestDataFactory:
             백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
         """
         # 하루의 총 분
-        minutes_in_a_day = utils._get_interval_minutes('1d')
+        
+        symbols = list(closing_sync_data.keys())
+        intervals = list(closing_sync_data[symbols[0]])
+        
+        date_range = lookback_days
+        timestamp_step = utils._get_interval_minutes('1d') * date_range
 
-        # # interval에 따른 간격(분) 정의
-        # interval_to_minutes = {
-        #     "1m": 1,
-        #     "3m": 3,
-        #     "5m": 5,
-        #     "15m": 15,
-        #     "30m": 30,
-        #     "1h": 60,
-        #     "2h": 120,
-        #     "4h": 240,
-        #     "6h": 360,
-        #     "8h": 480,
-        #     "12h": 720,
-        #     "1d": 1440,
-        # }
+        indices_data = self.__generate_full_indices(closing_sync_data)
+        base_indices = indices_data[intervals[0]]
 
-        indices_data = []
-
-        data_container_name = data_container.get_all_data_names()
-        intervals = [interval.split("_")[1] for interval in data_container_name]
+        container_data = utils.DataContainer()
 
         for interval in intervals:
-            indices_data = []
-            interval_to_minutes = utils._get_interval_minutes(interval)
-            
-            # 데이터에서 각 인덱스 처리
-            for current_index, data_point in enumerate(
-                data_container.get_data(data_name=f"interval_{interval}")[0]
-            ):
-                for series_index in range(
-                    len(data_container.get_data(data_name=f"interval_{interval}"))
-                ):
-                    # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
-                    start_index = current_index - minutes_in_a_day * lookback_days
-                    start_index = (
-                        start_index // interval_to_minutes
-                    ) * interval_to_minutes
-                    if start_index < 0:
-                        start_index = 0
+            select_indices = []
+            for current_idx in base_indices:
+                reference_data = indices_data[interval]
+                start_idx = current_idx - timestamp_step
+                if start_idx < 0:
+                    start_idx
+                condition = np.where((reference_data[:]>=start_idx)&
+                                    (reference_data[:]<=current_idx))
+                indices = indices_data[interval][condition]
+                if current_idx > condition[0][-1]:
+                    indices = np.append(indices, current_idx)
+                select_indices.append(indices)
+            container_data.set_data(data_name=f'interval_{interval}', data=select_indices)
 
-                    # np.arange 생성
-                    interval_range = np.arange(
-                        start_index, current_index, interval_to_minutes
-                    )
-
-                    # current_index가 마지막 인덱스보다 크면 추가
-                    if current_index not in interval_range:
-                        interval_range = np.append(interval_range, current_index)
-
-                    # (series_index, interval_range) 추가
-                    indices_data.append((series_index, interval_range))
-            data_container.set_data(data_name=f"map_{interval}", data=indices_data)
-
-        if save:
-            path = os.path.join(self.parent_directory, self.storeage, self.indices_file)
-            utils._save_to_json(
-                file_path=indices_data, new_data=indices_data, overwrite=True
-            )
-        return indices_data
+        return container_data
 
         # original code
         # for interval in intervals:
@@ -909,19 +894,27 @@ class BacktestProcessor:
 
 class OrderConstraint:
     """주문시 제약사항을 생성한다."""
-    def __init__(self, increase_type:str, chance:int, step_interval:str, safety_ratio:float=0.2, position_limit:int=3):
+
+    def __init__(
+        self,
+        increase_type: str,
+        chance: int,
+        step_interval: str,
+        safety_ratio: float = 0.2,
+        position_limit: int = 3,
+    ):
         self.increase_type = increase_type
         self.safety_ratio = safety_ratio
         self.position_limit = position_limit
-        
+
         self.chance: int = chance
-        self.step_interval: str= step_interval
-        
-        self.total_balance:Optional[float] = None
-        self.closed_trade_data:Optional[List[Any]] = None
-        
+        self.step_interval: str = step_interval
+
+        self.total_balance: Optional[float] = None
+        self.closed_trade_data: Optional[List[Any]] = None
+
         self.__verify_config()
-        
+
     # def __init__ (self):
     #     self.target_count_min = 1
     #     self.target_count_max = 10
@@ -932,26 +925,30 @@ class OrderConstraint:
     #     self.safety_account_ratio = 0.32
 
     def __verify_config(self):
-        increase_types= ["stepwise", "proportional"]
-        if not self.increase_type in increase_types or not isinstance(self.increase_type, str):
-            raise ValueError(f'increase_type 유효하지 않음:{self.increase_type}')
+        increase_types = ["stepwise", "proportional"]
+        if not self.increase_type in increase_types or not isinstance(
+            self.increase_type, str
+        ):
+            raise ValueError(f"increase_type 유효하지 않음:{self.increase_type}")
 
         if self.safety_ratio >= 1 or not isinstance(self.safety_ratio, float):
-            raise ValueError(f'sefty ratio가 유효하지 않음:{self.safety_ratio}')
-        
+            raise ValueError(f"sefty ratio가 유효하지 않음:{self.safety_ratio}")
+
         if not isinstance(self.position_limit, int):
-            raise ValueError(f'position_limit이 유효하지 않음:{self.position_limit}')
-    
-    def update_trading_data(self, closed_position:PortfolioManager, total_balance:PortfolioManager):
+            raise ValueError(f"position_limit이 유효하지 않음:{self.position_limit}")
+
+    def update_trading_data(
+        self, closed_position: PortfolioManager, total_balance: PortfolioManager
+    ):
         self.total_balance = total_balance
         self.closed_trade_data = closed_position
-    
+
     # 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
     def validate_failed_scenario(
         self,
         symbol: str,
         scenario: int,
-        closed_positions:PortfolioManager,
+        closed_positions: PortfolioManager,
         current_timestamp: Optional[int] = None,
     ):
         """
@@ -990,12 +987,9 @@ class OrderConstraint:
 
         # 허용된 chance보다 크면 이면 False 반환
         return filtered_count < self.chance
-    
-    
 
     # 보유가능한 항목과, 안전금액, 거래가능금액을 계산한다.
-    def calc_fund(
-        self, funds: float) -> dict:
+    def calc_fund(self, funds: float) -> dict:
         """
         총 자금과 안전 비율을 기반으로 보유 가능량과 다음 기준 금액 계산.
 

@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["1h"]
+    selected_intervals = ["1h", "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -46,11 +46,10 @@ class BaseConfig:
 
         # test모드의 경우 interval '1m' 을 추가함.
         if self.test_mode:
-            self.intervals = ['1m'] + self.selected_intervals#.insert(0, '1m')
+            self.intervals = ["1m"] + self.selected_intervals  # .insert(0, '1m')
         elif not self.test_mode:
             self.intervals = self.selected_intervals
-        
-        
+
         # interval_maps 속성 초기화
         self.intervals_idx_map = {
             f"interval_{data}": idx for idx, data in enumerate(self.intervals)
@@ -92,7 +91,6 @@ class Processing:
     #     print(peak_indices)
     #     return peak_indices
 
-
     @staticmethod
     def find_peaks_in_column(data, column_index, max_peaks=None):
         """
@@ -110,8 +108,8 @@ class Processing:
 
         # 국소 최대값(상승 꼭지점) 찾기
         diff_prev = np.diff(column_data, prepend=np.nan)  # 이전 값과 비교
-        diff_next = np.diff(column_data, append=np.nan)   # 다음 값과 비교
-        peaks = (diff_prev > 0) & (diff_next < 0)         # 국소 최대값 조건
+        diff_next = np.diff(column_data, append=np.nan)  # 다음 값과 비교
+        peaks = (diff_prev > 0) & (diff_next < 0)  # 국소 최대값 조건
 
         peak_indices = np.where(peaks)[0]  # 꼭지점 인덱스 추출
 
@@ -122,7 +120,7 @@ class Processing:
         else:
             sorted_indices = np.argsort(peak_values)[::-1]
         return peak_indices[sorted_indices]
-    
+
     @staticmethod
     def find_valleys_in_column(data, column_index, max_valleys=None):
         """
@@ -140,8 +138,8 @@ class Processing:
 
         # 국소 최소값(하락 꼭지점) 찾기
         diff_prev = np.diff(column_data, prepend=np.nan)  # 이전 값과 비교
-        diff_next = np.diff(column_data, append=np.nan)   # 다음 값과 비교
-        valleys = (diff_prev < 0) & (diff_next > 0)       # 국소 최소값 조건
+        diff_next = np.diff(column_data, append=np.nan)  # 다음 값과 비교
+        valleys = (diff_prev < 0) & (diff_next > 0)  # 국소 최소값 조건
 
         valley_indices = np.where(valleys)[0]  # 하락 꼭지점 인덱스 추출
 
@@ -153,6 +151,7 @@ class Processing:
             sorted_indices = np.argsort(valley_values)
 
         return valley_indices[sorted_indices]
+
 
 # 멀티프로세스로 실행할 것.
 class AnalysisManager:
@@ -166,7 +165,7 @@ class AnalysisManager:
         self.symbols = []
         self.kline_data = {}
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
-        
+
         # data:np.ndarray // data_name=f'interval_{interval}' 데이터전달.
         self.data_container: Optional[utils.DataContainer] = None
         self.scenario_data = utils.DataContainer()
@@ -185,7 +184,7 @@ class AnalysisManager:
         parent_function_name = stack[1].function
         return parent_function_name, int(parent_function_name.split("_")[-1])
 
-    def __fail_signal(self, scenario_number:int):
+    def __fail_signal(self, scenario_number: int):
         # 상태, position, 시나리오 번호
         return (False, 0, scenario_number)
 
@@ -193,65 +192,73 @@ class AnalysisManager:
         # 등록된 interval 확인
         missing_intervals = [item for item in intervals if item not in self.intervals]
         if missing_intervals:
-            raise ValueError(f'미등록 interval 있음: {missing_intervals}')
+            raise ValueError(f"미등록 interval 있음: {missing_intervals}")
 
         # 수신된 데이터에서 interval 확인
         container_name = self.data_container.get_all_data_names()
-        available_intervals = [name.split('_')[1] for name in container_name]  # 집합으로 처리
-        missing_in_data = [item for item in intervals if item not in available_intervals]
+        available_intervals = [
+            name.split("_")[1] for name in container_name
+        ]  # 집합으로 처리
+        missing_in_data = [
+            item for item in intervals if item not in available_intervals
+        ]
         if missing_in_data:
-            raise ValueError(f'수신 데이터에서 interval값 없음: {missing_in_data}')
-        
+            raise ValueError(f"수신 데이터에서 interval값 없음: {missing_in_data}")
 
     def scenario_1(self):
         target_length = 48
-        last_idx = target_length -1
-        select_interval = ['1h']
+        last_idx = target_length - 1
+        select_interval = ["1h"]
         # self.__validate_interval(select_interval)
         # 시나리오 이름(함수명)과 시나리오 number를 획득한다.
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_name)
-        
+
         """
         시나리오 1
             1. 5분봉 기준 48시간 전고점 돌파시 long
             2. 5분봉 기준 48시간 전저점 돌파시 short
         """
         # 원본 코드
-        select_data = self.data_container.get_data(data_name=f'interval_{select_interval[0]}')
+        select_data = self.data_container.get_data(
+            data_name=f"interval_{select_interval[0]}"
+        )
         # select_data = self.dummy_d[select_interval[0]]
         if target_length > len(select_data):
             return fail_signal
-        
+
         open_price = 1
         high_price = 2
         low_price = 3
         close_price = 4
-        
+
         max_peaks = 3
-        
+
         # data_range = select_data[-target_length:]
-        peaks = self.processing.find_peaks_in_column(data=select_data, column_index=close_price, max_peaks=max_peaks)
+        peaks = self.processing.find_peaks_in_column(
+            data=select_data, column_index=close_price, max_peaks=max_peaks
+        )
         if int(peaks[0]) == last_idx:
             success_signal = (True, 1, scenario_number)
             self.scenario_data.set_data(scenario_name, success_signal)
             return
-        
-        valleys = self.processing.find_valleys_in_column(data=select_data, column_index=close_price, max_valleys=max_peaks)
+
+        valleys = self.processing.find_valleys_in_column(
+            data=select_data, column_index=close_price, max_valleys=max_peaks
+        )
         if int(valleys[0]) == last_idx:
             success_signal = (True, 2, scenario_number)
             self.scenario_data.set_data(scenario_name, success_signal)
             return
-        
+
         else:
             self.scenario_data.set_data(scenario_name, fail_signal)
-    
+
     def scenario_run(self):
         fail_signal = (False, 0, 0)
         ### scenario 함수 실행 공간
         self.scenario_1()
-        
-        
+
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

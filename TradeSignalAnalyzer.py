@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["1h", "2h", "1d"]
+    selected_intervals = ["5m", "1h"]#, "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -93,60 +93,39 @@ class Processing:
 
     @staticmethod
     def find_peaks_in_column(data, column_index, max_peaks=None):
-        """
-        최적화된 국소 최대값 찾기 메서드.
-
-        Args:
-            data (np.ndarray): 2차원 Numpy 배열.
-            column_index (int): 상승 꼭지점을 찾을 열의 인덱스.
-            max_peaks (int, optional): 반환할 꼭지점 갯수 (기본값: None, 모든 꼭지점 반환).
-
-        Returns:
-            np.ndarray: 최대 max_peaks만큼의 꼭지점 인덱스 배열, 값 기준으로 정렬.
-        """
         column_data = data[:, column_index]  # 타겟 열 추출
 
         # 국소 최대값(상승 꼭지점) 찾기
-        diff_prev = np.diff(column_data, prepend=np.nan)  # 이전 값과 비교
-        diff_next = np.diff(column_data, append=np.nan)  # 다음 값과 비교
-        peaks = (diff_prev > 0) & (diff_next < 0)  # 국소 최대값 조건
+        diff = np.diff(column_data)  # 이전-다음 차이 계산
+        peaks = (np.hstack(([False], diff > 0)) & np.hstack((diff < 0, [False])))
 
         peak_indices = np.where(peaks)[0]  # 꼭지점 인덱스 추출
-
-        # 꼭지점 값 기준으로 정렬
         peak_values = column_data[peak_indices]
+
         if max_peaks is not None:
-            sorted_indices = np.argsort(peak_values)[-max_peaks:][::-1]
+            # 꼭지점 값 기준으로 상위 max_peaks만 선택
+            top_indices = np.argpartition(-peak_values, max_peaks)[:max_peaks]
+            sorted_indices = top_indices[np.argsort(-peak_values[top_indices])]
         else:
-            sorted_indices = np.argsort(peak_values)[::-1]
+            sorted_indices = np.argsort(-peak_values)
+
         return peak_indices[sorted_indices]
 
     @staticmethod
     def find_valleys_in_column(data, column_index, max_valleys=None):
-        """
-        최적화된 국소 최소값(하락 꼭지점) 찾기 메서드.
-
-        Args:
-            data (np.ndarray): 2차원 Numpy 배열.
-            column_index (int): 하락 꼭지점을 찾을 열의 인덱스.
-            max_valleys (int, optional): 반환할 하락 꼭지점 갯수 (기본값: None, 모든 꼭지점 반환).
-
-        Returns:
-            np.ndarray: 최대 max_valleys만큼의 하락 꼭지점 인덱스 배열, 값 기준으로 정렬.
-        """
         column_data = data[:, column_index]  # 타겟 열 추출
 
         # 국소 최소값(하락 꼭지점) 찾기
-        diff_prev = np.diff(column_data, prepend=np.nan)  # 이전 값과 비교
-        diff_next = np.diff(column_data, append=np.nan)  # 다음 값과 비교
-        valleys = (diff_prev < 0) & (diff_next > 0)  # 국소 최소값 조건
+        diff = np.diff(column_data)  # 이전-다음 차이 계산
+        valleys = (np.hstack(([False], diff < 0)) & np.hstack((diff > 0, [False])))
 
         valley_indices = np.where(valleys)[0]  # 하락 꼭지점 인덱스 추출
-
-        # 꼭지점 값 기준으로 정렬
         valley_values = column_data[valley_indices]
+
         if max_valleys is not None:
-            sorted_indices = np.argsort(valley_values)[:max_valleys]  # 오름차순
+            # 꼭지점 값 기준으로 상위 max_valleys만 선택
+            top_indices = np.argpartition(valley_values, max_valleys)[:max_valleys]
+            sorted_indices = top_indices[np.argsort(valley_values[top_indices])]
         else:
             sorted_indices = np.argsort(valley_values)
 
@@ -178,6 +157,7 @@ class AnalysisManager:
     # 결과 반환시 클리어 처리한다. // 필요 엾을것 같은데?
     def clear_dataset(self):
         self.data_container.clear_all_data()
+        self.scenario_data.clear_all_data()
 
     def __get_scenario_number(self) -> int:
         stack = inspect.stack()
@@ -208,7 +188,7 @@ class AnalysisManager:
     def scenario_1(self):
         target_length = 48
         last_idx = target_length - 1
-        select_interval = ["1h"]
+        select_interval = "1h"
         # self.__validate_interval(select_interval)
         # 시나리오 이름(함수명)과 시나리오 number를 획득한다.
         scenario_name, scenario_number = self.__get_scenario_number()
@@ -221,7 +201,7 @@ class AnalysisManager:
         """
         # 원본 코드
         select_data = self.data_container.get_data(
-            data_name=f"interval_{select_interval[0]}"
+            data_name=f"interval_{select_interval}"
         )
         # select_data = self.dummy_d[select_interval[0]]
         if target_length > len(select_data):
@@ -232,27 +212,34 @@ class AnalysisManager:
         low_price = 3
         close_price = 4
 
-        max_peaks = 3
-
-        # data_range = select_data[-target_length:]
-        peaks = self.processing.find_peaks_in_column(
-            data=select_data, column_index=close_price, max_peaks=max_peaks
-        )
-        if int(peaks[0]) == last_idx:
+        if np.max(select_data[:, 2]) == select_data[-1][2]:# and np.max(select_data[:,5] == select_data[-1][5]):
             success_signal = (True, 1, scenario_number)
-            self.scenario_data.set_data(scenario_name, success_signal)
-            return
-
-        valleys = self.processing.find_valleys_in_column(
-            data=select_data, column_index=close_price, max_valleys=max_peaks
-        )
-        if int(valleys[0]) == last_idx:
+            return self.scenario_data.set_data(scenario_name, success_signal)
+        elif np.min(select_data[:, 3]) == select_data[-1][3]:# and np.max(select_data[:,5] == select_data[-1][5]):
             success_signal = (True, 2, scenario_number)
-            self.scenario_data.set_data(scenario_name, success_signal)
-            return
-
+            return self.scenario_data.set_data(scenario_name, success_signal)
         else:
-            self.scenario_data.set_data(scenario_name, fail_signal)
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+            
+
+        # # data_range = select_data[-target_length:]
+        # peaks = self.processing.find_peaks_in_column(
+        #     data=select_data, column_index=close_price, max_peaks=max_peaks
+        # )
+        # if int(peaks[0]) == last_idx:
+        #     success_signal = (True, 1, scenario_number)
+        #     self.scenario_data.set_data(scenario_name, success_signal)
+        #     return
+
+        # valleys = self.processing.find_valleys_in_column(
+        #     data=select_data, column_index=close_price, max_valleys=max_peaks
+        # )
+        # if int(valleys[0]) == last_idx:
+        #     success_signal = (True, 2, scenario_number)
+        #     return
+
+        # else:
+        #     self.scenario_data.set_data(scenario_name, fail_signal)
 
     def scenario_run(self):
         fail_signal = (False, 0, 0)
@@ -265,10 +252,6 @@ class AnalysisManager:
             signal = self.scenario_data.get_data(data_name=name)
             if signal[0]:
                 self.clear_dataset()
-                self.scenario_data.clear_all_data()
-                # self.dummy_d = {}
                 return signal
-        self.scenario_data.clear_all_data()
         self.clear_dataset()
-        # self.dummy_d = {}
         return fail_signal

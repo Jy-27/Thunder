@@ -67,6 +67,7 @@ class BackTester:
         self.test_mode: bool = True
         # 데이터를 pickle로 저장 및 로딩해야하며, 컨테이너화 하지 않는다.
         self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
+        # self.kline_data: Optional[Dict[str,Dict[str,List[Any]]]] = None
         # 백테스트에 사용될 kline_data의 길이 지정(단위 : day)
         self.backtest_date_range = 2
         self.signal_analyzer_ins = TradeSignalAnalyzer.AnalysisManager(
@@ -457,6 +458,7 @@ class BackTester:
         for index in range(data_length):
             for symbol in self.symbols:
                 timestamp_min = []
+                self.interval_dataset.clear_all_data()
                 for interval in self.intervals:
                     select_indices_ = self.closing_indices_data.get_data(f'interval_{interval}')[index]
                     select_data = self.closing_sync_data[symbol][interval][select_indices_]
@@ -475,36 +477,41 @@ class BackTester:
                         ### trane 출력 ###
                         date = utils._convert_to_datetime(end_timestamp)
                         utils._std_print(
-                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
+                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}        {symbol}-{len(select_data)}"
                         )
+                            
+                        ### DEBUG 
+                        # if self.portfolio_ins.profit_loss_ratio <= -50:
+                        if self.portfolio_ins.trade_count > 5:
+                            raise ValueError(f'중간점검')
 
                     self.interval_dataset.set_data(
                         data_name=f"interval_{interval}", data=select_data
                     )
-            # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
-            if not await self.validate_ticker_conditions(
-                symbol=symbol, data=select_data
-                ) or self.portfolio_ins.validate_open_position(symbol):
-                continue
-        
-            ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-            self.signal_analyzer_ins.data_container = self.interval_dataset
-            # self.signal_analyzer_ins.dummy_d = dummy_data
+                # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
+                if not await self.validate_ticker_conditions(
+                    symbol=symbol, data=select_data
+                    ) or self.portfolio_ins.validate_open_position(symbol):
+                    continue
+            
+                ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
+                self.signal_analyzer_ins.data_container = self.interval_dataset
+                # self.signal_analyzer_ins.dummy_d = dummy_data
 
-            trade_signal = self.signal_analyzer_ins.scenario_run()
-            if not trade_signal[0]:
-                continue
+                trade_signal = self.signal_analyzer_ins.scenario_run()
+                if not trade_signal[0]:
+                    continue
 
-            current_timestamp = min(timestamp_min)
+                current_timestamp = min(timestamp_min)
 
-            await self.active_open_position(
-                symbol=symbol,
-                price=price,
-                position=trade_signal[1],
-                leverage=self.max_leverage,
-                start_timestamp=current_timestamp,
-                scenario_type=trade_signal[2],
-            )
+                await self.active_open_position(
+                    symbol=symbol,
+                    price=price,
+                    position=trade_signal[1],
+                    leverage=self.max_leverage,
+                    start_timestamp=current_timestamp,
+                    scenario_type=trade_signal[2],
+                )
 
         print("\n\nEND")
         

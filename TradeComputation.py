@@ -211,6 +211,7 @@ class TradingLog:
             # 시작 가격은 진입가로 대처한다.
             self.adj_start_price = self.entry_price
             # 포지션이 롱이면,
+            dynamic_rate = 0
             if self.position == 1:
                 # high price를 반영하여 stop_price를 계산한다.
                 self.stop_price = self.high_price * (1 - self.stop_rate)
@@ -221,9 +222,9 @@ class TradingLog:
             # 발생할 수 없으나, 만일을 위해
             else:
                 raise ValueError(f"position입력 오류: {self.position}")
-
+            return
         # adj_timer가 적용된다면,
-        if self.adj_timer:
+        elif self.adj_timer:
             # 종료시간과 시작시간의 차이를 구하고
             time_diff = self.last_timestamp - self.start_timestamp
             # 현재 설정된(self.adj_interval)값을 조회한다.
@@ -234,9 +235,7 @@ class TradingLog:
                 raise ValueError(f"interval값이 유효하지 않음: {self.adj_interval}")
             # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
             dynamic_rate = int(time_diff / target_ms_seconds) * self.adj_rate
-        # ajd_timer가 미적용된다면 dynamic_rate를 0으로하여 해당값을 무의미하게 만든다.
-        else:
-            dynamic_rate = 0
+
 
         # 시작 손절 비율을 계산한다. adj_timer 설정에 따라 start_rate가 달라진다.
         # dynamic_rate값이 음수로 바뀔경우 start_rate는 증가된다. 맞나??
@@ -287,11 +286,10 @@ class TradingLog:
         current_timestamp: Optional[int] = None,
     ):
         # self.stoploss = stop_price
-        if self.test_mode:
-            if current_timestamp is None:
-                raise ValueError(
-                    f"백테트시 current_timestamp값 입력해야함: {current_timestamp}"
-                )
+        if self.test_mode and current_timestamp is None:
+            raise ValueError(
+                f"백테트시 current_timestamp값 입력해야함: {current_timestamp}"
+            )
         elif not self.test_mode:
             current_timestamp = int(time.time() * 1_000)
 
@@ -614,7 +612,7 @@ class BacktestDataFactory:
                         interval=interval,
                         start_date=start_timestamp_str,
                         end_date=end_timestamp_str,
-                    )
+                    )                   
                     collected_data.extend(kline_data)
 
                 # API 호출 간 간격 조정
@@ -886,7 +884,6 @@ class BacktestProcessor:
         )
 
         if get_max_trade_qty < get_min_trade_qty:
-            print("기본 주문 수량 > 최대 주문 수량")
             return (False, get_max_trade_qty, target_leverage)
 
         return (True, get_max_trade_qty, target_leverage)
@@ -1032,6 +1029,8 @@ class OrderConstraint:
         # count최대값을 지정한다. 너무 높면 회당 주문금액이 낮아진다.
         count = min(count, self.position_limit)
 
+        count = 4
+        
         # 안전 금액 및 유효 금액 계산
         safety_value = last_valid_target * self.safety_ratio
         usable_value = last_valid_target - safety_value

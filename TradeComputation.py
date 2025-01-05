@@ -236,7 +236,6 @@ class TradingLog:
             # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
             dynamic_rate = int(time_diff / target_ms_seconds) * self.adj_rate
 
-
         # 시작 손절 비율을 계산한다. adj_timer 설정에 따라 start_rate가 달라진다.
         # dynamic_rate값이 음수로 바뀔경우 start_rate는 증가된다. 맞나??
         start_rate = self.init_stop_rate - dynamic_rate
@@ -612,7 +611,7 @@ class BacktestDataFactory:
                         interval=interval,
                         start_date=start_timestamp_str,
                         end_date=end_timestamp_str,
-                    )                   
+                    )
                     collected_data.extend(kline_data)
 
                 # API 호출 간 간격 조정
@@ -638,7 +637,7 @@ class BacktestDataFactory:
         base_data = closing_sync_data[symbols[0]]
         # 마지막 index값 조회
         max_index = len(base_data[intervals[0]])
-        
+
         # 인덱스 데이터를 저장할 자료를 초기화
         indices_data = {}
         # interval 루프
@@ -646,12 +645,16 @@ class BacktestDataFactory:
             # interval별 miute를 활용하여 step으로 지정
             interval_step = utils._get_interval_minutes(interval)
             # arange를 통해서 interval의 기준 index 지정.
-            indices_data[interval] = np.arange(start=0, stop=max_index, step=interval_step)
+            indices_data[interval] = np.arange(
+                start=0, stop=max_index, step=interval_step
+            )
         # 결과 반환.
         return indices_data
 
     # 1분봉 종가 가격을 각 interval에 반영한 테스트용 더미 데이터를 생성한다.
-    def generate_kline_closing_sync(self, kline_data: Dict, save: bool = False) -> Dict[str, Dict[str, np.ndarray]]:
+    def generate_kline_closing_sync(
+        self, kline_data: Dict, save: bool = False
+    ) -> Dict[str, Dict[str, np.ndarray]]:
         """
         1. 기능 : 백테스트시 데이터의 흐름을 구현하기 위하여 1분봉의 누적데이터를 반영 및 1분봉의 길이와 맞춘다.
         2. 매개변수
@@ -667,6 +670,18 @@ class BacktestDataFactory:
         symbols_list = list(kline_data.keys())
         intervals_list = list(kline_data[symbols_list[0]].keys())
         closing_sync_data = {}
+
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        # =-=###=----=###=---=# P O I N T #=---=###=----=###=-#
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        ### indices의 arange(step)기능의 오점을 개선하고자 첫번째 데이터는 더미데이터를 넣는다.
+        data_lengh = len(kline_data[symbols_list[0]][intervals_list[0]][0])
+        dummy_data = [0 for _ in range(data_lengh)]
+
+        for symbol in symbols_list:
+            for interval in intervals_list:
+                # print(type(kline_data[symbol][interval]))
+                kline_data[symbol][interval].insert(0, dummy_data)
 
         kline_array = utils._convert_to_array(kline_data)
 
@@ -757,7 +772,10 @@ class BacktestDataFactory:
 
     # generate_kline_closing_sync index 자료를 생성한다.
     def get_indices_data(
-        self, closing_sync_data:Dict[str, Dict[str, np.ndarray]] , lookback_days: int = 2) -> utils.DataContainer:
+        self,
+        closing_sync_data: Dict[str, Dict[str, np.ndarray]],
+        lookback_days: int = 2,
+    ) -> utils.DataContainer:
         """
         1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
         2. 매개변수
@@ -768,12 +786,12 @@ class BacktestDataFactory:
             백테스를 위한 자료이며, 실제 알고리즘 트레이딩시에는 필요 없다. 데이터의 흐름을 구현하기 위하여 만든 함수다.
         """
         # 하루의 총 분
-        
+
         symbols = list(closing_sync_data.keys())
         intervals = list(closing_sync_data[symbols[0]])
-        
+
         date_range = lookback_days
-        timestamp_step = utils._get_interval_minutes('1d') * date_range
+        timestamp_step = utils._get_interval_minutes("1d") * date_range
 
         indices_data = self.__generate_full_indices(closing_sync_data)
         base_indices = indices_data[intervals[0]]
@@ -787,13 +805,17 @@ class BacktestDataFactory:
                 start_idx = current_idx - timestamp_step
                 if start_idx < 0:
                     start_idx
-                condition = np.where((reference_data[:]>=start_idx)&
-                                    (reference_data[:]<=current_idx))
+                condition = np.where(
+                    (reference_data[:] >= start_idx)
+                    & (reference_data[:] <= current_idx)
+                )
                 indices = indices_data[interval][condition]
                 if current_idx > condition[0][-1]:
                     indices = np.append(indices, current_idx)
                 select_indices.append(indices)
-            container_data.set_data(data_name=f'interval_{interval}', data=select_indices)
+            container_data.set_data(
+                data_name=f"interval_{interval}", data=select_indices
+            )
 
         return container_data
 
@@ -1030,7 +1052,7 @@ class OrderConstraint:
         count = min(count, self.position_limit)
 
         count = 4
-        
+
         # 안전 금액 및 유효 금액 계산
         safety_value = last_valid_target * self.safety_ratio
         usable_value = last_valid_target - safety_value

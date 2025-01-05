@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["5m", "1h"]#, "2h", "1d"]
+    selected_intervals = ["5m", "1h"]  # , "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -97,7 +97,7 @@ class Processing:
 
         # 국소 최대값(상승 꼭지점) 찾기
         diff = np.diff(column_data)  # 이전-다음 차이 계산
-        peaks = (np.hstack(([False], diff > 0)) & np.hstack((diff < 0, [False])))
+        peaks = np.hstack(([False], diff > 0)) & np.hstack((diff < 0, [False]))
 
         peak_indices = np.where(peaks)[0]  # 꼭지점 인덱스 추출
         peak_values = column_data[peak_indices]
@@ -117,7 +117,7 @@ class Processing:
 
         # 국소 최소값(하락 꼭지점) 찾기
         diff = np.diff(column_data)  # 이전-다음 차이 계산
-        valleys = (np.hstack(([False], diff < 0)) & np.hstack((diff > 0, [False])))
+        valleys = np.hstack(([False], diff < 0)) & np.hstack((diff > 0, [False]))
 
         valley_indices = np.where(valleys)[0]  # 하락 꼭지점 인덱스 추출
         valley_values = column_data[valley_indices]
@@ -186,9 +186,12 @@ class AnalysisManager:
             raise ValueError(f"수신 데이터에서 interval값 없음: {missing_in_data}")
 
     def scenario_1(self):
-        target_length = 48
-        last_idx = target_length - 1
+        DAYS = 2
         select_interval = "1h"
+        day_minutes = utils._get_interval_minutes("1d")
+        interval_minutes = utils._get_interval_minutes(select_interval)
+
+        target_length = DAYS * (day_minutes / interval_minutes)  # - 1
         # self.__validate_interval(select_interval)
         # 시나리오 이름(함수명)과 시나리오 number를 획득한다.
         scenario_name, scenario_number = self.__get_scenario_number()
@@ -205,22 +208,31 @@ class AnalysisManager:
         )
         # select_data = self.dummy_d[select_interval[0]]
         if target_length > len(select_data):
-            return fail_signal
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
 
         open_price = 1
         high_price = 2
         low_price = 3
         close_price = 4
 
-        if np.max(select_data[:, 2]) == select_data[-1][2]:# and np.max(select_data[:,5] == select_data[-1][5]):
+        diff_price = abs(select_data[:, open_price] - select_data[:,close_price])
+
+        if np.max(diff_price) != diff_price[-1]:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        if (
+            np.max(select_data[:, close_price]) == select_data[-1][close_price]
+        ) and np.max(select_data[:,open_price]-select_data[:,close_price]):  # and np.max(select_data[:,5] == select_data[-1][5]):
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-        elif np.min(select_data[:, 3]) == select_data[-1][3]:# and np.max(select_data[:,5] == select_data[-1][5]):
+        elif (
+            np.min(select_data[:, close_price]) == select_data[-1][close_price]
+        ):  # and np.max(select_data[:,5] == select_data[-1][5]):
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
         else:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-            
 
         # # data_range = select_data[-target_length:]
         # peaks = self.processing.find_peaks_in_column(

@@ -11,16 +11,17 @@ import matplotlib.pyplot as plt
 from matplotlib import style, ticker
 from typing import Optional, List, Union
 import numpy as np
+from multiprocessing import Pool, Manager
 
 
 class BackTester:
     def __init__(
         self,
-        symbols: str,
+        symbols: list[str],
         # intervals: List[str],
         seed_money: Union[int, float],
-        start_date: Union[int, float],
-        end_date: Union[int, float],
+        start_date: str,
+        end_date: str,
         increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
         max_trade_number: int = 3,
         init_stop_rate: float = 0.015,
@@ -32,7 +33,7 @@ class BackTester:
         stop_loss_rate: float = 0.025,
         safety_balance_ratio: float = 0.2,
         is_download: bool = True,
-        max_leverage: Optional[int] = None,
+        max_leverage:int = 10,
         # 주문신호 유효성 검토(브레이크 기능)
         is_order_break: bool = True,
         loss_chance: int = 2,
@@ -176,10 +177,10 @@ class BackTester:
                 save=is_save
             )
             # 데이터를 np.array타입으로 변환한다.
-            data_array = utils._convert_kline_data_array(data)
+            # data_array = utils._convert_kline_data_array(data)
             # closing_sync 데이터를 생성 및 속성에 저장한다.
             self.closing_sync_data = self.backtest_data_ins.generate_kline_closing_sync(
-                kline_data=data_array, save=is_save
+                kline_data=data, save=is_save
             )
 
         self.closing_indices_data = self.backtest_data_ins.get_indices_data(
@@ -439,6 +440,7 @@ class BackTester:
         print(f"\n {header}\n")
         print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL")
 
+
     # 백테스트 실행.
     async def run(self):
         """
@@ -453,47 +455,59 @@ class BackTester:
         # 최소단위 interval값 기준 데이터 길이를 확보한다.
         data_length = len(self.closing_sync_data[self.symbols[0]][self.intervals[0]])
 
-
         # Loop 시작
         for index in range(data_length):
             for symbol in self.symbols:
                 timestamp_min = []
                 self.interval_dataset.clear_all_data()
                 for interval in self.intervals:
-                    select_indices_ = self.closing_indices_data.get_data(f'interval_{interval}')[index]
-                    select_data = self.closing_sync_data[symbol][interval][select_indices_]
-                    
+                    select_indices_ = self.closing_indices_data.get_data(
+                        f"interval_{interval}"
+                    )[index]
+                    select_data = self.closing_sync_data[symbol][interval][
+                        select_indices_
+                    ]
+
                     price = select_data[-1][4]
                     end_timestamp = select_data[-1][6]
                     timestamp_min.append(end_timestamp)
-        
+
                     if interval == self.intervals[0]:
                         update_and_stop_signal = self.update_trade_info(
                             symbol=symbol, data=select_data
-                            )
-                        
+                        )
+
                         if update_and_stop_signal:
                             self.active_close_position(symbol=symbol)
                         ### trane 출력 ###
                         date = utils._convert_to_datetime(end_timestamp)
                         utils._std_print(
-                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}        {symbol}-{len(select_data)}"
+                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
                         )
-                            
-                        ### DEBUG 
+
+                        ### DEBUG
                         # if self.portfolio_ins.profit_loss_ratio <= -50:
-                        if self.portfolio_ins.trade_count > 5:
-                            raise ValueError(f'중간점검')
+                        # if self.portfolio_ins.trade_count > 5:
+                        #     raise ValueError(f'중간점검')
 
                     self.interval_dataset.set_data(
                         data_name=f"interval_{interval}", data=select_data
                     )
+
+                if np.all(select_data == 0):
+                    continue
+                # print(select_data)
+                # print('\n')
+                # print('='*15)
+                # print(select_data)
+                # print(type(select_data))
+                # print('='*15)
+
                 # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
                 if not await self.validate_ticker_conditions(
                     symbol=symbol, data=select_data
-                    ) or self.portfolio_ins.validate_open_position(symbol):
+                ) or self.portfolio_ins.validate_open_position(symbol):
                     continue
-            
                 ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
                 self.signal_analyzer_ins.data_container = self.interval_dataset
                 # self.signal_analyzer_ins.dummy_d = dummy_data
@@ -514,10 +528,7 @@ class BackTester:
                 )
 
         print("\n\nEND")
-        
-        
-        
-        
+
         # # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
 
         # ### 데이터 타임루프 시작 ###
@@ -538,10 +549,10 @@ class BackTester:
         #     # dummy_data = {}
         #     """
         #     동작원리 고민중...
-            
+
         #     np.array변환을 한번에 하기 위하여 다차원 list데이터가 필요하다.
         #         변수1 >> 데이터 수신속도에 따라서 같은 interval이라 하더라도 데이터의 길이가 다를경우 np.array처리시 오류발생.
-            
+
         #     순서는 interval loop
         #         >> symbol.interval_data
         #     """

@@ -203,37 +203,44 @@ class AnalysisManager:
         low_price = 3
         close_price = 4
         
+        quote_value = 7
+        
         last_price = data_1h[-1][close_price]
         closed_price = data_1h[:, close_price]
-        
+        q_value = data_1h[:, quote_value]
+        last_value = data_1h[-1][quote_value]
+
         is_max_price_1h = np.max(closed_price) == last_price
         is_min_price_1h = np.min(closed_price) == last_price
+
+        is_max_value_1h = np.max(q_value) == last_value
+        is_min_value_1h = np.min(q_value) == last_value
 
         if not (is_max_price_1h or is_min_price_1h):
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
         data_slice_5m = data_5m[-10:]
-        
+
         candle_body_length = data_slice_5m[:, open_price] - data_slice_5m[:, close_price]
         candle_body_diff = np.diff(candle_body_length)[-2:]
-        
+
         is_plus_length = np.all(candle_body_diff > 0)
-        is_minus_legth = np.all(candle_body_diff < 0)
-        
-        if not(is_plus_length or is_minus_legth):
+        is_minus_length = np.all(candle_body_diff < 0)
+
+        if not(is_plus_length or is_minus_length):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
-        if is_max_price_1h and is_plus_length:
+
+        if is_max_price_1h and is_plus_length and is_max_value_1h:
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-        
-        elif is_min_price_1h and is_plus_length:
+
+        elif is_min_price_1h and is_minus_length and is_max_price_1h:
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-        
+
         else:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-            
+
     def scenario_2(self):
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_name)

@@ -322,6 +322,12 @@ class PortfolioManager:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0  # 총 체결 횟수
+        
+        
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        self.safety_pnl: float = 0  # init_balance를 초과하는 수익금액
         # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
     def validate_open_position(self, symbol: str):
@@ -418,7 +424,7 @@ class PortfolioManager:
 
         if open_data_array.size == 0:
             open_pnl = 0
-            active_value = 0
+            active_value = 0            
         else:
             open_pnl = np.sum(open_data_array[:, 13])
             active_value = np.sum(open_data_array[:, 10])
@@ -441,6 +447,16 @@ class PortfolioManager:
             self.total_balance - self.initial_balance
         ) / self.initial_balance
 
+
+
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
+        ##=---=####=---=####=---=####=---=####=---=####=---=##
+        safety_pnl = self.total_balance - self.initial_balance - self.safety_pnl
+        if safety_pnl > 0 and open_data_array.size == 0:
+            self.safety_pnl += safety_pnl
+        if ((self.total_balance - self.safety_pnl) / self.initial_balance) < 0.5:
+            raise ValueError(f'청산')
 
 ##=---=####=---=####=---=####=---=####=---=####=---=##
 # =-=##=---=###=----=###=----=###=----=###=----=###=-=#

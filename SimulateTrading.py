@@ -229,7 +229,16 @@ class BackTester:
         if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
-            total_balance = self.portfolio_ins.total_balance
+            
+            ### DEBUG START
+            if self.portfolio_ins.safety_pnl >0:
+                total_balance = self.portfolio_ins.total_balance - self.portfolio_ins.safety_pnl
+            elif self.portfolio_ins.safety_pnl <=0:
+                total_balance = self.portfolio_ins.total_balance
+            ### DEBUG END
+            
+            ### ORIGINAL CODE
+            # total_balance = self.portfolio_ins.total_balance
             conctraint = self.constraint.calc_fund(
                 funds=total_balance,
             )
@@ -482,7 +491,7 @@ class BackTester:
                         ### trane 출력 ###
                         date = utils._convert_to_datetime(end_timestamp)
                         utils._std_print(
-                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
+                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}        {self.portfolio_ins.safety_pnl:,.2f}"
                         )
 
                         ### DEBUG

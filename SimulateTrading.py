@@ -231,14 +231,14 @@ class BackTester:
         else:
             
             ### DEBUG START
-            if self.portfolio_ins.safety_pnl >0:
-                total_balance = self.portfolio_ins.total_balance - self.portfolio_ins.safety_pnl
-            elif self.portfolio_ins.safety_pnl <=0:
-                total_balance = self.portfolio_ins.total_balance
+            # if self.portfolio_ins.safety_pnl >0:
+            #     total_balance = self.portfolio_ins.total_balance - self.portfolio_ins.safety_pnl
+            # elif self.portfolio_ins.safety_pnl <=0:
+            #     total_balance = self.portfolio_ins.total_balance
             ### DEBUG END
             
             ### ORIGINAL CODE
-            # total_balance = self.portfolio_ins.total_balance
+            total_balance = self.portfolio_ins.total_balance
             conctraint = self.constraint.calc_fund(
                 funds=total_balance,
             )
@@ -497,6 +497,7 @@ class BackTester:
                         ### DEBUG
                         # if self.portfolio_ins.profit_loss_ratio <= -50:
                         # if self.portfolio_ins.trade_count > 5:
+                        #     self.portfolio_ins.to_dict_list()
                         #     raise ValueError(f'중간점검')
 
                     self.interval_dataset.set_data(

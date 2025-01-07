@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["5m", "1h"]  # , "2h", "1d"]
+    selected_intervals = ["5m", "15m", "1h"]  # , "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -54,7 +54,6 @@ class BaseConfig:
         self.intervals_idx_map = {
             f"interval_{data}": idx for idx, data in enumerate(self.intervals)
         }
-
 
 class Processing:
     # @staticmethod
@@ -218,16 +217,20 @@ class AnalysisManager:
         candle_body_diff = np.diff(candle_body_length)[-2:]
         
         is_plus_length = np.all(candle_body_diff > 0)
-        is_minus_legth = np.all(candle_body_diff < 0)
+        is_minus_length = np.all(candle_body_diff < 0)
         
-        if not(is_plus_length or is_minus_legth):
+        trade_count = data_1h[:, 7]
+        is_max_count_1h = np.max(trade_count) == trade_count[-1]
+        is_min_count_1h = np.max(trade_count) == trade_count[-1]
+        
+        if not(is_plus_length or is_minus_length):
             return self.scenario_data.set_data(scenario_name, fail_signal)
         
-        if is_max_price_1h and is_plus_length:
+        if is_max_price_1h and is_plus_length and is_max_count_1h:
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
         
-        elif is_min_price_1h and is_plus_length:
+        elif is_min_price_1h and is_minus_length and is_min_count_1h:
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
         
@@ -235,55 +238,115 @@ class AnalysisManager:
             return self.scenario_data.set_data(scenario_name, fail_signal)
             
     def scenario_2(self):
+        ### init_code ###
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_name)
-
+        #################
+        
+        ### index zone  ###
+        open_timestamp = 0
         open_price = 1
         high_price = 2
         low_price = 3
         close_price = 4
+        volume = 5
+        close_timestamp = 6
+        q_volume = 7
+        trade_n = 8
+        taker_volume = 9
+        taker_q_volume = 10
 
-
+        data_1h = self.data_container.get_data('interval_1h')
         data_5m = self.data_container.get_data('interval_5m')
-        def ema(data, period):
-            alpha = 2 / (period + 1)
-            ema_values = np.empty_like(data)
-            ema_values[0] = data[0]  # 초기 값
-            for i in range(1, len(data)):
-                ema_values[i] = alpha * data[i] + (1 - alpha) * ema_values[i - 1]
-            return ema_values
-        
-        ema_5 = ema(data_5m[:, close_price], 99)
-        
-        last_ma_price = ema_5[-1]
-        current_price = data_5m[-1][close_price]
-        
-        data_slice_5m = data_5m[-10:]
-        
-        candle_body_length = data_slice_5m[:, open_price] - data_slice_5m[:, close_price]
-        candle_body_diff = np.diff(candle_body_length)[-2:]
-        
-        is_plus_length = np.all(candle_body_diff > 0)
-        is_minus_legth = np.all(candle_body_diff < 0)
+        data_15m = self.data_container.get_data('interval_15m')
 
-        if not(is_minus_legth or is_minus_legth):
+        target_index = -3
+        wick_ratio = 0.35
+
+        last_price = data_15m[-1][close_price]
+        max_price = np.max(data_1h[:, close_price])
+        min_price = np.max(data_1h[:, close_price])
+
+        # 마지막 가격이 최고가 또는 최저가 일 것. 아니면 fail
+        if not(max_price==last_price or min_price==last_price):
             return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        price_diff_15m = np.diff(data_15m[target_index:, close_price])
+        price_diff_5m = np.diff(data_5m[target_index:, close_price])
+
+        is_minus_all_15m = np.all(price_diff_15m < 0)
+        is_minus_all_5m = np.all(price_diff_5m < 0)
+
+        is_plus_all_15m = np.all(price_diff_15m > 0)
+        is_plus_all_5m = np.all(price_diff_5m > 0)
+
         
-        if last_ma_price < current_price and is_plus_length:
-            success_signal = (True, 1, scenario_number)
-            return self.scenario_data.set_data(scenario_name, success_signal)
-        elif last_ma_price > current_price and is_minus_legth:
+        if not((is_minus_all_15m and is_minus_all_5m)or(is_plus_all_5m and is_plus_all_5m)):
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        candle_lengh = data_15m[:,high_price] - data_15m[:, low_price]
+        candle_wick = candle_lengh - abs(data_15m[:,open_price]-data_15m[:,close_price])
+        candle_ratio = np.where(candle_lengh == 0, 0, candle_wick / candle_lengh)   #wick가 0일경우 0으로 반환.
+        is_candle_all = np.all(candle_ratio[target_index:] <= wick_ratio)
+
+        # 마지막 캔들 3개의 꼬리길이가 전체의 50%이하일 것. 아니면 fail
+        if not is_candle_all:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        if is_minus_all_15m:
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-        else:
-            return self.scenario_data.set_data(scenario_name, fail_signal)
-    
-    
+
+        if is_plus_all_15m:
+            success_signal = (True, 1, scenario_number)
+            return self.scenario_data.set_data(scenario_name, success_signal)
+
+    def scenario_3(self):
+        ### init_code ###
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_name)
+        #################
+        def calculate_rsi(prices, period=14):
+            """
+            RSI 계산 함수
+            :param prices: 가격 리스트 또는 NumPy 배열
+            :param period: RSI 계산을 위한 기간 (기본값 14)
+            :return: RSI 리스트
+            """
+            prices = np.array(prices)
+            deltas = np.diff(prices)  # 가격 변화량 계산
+            gains = np.where(deltas > 0, deltas, 0)  # 상승분
+            losses = np.where(deltas < 0, -deltas, 0)  # 하락분
+
+            # 초기 평균 상승 및 하락 계산
+            avg_gain = np.empty_like(prices)
+            avg_loss = np.empty_like(prices)
+            avg_gain[:period] = np.nan
+            avg_loss[:period] = np.nan
+
+            avg_gain[period] = np.mean(gains[:period])
+            avg_loss[period] = np.mean(losses[:period])
+
+            # 나머지 기간에 대해 RSI 계산
+            for i in range(period + 1, len(prices)):
+                avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gains[i - 1]) / period
+                avg_loss[i] = (avg_loss[i - 1] * (period - 1) + losses[i - 1]) / period
+
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+
+            return rsi
+
+        data_5m = self.data_container.get_data('interval_5m')
+        data_1h = self.data_container.get_data('interval_1h')
+        
+        
+
     def scenario_run(self):
         fail_signal = (False, 0, 0)
         ### scenario 함수 실행 공간
-        self.scenario_1()
-        # self.scenario_2()
+        # self.scenario_1()
+        self.scenario_2()
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

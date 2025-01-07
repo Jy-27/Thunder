@@ -330,6 +330,24 @@ class PortfolioManager:
         self.safety_pnl: float = 0  # init_balance를 초과하는 수익금액
         # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
+    def to_dict_list(self, is_save:bool=True):
+        file_name = 'trade_history.pkl'
+        # TradingLog의 속성 이름을 확보한다.
+        keys_ = list(TradingLog.__annotations__)
+        # 데이터를 저장할 빈 리스트를 생성한다.
+        result = []
+        for trade_log in self.trade_history:
+            data_ = trade_log.to_list()
+            temp_log = {}
+            for idx, key in enumerate(keys_):
+                temp_log[key] = data_[idx]
+            result.append(temp_log)
+        if is_save:
+            with open(file_name, 'wb')as file:
+                pickle.dump(result, file)
+            return result
+        return result
+
     def validate_open_position(self, symbol: str):
         if symbol in self.open_positions:
             return True
@@ -455,8 +473,8 @@ class PortfolioManager:
         safety_pnl = self.total_balance - self.initial_balance - self.safety_pnl
         if safety_pnl > 0 and open_data_array.size == 0:
             self.safety_pnl += safety_pnl
-        if ((self.total_balance - self.safety_pnl) / self.initial_balance) < 0.5:
-            raise ValueError(f'청산')
+        # if ((self.total_balance - self.safety_pnl) / self.initial_balance) < 0.5:
+        #     raise ValueError(f'청산')
 
 ##=---=####=---=####=---=####=---=####=---=####=---=##
 # =-=##=---=###=----=###=----=###=----=###=----=###=-=#

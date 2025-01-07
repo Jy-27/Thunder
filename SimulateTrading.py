@@ -536,6 +536,7 @@ class BackTester:
                     scenario_type=trade_signal[2],
                 )
 
+        self.portfolio_ins.to_dict_list()
         print("\n\nEND")
 
         # # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))

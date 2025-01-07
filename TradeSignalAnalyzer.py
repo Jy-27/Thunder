@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["5m", "1h"]  # , "2h", "1d"]
+    selected_intervals = ["5m", "15m", "1h"]  # , "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -195,6 +195,7 @@ class AnalysisManager:
         """
         
         data_5m = self.data_container.get_data('interval_5m')
+        data_15m = self.data_container.get_data('interval_15m')
         data_1h = self.data_container.get_data('interval_1h')
         
         ## 최고점 / 최저점 확인
@@ -205,41 +206,48 @@ class AnalysisManager:
         
         quote_value = 7
         
-        last_price = data_1h[-1][close_price]
-        closed_price = data_1h[:, close_price]
-        q_value = data_1h[:, quote_value]
-        last_value = data_1h[-1][quote_value]
+        price_max = np.max(data_1h[:, open_price])
+        price_min = np.min(data_1h[:, open_price])
+        
+        is_price_max = price_max == data_1h[-1][open_price]
+        is_price_min = price_min == data_1h[-1][open_price]
 
-        is_max_price_1h = np.max(closed_price) == last_price
-        is_min_price_1h = np.min(closed_price) == last_price
-
-        is_max_value_1h = np.max(q_value) == last_value
-        is_min_value_1h = np.min(q_value) == last_value
-
-        if not (is_max_price_1h or is_min_price_1h):
+        if not (is_price_max or is_price_min):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-
-        data_slice_5m = data_5m[-10:]
-
-        candle_body_length = data_slice_5m[:, open_price] - data_slice_5m[:, close_price]
-        candle_body_diff = np.diff(candle_body_length)[-2:]
-
-        is_plus_length = np.all(candle_body_diff > 0)
-        is_minus_length = np.all(candle_body_diff < 0)
-
-        if not(is_plus_length or is_minus_length):
+        
+        
+        candle_up_15m = data_15m[:, 1] - data_15m[:, 4]
+        candle_down_15m = data_15m[:, 4] - data_15m[:, 1]
+        
+        candle_up_diff_15m = np.diff(candle_up_15m)
+        candle_down_diff_15m = np.diff(candle_down_15m)
+        
+        is_candle_up_15m = np.all(candle_up_diff_15m[-2:] > 0)
+        is_candle_down_15m = np.all(candle_down_diff_15m[-2:] < 0)
+        
+        if not (is_candle_up_15m or is_candle_down_15m):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-
-        if is_max_price_1h and is_plus_length and is_max_value_1h:
+        
+        # candle_up_5m = data_5m[:, 1] - data_5m[:, 4]
+        # candle_down_5m = data_5m[:, 4] - data_5m[:, 1]
+        
+        candle_up_diff_5m = np.diff(data_5m[:, close_price])
+        candle_down_diff_5m = np.diff(data_15m[:, close_price])
+        
+        is_candle_up_5m = np.all(candle_up_diff_5m[-3:] > 0)
+        is_candle_down_5m = np.all(candle_down_diff_5m[-3:] < 0)
+        
+        if not (is_candle_up_5m or is_candle_down_5m):
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        if is_price_max:
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-
-        elif is_min_price_1h and is_minus_length and is_max_price_1h:
+        
+        if is_price_min:
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-
-        else:
-            return self.scenario_data.set_data(scenario_name, fail_signal)
+                
 
     def scenario_2(self):
         scenario_name, scenario_number = self.__get_scenario_number()

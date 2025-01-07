@@ -29,8 +29,8 @@ if __name__ == "__main__":
     seed_money = 69690
     max_trade_number = 3
     start_step = 5_000
-    leverage = 15
-    init_stop_rate = 0.01
+    leverage = 10
+    init_stop_rate = 0.035
     adj_interval = "3m"
     is_order_break = True
     loss_chance = 1
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     comparison = "above"  # above : 이상, below : 이하
     absolute = True  # True : 비율 절대값, False : 비율 실제값
     value = 35_000_000  # 거래대금 : 단위 USD
-    target_percent = 0.03  # 변동 비율폭 : 음수 가능
+    target_percent = 0.08  # 변동 비율폭 : 음수 가능
     quote_type = "usdt"  # 쌍거래 거래화폐
 
     backtest_ins = BackTester(

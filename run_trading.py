@@ -33,7 +33,7 @@ if __name__ == "__main__":
     init_stop_rate = 0.035
     adj_interval = "3m"
     is_order_break = True
-    loss_chance = 1
+    loss_chance = 2
     step_interval = "4h"
 
     ### Ticker Setting Option ###

@@ -312,8 +312,8 @@ class AnalysisManager:
         data_1h_mean = np.mean(data_1h[:,4])
         data_1h_ratio = (data_1h[:,4] - data_1h_mean) / data_1h_mean
         
-        data_1h_max_close_price = np.max(data_1h[:, 2])
-        is_last_price = data_1h_max_close_price == data_1h[-1][2]
+        data_1h_max_close_price = np.max(data_1h[:, 4])
+        is_last_price = data_1h_max_close_price == data_1h[-1][4]
         
         # print('\n')
         # print('='*10)

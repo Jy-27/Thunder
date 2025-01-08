@@ -293,12 +293,63 @@ class AnalysisManager:
         else:
             return self.scenario_data.set_data(scenario_name, fail_signal)
     
+    def scenario_3(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_name)
+        
+        """"
+        시나리오
+        taker구매 비율이 높으면,
+        1h mean 이 1.2배 이상
+        15분봉 3회 연속 양봉
+        5분봉 양봉
+        
+        """
+        data_1h = self.data_container.get_data('interval_1h')
+        data_15m = self.data_container.get_data('interval_15m')
+        data_5m = self.data_container.get_data('interval_5m')
+        
+        data_1h_mean = np.mean(data_1h[:,4])
+        data_1h_ratio = (data_1h[:,4] - data_1h_mean) / data_1h_mean
+        
+        data_1h_max_close_price = np.max(data_1h[:, 2])
+        is_last_price = data_1h_max_close_price == data_1h[-1][2]
+        
+        # print('\n')
+        # print('='*10)
+        # print(data_1h_ratio)
+        # print('='*10)
+        
+        if data_1h_ratio[-1] < 1.2 and not is_last_price:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        data_15m_diff = np.diff(data_15m[:, 4])
+        is_diff_15m_up = np.all(data_15m_diff[-3:])
+        if not is_diff_15m_up:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        data_5m_diff = np.diff(data_5m[:, 4])
+        is_diff_5m_up = np.all(data_15m_diff[-3:])
+        if not is_diff_5m_up:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
+        
+        if data_15m_taker_ratio < 0.8:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        success_signal = (True, 1, scenario_number)
+        self.scenario_data.set_data(scenario_name, success_signal)
+            
+    
+
     
     def scenario_run(self):
         fail_signal = (False, 0, 0)
         ### scenario 함수 실행 공간
-        self.scenario_1()
+        # self.scenario_1()
         # self.scenario_2()
+        self.scenario_3()
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

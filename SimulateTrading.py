@@ -26,7 +26,6 @@ class BackTester:
         max_trade_number: int = 3,
         init_stop_rate: float = 0.015,
         adj_interval: str = "3m",
-        start_step: int = 5_000,
         adj_rate: float = 0.0007,
         is_use_scale_stop: bool = True,
         adj_timer: bool = True,
@@ -101,7 +100,6 @@ class BackTester:
         self.closing_indices_data = None
         # self.target_run_interval = "map_1m"
         self.max_trade_number = max_trade_number
-        self.start_step = utils._get_interval_minutes(self.intervals[-1])
         self.init_stop_rate = init_stop_rate
 
         # interval별 데이털르 저장하는 데이터셋
@@ -662,7 +660,6 @@ if __name__ == "__main__":
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 69690
     max_trade_number = 3
-    start_step = 5_000
     leverage = 10
     init_stop_rate = 0.015
     adj_interval = "3m"
@@ -696,7 +693,6 @@ if __name__ == "__main__":
         adj_interval=adj_interval,
         is_order_break=is_order_break,
         loss_chance=loss_chance,
-        step_interval=step_interval,
         comparison=comparison,
         absolute=True,
         value=value,

@@ -21,15 +21,14 @@ if __name__ == "__main__":
     start_date = "2024-11-1 09:00:00"  # 시작 시간
     end_date = "2025-1-6 08:59:59"  # 종료 시간
     safety_balance_ratio = 0.2  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.35  # 스톱 로스 비율
+    stop_loss_rate = 0.65  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     adj_timer = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     adj_rate = 0.0007
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 69690
     max_trade_number = 3
-    start_step = 5_000
-    leverage = 10
+    leverage = 15
     init_stop_rate = 0.035
     adj_interval = "3m"
     is_order_break = True
@@ -40,7 +39,7 @@ if __name__ == "__main__":
     comparison = "above"  # above : 이상, below : 이하
     absolute = True  # True : 비율 절대값, False : 비율 실제값
     value = 35_000_000  # 거래대금 : 단위 USD
-    target_percent = 0.08  # 변동 비율폭 : 음수 가능
+    target_percent = 0.035  # 변동 비율폭 : 음수 가능
     quote_type = "usdt"  # 쌍거래 거래화폐
 
     backtest_ins = BackTester(
@@ -56,7 +55,6 @@ if __name__ == "__main__":
         is_use_scale_stop=use_scale_stop,
         seed_money=seed_money,
         max_trade_number=max_trade_number,
-        start_step=start_step,
         max_leverage=leverage,
         init_stop_rate=init_stop_rate,
         adj_interval=adj_interval,

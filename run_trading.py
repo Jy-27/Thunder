@@ -14,7 +14,7 @@ if __name__ == "__main__":
         "bnbusdt",
         "dogeusdt",
         "solusdt",
-        "ethusdt"
+        "ethusdt",
     ]  # 확인하고자 하는 심볼 정보
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
@@ -26,10 +26,10 @@ if __name__ == "__main__":
     adj_timer = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     adj_rate = 0.0007
     use_scale_stop = True  # final손절(False), Scale손절(True)
-    seed_money = 69690
+    seed_money = 350
     max_trade_number = 3
     leverage = 15
-    init_stop_rate = 0.035
+    init_stop_rate = 0.02
     adj_interval = "3m"
     is_order_break = True
     loss_chance = 2
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     target_percent = 0.035  # 변동 비율폭 : 음수 가능
     quote_type = "usdt"  # 쌍거래 거래화폐
 
-    backtest_ins = BackTester(
+    backtest_ins = BackTesterManager(
         symbols=symbols,
         # intervals=intervals,
         start_date=start_date,
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         is_use_scale_stop=use_scale_stop,
         seed_money=seed_money,
         max_trade_number=max_trade_number,
-        max_leverage=leverage,
+        requested_leverage=leverage,
         init_stop_rate=init_stop_rate,
         adj_interval=adj_interval,
         is_order_break=is_order_break,

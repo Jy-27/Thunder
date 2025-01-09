@@ -14,7 +14,7 @@ import numpy as np
 from multiprocessing import Pool, Manager
 
 
-class BackTester:
+class BackTesterManager:
     def __init__(
         self,
         symbols: list[str],
@@ -32,7 +32,7 @@ class BackTester:
         stop_loss_rate: float = 0.025,
         safety_balance_ratio: float = 0.2,
         is_download: bool = True,
-        max_leverage:int = 10,
+        requested_leverage: int = 10,
         # 주문신호 유효성 검토(브레이크 기능)
         is_order_break: bool = True,
         loss_chance: int = 2,
@@ -54,7 +54,7 @@ class BackTester:
         self.adj_rate = adj_rate
         self.adj_interval = adj_interval
         self.is_use_scale_stop = is_use_scale_stop
-        self.max_leverage = max_leverage
+        self.requested_leverage = requested_leverage
         # 반복적인 손실발생시 해당 시나리오는 브레이크 타임을 갖는다.
         self.is_order_break = is_order_break
         # 시나리오 브레이크임 진입전 손실 횟수
@@ -70,27 +70,29 @@ class BackTester:
         # self.kline_data: Optional[Dict[str,Dict[str,List[Any]]]] = None
         # 백테스트에 사용될 kline_data의 길이 지정(단위 : day)
         self.backtest_date_range = 2
-        self.signal_analyzer_ins = TradeSignalAnalyzer.AnalysisManager(
+        self.ins_signal_analyzer = TradeSignalAnalyzer.AnalysisManager(
             back_test=self.test_mode
         )
-        self.intervals = self.signal_analyzer_ins.base_config.intervals
-        self.lookback_days = self.signal_analyzer_ins.base_config.lookback_days
-        self.backtest_data_ins = TradeComputation.BacktestDataFactory(
+        self.intervals = self.ins_signal_analyzer.base_config.intervals
+        self.lookback_days = self.ins_signal_analyzer.base_config.lookback_days
+        self.ins_backtest_data = TradeComputation.BacktestDataFactory(
             symbols=self.symbols,
             intervals=self.intervals,
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        self.test_data_manager_ins = TradeComputation.BacktestProcessor(
-            max_leverage=self.max_leverage
-        )
         self.seed_money = seed_money
-        self.portfolio_ins = TradeComputation.PortfolioManager(
+        self.ins_portfolio = TradeComputation.PortfolioManager(
             initial_balance=self.seed_money
         )
+        self.ins_trade_calculator = TradeComputation.TradeCalculator(
+            requested_leverage=self.requested_leverage, instance=self.ins_portfolio
+        )
         self.constraint = TradeComputation.OrderConstraint(
+            max_trade_number=max_trade_number,
             increase_type=increase_type,
             chance=self.loss_chance,
+            instance=self.ins_portfolio,
             safety_ratio=safety_balance_ratio,
             step_interval=self.step_interval,
             position_limit=self.loss_chance,
@@ -99,14 +101,13 @@ class BackTester:
         # self.interval_map = None
         self.closing_indices_data = None
         # self.target_run_interval = "map_1m"
-        self.max_trade_number = max_trade_number
         self.init_stop_rate = init_stop_rate
 
         # interval별 데이털르 저장하는 데이터셋
         self.interval_dataset = utils.DataContainer()
 
         # ticker 관련 instance
-        self.ticker_ins = TickerDataFetcher.FuturesTickers()
+        self.ins_ticker = TickerDataFetcher.FuturesTickers()
         self.comparison = comparison  # above : 이상, below : 이하
         self.absolute = absolute  # True : 비율 절대값, False : 비율 실제값
         self.value = value  # 거래대금 : 단위 USD
@@ -120,9 +121,9 @@ class BackTester:
         2. 매개변수 : 해당없음.
         """
         # 파일명 - 속성명에 지정함.
-        file_name = self.backtest_data_ins.kline_closing_sync_data
+        file_name = self.ins_backtest_data.kline_closing_sync_data
         # 폴더명 - 속성명에 지정함.
-        folder_name = self.backtest_data_ins.storeage
+        folder_name = self.ins_backtest_data.storeage
         # 상위폴도명 - 함수로 확보
         base_directory = os.path.dirname(os.getcwd())
         # 주소 합성 - 상위폴더 + 폴더명 + 파일명
@@ -171,17 +172,17 @@ class BackTester:
         # 신규 다운로드 선택시
         else:
             # kline data를 수신한다.
-            data = await self.backtest_data_ins.generate_kline_interval_data(
+            data = await self.ins_backtest_data.generate_kline_interval_data(
                 save=is_save
             )
             # 데이터를 np.array타입으로 변환한다.
             # data_array = utils._convert_kline_data_array(data)
             # closing_sync 데이터를 생성 및 속성에 저장한다.
-            self.closing_sync_data = self.backtest_data_ins.generate_kline_closing_sync(
+            self.closing_sync_data = self.ins_backtest_data.generate_kline_closing_sync(
                 kline_data=data, save=is_save
             )
 
-        self.closing_indices_data = self.backtest_data_ins.get_indices_data(
+        self.closing_indices_data = self.ins_backtest_data.get_indices_data(
             closing_sync_data=self.closing_sync_data,
             lookback_days=self.backtest_date_range,
         )
@@ -201,10 +202,10 @@ class BackTester:
         # 현재 타임스템프
         close_timestamp = data[-1][6]
         # 해당 symbol이 현재 진행중인 포지션이 있는지 확인한다.
-        if symbol in self.portfolio_ins.open_positions:
+        if symbol in self.ins_portfolio.open_positions:
             # 현재 포지션 유지중이라면 데이터를 업데이트한다.
             # 포지션 종료신호를 반환한다. (True / False)
-            return self.portfolio_ins.update_log_data(
+            return self.ins_portfolio.update_log_data(
                 symbol=symbol, price=price, timestamp=close_timestamp
             )
         # 현재 포지션이 없다면,
@@ -227,37 +228,39 @@ class BackTester:
         if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
-            
+
             ### DEBUG START
-            if self.portfolio_ins.safety_pnl >0:
-                total_balance = self.portfolio_ins.total_balance - self.portfolio_ins.safety_pnl
-            elif self.portfolio_ins.safety_pnl <=0:
-                total_balance = self.portfolio_ins.total_balance
+            if self.ins_portfolio.secured_profit > 0:
+                total_balance = (
+                    self.ins_portfolio.total_balance - self.ins_portfolio.secured_profit
+                )
+            elif self.ins_portfolio.secured_profit <= 0:
+                total_balance = self.ins_portfolio.total_balance
             ### DEBUG END
-            
+
             ### ORIGINAL CODE
-            # total_balance = self.portfolio_ins.total_balance
+            # total_balance = self.ins_portfolio.total_balance
             conctraint = self.constraint.calc_fund(
                 funds=total_balance,
             )
             trade_balance = conctraint.get("tradeValue")
             trade_count = conctraint.get("count")
 
-            if self.max_leverage is None:
-                leverage = leverage
+            if self.requested_leverage is None:
+                # 레버리지값 미지정시 기본값 5적용
+                leverage = 5
             else:
-                leverage = self.max_leverage
+                leverage = self.requested_leverage
 
             # 주문 신호 발생기
-            status, qty, lv = await self.test_data_manager_ins.calculate_order_values(
-                symbol=symbol,
-                leverage=leverage,
-                balance=trade_balance,
-                market_type="futures",
+            status, qty, lv = await self.ins_trade_calculator.get_order_params(
+                trading_symbol=symbol,
+                requested_leverage=leverage,  # 희망 레버리지 값을 입력시 해당 함수에서 적용가능 레버리지 값으로 변환해준다.
+                order_amount=trade_balance,
             )
             margin_ = (qty / leverage) * price
-            is_cash_margin = self.portfolio_ins.cash_balance > margin_
-            is_trade_count = self.portfolio_ins.number_of_stocks < trade_count
+            is_cash_margin = self.ins_portfolio.cash_balance > margin_
+            is_trade_count = self.ins_portfolio.number_of_stocks < trade_count
 
             if not status or not is_cash_margin or not is_trade_count:
                 return False, 0, 0
@@ -272,7 +275,7 @@ class BackTester:
             1) symbol : 쌍거래 symbol
         """
 
-        if symbol in self.portfolio_ins.open_positions:
+        if symbol in self.ins_portfolio.open_positions:
             return True
         else:
             return False
@@ -325,12 +328,12 @@ class BackTester:
         # print(dummy_24hr_tickers)
         # raise ValueError('stop')
         # 비동기 작업: 값을 기준으로 필터링된 티커와 변동률 기준 티커 가져오기
-        above_value_tickers = await self.ticker_ins.get_tickers_above_value(
+        above_value_tickers = await self.ins_ticker.get_tickers_above_value(
             target_value=self.value,
             comparison=self.comparison,
             dummy_data=dummy_24hr_tickers,
         )
-        above_change_tickers = await self.ticker_ins.get_tickers_above_change(
+        above_change_tickers = await self.ins_ticker.get_tickers_above_change(
             target_percent=self.target_percent,
             comparison=self.comparison,
             absolute=self.absolute,
@@ -361,11 +364,14 @@ class BackTester:
             2) price : 진입가격
             3) position : 1:long, 2:short
             4) start_timestamp : 시작 타임스템프
-            5) secnario_type : int() / 시나리오 종류
+            5) secnario_type : intma() / 시나리오 종류
             6) leverage : 레버리지
         """
 
-        # 주문전 유효성 검사
+        # 주문전 유효성 검사 1
+        if not self.constraint.can_open_more_trades():
+            return
+        # 주문전 유효성 검사 2
         is_open_signal, quantity, leverage = await self.__validate_open_signal(
             symbol=symbol, price=price
         )
@@ -379,14 +385,10 @@ class BackTester:
         if self.is_order_break:
             # 기존 거래내역을 검토해서 브레이크 타임 적용여부 검토
 
-            self.constraint.update_trading_data(
-                closed_position=self.portfolio_ins.closed_positions,
-                total_balance=self.portfolio_ins.total_balance,
-            )
+            self.constraint.update_trading_data()  #
             is_loss_scnario = self.constraint.validate_failed_scenario(
                 symbol=symbol,
                 scenario=scenario_type,
-                closed_positions=self.portfolio_ins.closed_positions,
                 current_timestamp=start_timestamp,
             )
             # 브레이크 타임 해당될경우
@@ -412,14 +414,14 @@ class BackTester:
             use_scale_stop=self.is_use_scale_stop,
         )
         # 주문 정보를 추가
-        self.portfolio_ins.add_log_data(log_data=log_data)
+        self.ins_portfolio.add_log_data(log_data=log_data)
 
     # 포지션 종료를 위한 함수.
     def active_close_position(self, symbol: str):
         # 포지션 종료 신호를 수신해도 symbol값 기준으로 position 유효성 검토한다.
         if self.__validate_cloes_position(symbol=symbol):
             # 유효성 확인시 해당 내용을 제거한다.
-            self.portfolio_ins.remove_order_data(symbol=symbol)
+            self.ins_portfolio.remove_order_data(symbol=symbol)
 
     # 백테스트 시작시 현재 설정정보를 출력한다.
     def start_masage(self):
@@ -434,7 +436,7 @@ class BackTester:
         print(f"    2.  EndDate     : {self.end_date}")
         print(f"    3.  Symbols     : {self.symbols}")
         print(f"    4.  SeedMoney   : {self.seed_money:,.1f} USDT")
-        print(f"    5.  leverage    : {self.max_leverage}x")
+        print(f"    5.  leverage    : {self.requested_leverage}x")
         print(f"    6.  Intervals   : {self.intervals}")
         print(f"    7.  ScaleStop   : {self.is_use_scale_stop}")
         print(f"    8.  StopRate    : {self.stop_loss_rate*100:.2f} %")
@@ -446,7 +448,6 @@ class BackTester:
         print(f"    14. Absolute    : {self.absolute}")
         print(f"\n {header}\n")
         print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL")
-
 
     # 백테스트 실행.
     async def run(self):
@@ -489,12 +490,12 @@ class BackTester:
                         ### trane 출력 ###
                         date = utils._convert_to_datetime(end_timestamp)
                         utils._std_print(
-                            f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}        {self.portfolio_ins.safety_pnl:,.2f}"
+                            f"{date}    {self.ins_portfolio.number_of_stocks}         {self.ins_portfolio.trade_count:,.0f}          {self.ins_portfolio.profit_loss_ratio*100:,.2f} %         {self.ins_portfolio.profit_loss:,.2f}        {self.ins_portfolio.secured_profit:,.2f}"
                         )
 
                         ### DEBUG
-                        # if self.portfolio_ins.profit_loss_ratio <= -50:
-                        # if self.portfolio_ins.trade_count > 5:
+                        # if self.ins_portfolio.profit_loss_ratio <= -50:
+                        # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
 
                     self.interval_dataset.set_data(
@@ -513,13 +514,13 @@ class BackTester:
                 # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
                 if not await self.validate_ticker_conditions(
                     symbol=symbol, data=select_data
-                ) or self.portfolio_ins.validate_open_position(symbol):
+                ) or self.ins_portfolio.validate_open_position(symbol):
                     continue
                 ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-                self.signal_analyzer_ins.data_container = self.interval_dataset
-                # self.signal_analyzer_ins.dummy_d = dummy_data
+                self.ins_signal_analyzer.data_container = self.interval_dataset
+                # self.ins_signal_analyzer.dummy_d = dummy_data
 
-                trade_signal = self.signal_analyzer_ins.scenario_run()
+                trade_signal = self.ins_signal_analyzer.scenario_run()
                 if not trade_signal[0]:
                     continue
 
@@ -529,12 +530,12 @@ class BackTester:
                     symbol=symbol,
                     price=price,
                     position=trade_signal[1],
-                    leverage=self.max_leverage,
+                    leverage=self.requested_leverage,
                     start_timestamp=current_timestamp,
                     scenario_type=trade_signal[2],
                 )
 
-        self.portfolio_ins.to_dict_list()
+        self.ins_portfolio.export_trading_logs()
         print("\n\nEND")
 
         # # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
@@ -592,10 +593,10 @@ class BackTester:
         #             ### trane 출력 ###
         #             date = utils._convert_to_datetime(end_timestamp)
         #             utils._std_print(
-        #                 f"{date}    {self.portfolio_ins.number_of_stocks}         {self.portfolio_ins.trade_count:,.0f}          {self.portfolio_ins.profit_loss_ratio*100:,.2f} %         {self.portfolio_ins.profit_loss:,.2f}"
+        #                 f"{date}    {self.ins_portfolio.number_of_stocks}         {self.ins_portfolio.trade_count:,.0f}          {self.ins_portfolio.profit_loss_ratio*100:,.2f} %         {self.ins_portfolio.profit_loss:,.2f}"
         #             )
         #             ### 포지션 보유시 연산 pass ###
-        #             if self.portfolio_ins.validate_open_position(symbol):
+        #             if self.ins_portfolio.validate_open_position(symbol):
         #                 continue
 
         #         self.interval_dataset.set_data(
@@ -611,15 +612,15 @@ class BackTester:
 
         #     if not await self.validate_ticker_conditions(
         #         symbol=symbol, data=data
-        #     ) or self.portfolio_ins.validate_open_position(symbol):
+        #     ) or self.ins_portfolio.validate_open_position(symbol):
         #         continue
 
         #     # 원본 코드
         #     ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-        #     self.signal_analyzer_ins.data_container = self.interval_dataset
-        #     # self.signal_analyzer_ins.dummy_d = dummy_data
+        #     self.ins_signal_analyzer.data_container = self.interval_dataset
+        #     # self.ins_signal_analyzer.dummy_d = dummy_data
 
-        #     trade_signal = self.signal_analyzer_ins.scenario_run()
+        #     trade_signal = self.ins_signal_analyzer.scenario_run()
         #     if not trade_signal[0]:
         #         continue
 
@@ -629,7 +630,7 @@ class BackTester:
         #         symbol=symbol,
         #         price=price,
         #         position=trade_signal[1],
-        #         leverage=self.max_leverage,
+        #         leverage=self.requested_leverage,
         #         start_timestamp=current_timestamp,
         #         scenario_type=trade_signal[2],
         #     )
@@ -701,5 +702,5 @@ if __name__ == "__main__":
     )
 
     asyncio.run(backtest_ins.run())
-    analyze_statistics = TradeComputation.ResultEvaluator(backtest_ins.portfolio_ins)
+    analyze_statistics = TradeComputation.ResultEvaluator(backtest_ins.ins_portfolio)
     analyze_statistics.run_analysis()

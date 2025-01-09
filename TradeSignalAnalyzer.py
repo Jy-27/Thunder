@@ -193,61 +193,59 @@ class AnalysisManager:
             1. 48시간 기준 가장 최고/최저 점 도딜시점에 5분봉 연속 하락 또는 상승
             2. candle길이는 증가해야함.
         """
-        
-        data_5m = self.data_container.get_data('interval_5m')
-        data_15m = self.data_container.get_data('interval_15m')
-        data_1h = self.data_container.get_data('interval_1h')
-        
+
+        data_5m = self.data_container.get_data("interval_5m")
+        data_15m = self.data_container.get_data("interval_15m")
+        data_1h = self.data_container.get_data("interval_1h")
+
         ## 최고점 / 최저점 확인
         open_price = 1
         high_price = 2
         low_price = 3
         close_price = 4
-        
+
         quote_value = 7
-        
+
         price_max = np.max(data_1h[:, open_price])
         price_min = np.min(data_1h[:, open_price])
-        
+
         is_price_max = price_max == data_1h[-1][open_price]
         is_price_min = price_min == data_1h[-1][open_price]
 
         if not (is_price_max or is_price_min):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
-        
+
         candle_up_15m = data_15m[:, 1] - data_15m[:, 4]
         candle_down_15m = data_15m[:, 4] - data_15m[:, 1]
-        
+
         candle_up_diff_15m = np.diff(candle_up_15m)
         candle_down_diff_15m = np.diff(candle_down_15m)
-        
+
         is_candle_up_15m = np.all(candle_up_diff_15m[-2:] > 0)
         is_candle_down_15m = np.all(candle_down_diff_15m[-2:] < 0)
-        
+
         if not (is_candle_up_15m or is_candle_down_15m):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         # candle_up_5m = data_5m[:, 1] - data_5m[:, 4]
         # candle_down_5m = data_5m[:, 4] - data_5m[:, 1]
-        
+
         candle_up_diff_5m = np.diff(data_5m[:, close_price])
         candle_down_diff_5m = np.diff(data_15m[:, close_price])
-        
+
         is_candle_up_5m = np.all(candle_up_diff_5m[-3:] > 0)
         is_candle_down_5m = np.all(candle_down_diff_5m[-3:] < 0)
-        
+
         if not (is_candle_up_5m or is_candle_down_5m):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         if is_price_max:
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-        
+
         if is_price_min:
             success_signal = (True, 2, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
-                
 
     def scenario_2(self):
         scenario_name, scenario_number = self.__get_scenario_number()
@@ -258,8 +256,8 @@ class AnalysisManager:
         low_price = 3
         close_price = 4
 
+        data_5m = self.data_container.get_data("interval_5m")
 
-        data_5m = self.data_container.get_data('interval_5m')
         def ema(data, period):
             alpha = 2 / (period + 1)
             ema_values = np.empty_like(data)
@@ -267,23 +265,25 @@ class AnalysisManager:
             for i in range(1, len(data)):
                 ema_values[i] = alpha * data[i] + (1 - alpha) * ema_values[i - 1]
             return ema_values
-        
+
         ema_5 = ema(data_5m[:, close_price], 99)
-        
+
         last_ma_price = ema_5[-1]
         current_price = data_5m[-1][close_price]
-        
+
         data_slice_5m = data_5m[-10:]
-        
-        candle_body_length = data_slice_5m[:, open_price] - data_slice_5m[:, close_price]
+
+        candle_body_length = (
+            data_slice_5m[:, open_price] - data_slice_5m[:, close_price]
+        )
         candle_body_diff = np.diff(candle_body_length)[-2:]
-        
+
         is_plus_length = np.all(candle_body_diff > 0)
         is_minus_legth = np.all(candle_body_diff < 0)
 
-        if not(is_minus_legth or is_minus_legth):
+        if not (is_minus_legth or is_minus_legth):
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         if last_ma_price < current_price and is_plus_length:
             success_signal = (True, 1, scenario_number)
             return self.scenario_data.set_data(scenario_name, success_signal)
@@ -292,11 +292,11 @@ class AnalysisManager:
             return self.scenario_data.set_data(scenario_name, success_signal)
         else:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-    
+
     def scenario_3(self):
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_name)
-        
+
         """"
         시나리오
         taker구매 비율이 높으면,
@@ -305,51 +305,91 @@ class AnalysisManager:
         5분봉 양봉
         
         """
-        data_1h = self.data_container.get_data('interval_1h')
-        data_15m = self.data_container.get_data('interval_15m')
-        data_5m = self.data_container.get_data('interval_5m')
-        
-        data_1h_mean = np.mean(data_1h[:,4])
-        data_1h_ratio = (data_1h[:,4] - data_1h_mean) / data_1h_mean
-        
+        data_1h = self.data_container.get_data("interval_1h")
+        data_15m = self.data_container.get_data("interval_15m")
+        data_5m = self.data_container.get_data("interval_5m")
+
+        data_1h_mean = np.mean(data_1h[:, 4])
+        data_1h_ratio = (data_1h[:, 4] - data_1h_mean) / data_1h_mean
+
         data_1h_max_close_price = np.max(data_1h[:, 4])
         is_last_price = data_1h_max_close_price == data_1h[-1][4]
-        
+
         # print('\n')
         # print('='*10)
         # print(data_1h_ratio)
         # print('='*10)
-        
+
         if data_1h_ratio[-1] < 1.2 and not is_last_price:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         data_15m_diff = np.diff(data_15m[:, 4])
-        is_diff_15m_up = np.all(data_15m_diff[-3:])
+        is_diff_15m_up = np.all(data_15m_diff[-3:] > 0)
         if not is_diff_15m_up:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         data_5m_diff = np.diff(data_5m[:, 4])
-        is_diff_5m_up = np.all(data_15m_diff[-3:])
+        is_diff_5m_up = np.all(data_15m_diff[-3:] > 0)
         if not is_diff_5m_up:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
-        
+
         if data_15m_taker_ratio < 0.8:
             return self.scenario_data.set_data(scenario_name, fail_signal)
-        
+
         success_signal = (True, 1, scenario_number)
         self.scenario_data.set_data(scenario_name, success_signal)
-            
-    
 
-    
+    def scenario_4(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_name)
+
+        """"
+        시나리오
+        taker구매 비율이 높으면,
+        1h mean 이 1.2배 이상
+        15분봉 3회 연속 양봉
+        5분봉 양봉
+        """
+        data_1h = self.data_container.get_data("interval_1h")
+        data_15m = self.data_container.get_data("interval_15m")
+        data_5m = self.data_container.get_data("interval_5m")
+
+        data_1h_mean = np.mean(data_1h[:, 4])
+        data_1h_ratio = (data_1h[:, 4] - data_1h_mean) / data_1h_mean
+
+        data_1h_min_close_price = np.min(data_1h[:, 4])
+        is_last_price = data_1h_min_close_price == data_1h[-1][4]
+
+        if data_1h_ratio[-1] > -1.2 and not is_last_price:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        data_15m_diff = np.diff(data_15m[:, 4])
+        is_diff_15m_down = np.all(data_15m_diff[-3:] < 0)
+        if not is_diff_15m_down:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        data_5m_diff = np.diff(data_5m[:, 4])
+        is_diff_5m_down = np.all(data_15m_diff[-3:] < 0)
+        if not is_diff_5m_down:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
+
+        if data_15m_taker_ratio > 0.2:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        success_signal = (True, 2, scenario_number)
+        self.scenario_data.set_data(scenario_name, success_signal)
+
     def scenario_run(self):
         fail_signal = (False, 0, 0)
         ### scenario 함수 실행 공간
         # self.scenario_1()
         # self.scenario_2()
         self.scenario_3()
+        # self.scenario_4()
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

@@ -32,6 +32,12 @@ from plotly.subplots import make_subplots
 # TickerDataManager.get_tickers_above_change 적용될 dummy data 생성 함수 만들기
 # fetch_24hr_ticker 대용
 
+#
+#
+# TradingLog / PortpolioManager class의 속성값을 이용하여 각 클라스에 공유한다.
+# PortfloioManager에 의존성을 높인다. 단점이 존재하더라도 코드를 깔끔하게 정돈하는걸 목표로 한다.
+
+
 # 목표 // 백테스티 더미에티어를 반영하여 target_ticker가 적용되는지 여부를 확인한다.abs
 # 타겟 티켓도 아닌데 발주 진행건으로 분류되는 것은 결과 데이터에 영향을 미친다.
 
@@ -53,8 +59,8 @@ def trade_log_attr_maps():
 @dataclass
 class TradingLog:
     """
-    거래 발생시 거래내역에 대한 자세한 정보를 정리한다. 각종 손익비용에 대한 정보를 기록하여 분석할 수 있는 데이터로 활용한다.
-    현재가를 계속 업데이트하여 전체적인 정보를 업데이트하고 stop_price를 분석한다.
+    거래 발생시 거래내역에 대한 상세 정보를 관리한다. 각조 손익비용에 대한 정보를 기록하여 분석할 수 잇는 데이터의 척도로 활용한다.
+    자체적인 함수의 기능을 활용하여 지속되는 갱신 정보를 반영 및 재평가 연산한다.
     """
 
     symbol: str  # 심볼
@@ -189,19 +195,6 @@ class TradingLog:
         # 손익분기 가격
         self.break_even_price = self.entry_price + (total_fees / self.quantity)
 
-        # # 포지션이 Long일때
-        # if self.position == 1:
-        #     # 손익 계산 및 속성 반영
-        #     self.profit_loss = (
-        #         self.quantity * (self.current_price - self.entry_price) - total_fees
-        #     )
-        # # 포지션이 Short일때
-        # elif self.position == 2:
-        #     # 손익 계산 및 속성 반영
-        #     self.profit_loss = (
-        #         self.quantity * (self.entry_price - self.current_price) - total_fees
-        #     )
-
     # Stoploss가격을 계산한다. 포지션 종료의 기준이 가격이 된다.
     def __calculate_stop_price(self):
         # scale stop 미사용시 손절율을 최종가에 반영한다.
@@ -224,6 +217,7 @@ class TradingLog:
                 raise ValueError(f"position입력 오류: {self.position}")
             return
         # adj_timer가 적용된다면,
+        # (시간이 지날수록 시작가격을 점점 상승 또는 하락반영하여 start_rate를 끌어올린다. 장기간 가격변화없을것을 대비함.)
         elif self.adj_timer:
             # 종료시간과 시작시간의 차이를 구하고
             time_diff = self.last_timestamp - self.start_timestamp
@@ -243,15 +237,25 @@ class TradingLog:
         # 포지션이 롱이면,
         if self.position == 1:
             # 손절 반영 시작값은 시작가 기준
+            # 반영가격은 high_price
+
+            # 만약 self.adj_timer가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 - start_rate)
             self.stop_price = self.adj_start_price + (
                 (self.high_price - self.adj_start_price) * (1 - self.stop_rate)
             )
+        # 포지션이 숏이면,
         elif self.position == 2:
+            # 손절 반영 시작값은 시작가 기준
+            # 반영가격은 high_price
+
+            # 만약 self.adj_timer가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 + start_rate)
             self.stop_price = self.adj_start_price + (
                 (self.adj_start_price - self.low_price) * (1 + self.stop_rate)
             )
+
+        # 오입력 발생시 오류로 프로그래밍 종료처리.
         else:
             raise ValueError(f"position입력 오류: {self.position}")
 
@@ -278,25 +282,36 @@ class TradingLog:
                 f"position은 1:long/buy, 2:short/sell만 입력가능: {self.position}"
             )
 
+    #
     def update_trade_data(
         self,
         current_price: Union[float, int],
-        # stop_price: Union[float, int],
         current_timestamp: Optional[int] = None,
     ):
-        # self.stoploss = stop_price
+        # Test모드이면서 현재 타임스템프 미입력시 오류를 발생시킨다.
+        # 라이브 트레이딩시는 현재 시간 확보하면 되나, 테스트 실행시 현재시간을 지정하지 않으면 연산불가함.
         if self.test_mode and current_timestamp is None:
             raise ValueError(
                 f"백테트시 current_timestamp값 입력해야함: {current_timestamp}"
             )
+        # 테스트 모드가 아닐경우 현재 타임스템프를 확보한다.
+        #   >> 아니면 websocket data의 close_timestamp반영하는것도 검토해볼 필요가 있다. 그렇게 할까....?
         elif not self.test_mode:
             current_timestamp = int(time.time() * 1_000)
 
+        # 현재 시간 업데이트
         self.last_timestamp = current_timestamp
+        # 현재 가격 업데이트
         self.current_price = current_price
+
+        # >>> 각 연산은 별대의 함수로 나누어 개별처리 한다. <<<
+        # 수수료 값 업데이트
         self.__calculate_fees()
+        # trade log 데이터의 전반적인 평가 계산
         self.__calculate_trade_values()
+        # 손절 가격을 업데이트
         self.__calculate_stop_price()
+        # 손절 상황여부 신호 발생
         self.__calculate_stop_signal()
 
     def to_list(self):
@@ -307,6 +322,9 @@ class TradingLog:
 class PortfolioManager:
     """
     전체 자산 관리와 거래기록을 관리한다.
+    해당 데이터가 필요한 클라스들은 instance자체를 공유하기 때문에
+    본 클라스에 대한 의존도가 높다. 본 클라스의 계산역할이 매우 중요함.
+    속성명을 수정하지 말것.
     """
 
     def __init__(self, initial_balance: float = 1_000):
@@ -322,16 +340,16 @@ class PortfolioManager:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0  # 총 체결 횟수
-        
-        
+
         ##=---=####=---=####=---=####=---=####=---=####=---=##
         # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
         ##=---=####=---=####=---=####=---=####=---=####=---=##
-        self.safety_pnl: float = 0  # init_balance를 초과하는 수익금액
+        self.secured_profit: float = 0  # init_balance를 초과하는 수익금액
         # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
-    def to_dict_list(self, is_save:bool=True):
-        file_name = 'trade_history.pkl'
+    # 현재 TradingLog정보를 List[Dict] 타입으로 변환 후 pickle 형태로 저장한다.
+    def export_trading_logs(self, is_save: bool = True):
+        file_name = "trade_history.pkl"
         # TradingLog의 속성 이름을 확보한다.
         keys_ = list(TradingLog.__annotations__)
         # 데이터를 저장할 빈 리스트를 생성한다.
@@ -343,14 +361,17 @@ class PortfolioManager:
                 temp_log[key] = data_[idx]
             result.append(temp_log)
         if is_save:
-            with open(file_name, 'wb')as file:
+            with open(file_name, "wb") as file:
                 pickle.dump(result, file)
             return result
         return result
 
+    # 현재 진행중인 거래가 있는지 여부를 점검한다.
     def validate_open_position(self, symbol: str):
+        # open_position에 해당 symbol이 있을경우
         if symbol in self.open_positions:
             return True
+        # 없을경우
         else:
             return False
 
@@ -360,8 +381,11 @@ class PortfolioManager:
         symbol = log_data.symbol
         # container name은 symbol로 정하고 데이터는 TradingLog를 넣는다.
         self.data_container.set_data(data_name=symbol, data=log_data)
+        # log data를 LIST형태로 반환한다.
         trade_data = self.__extract_valid_data(data=log_data)
+        # 총 거래 횟수를 계산한다.
         self.trade_count += 1
+        # list형태로 반환된 데이터를 open_position에 저장한다.
         self.open_positions[symbol] = trade_data
         self.update_data()
 
@@ -380,8 +404,7 @@ class PortfolioManager:
         trade_data = self.__extract_valid_data(data=log_data)
         # print(trade_data)
         self.open_positions[symbol] = trade_data
-        # print(self.open_positions[symbol])
-        # 종료 신호를 반환한다.
+        # portpolid의 각 값들을 계산하여 업데이트 한다.
         self.update_data()
         return self.data_container.get_data(data_name=symbol).stop_signal
 
@@ -407,47 +430,77 @@ class PortfolioManager:
             data.trade_scenario,  # 16  시나리오 종류
         ]
 
+    # 거래종료시 open_position 데이터를 정리한다.
     def remove_order_data(self, symbol: str):
+        # 해당 symbol이 거래중이 아니면 오류를 발생시킨다. 오류가 맞음.
         if not self.open_positions.get(symbol):
             raise ValueError(f"진행중인 거래 없음: {symbol}")
 
+        # open_positions 데이터를 복사 및 변수로 저장한다.
         open_position_data = self.open_positions[symbol].copy()
+        # open_position 데이터를 삭제한다.
         del self.open_positions[symbol]
 
+        # 거래종료 positions에 해당 symbol이 있으면,
         if symbol in self.closed_positions.keys():
+            # 데이터를 끝에 추가한다.
             self.closed_positions[symbol].append(open_position_data)
+        # 만약에 없으면
         elif not symbol in self.closed_positions.keys():
+            # 신규로 생성하여 데이터를 저장한다.
             self.closed_positions[symbol] = [open_position_data]
 
+        # 트레이드 히스토리에 현재 트레이드 로그값을 저장한다.
         self.trade_history.append(self.data_container.get_data(data_name=symbol))
+        # 저장이 완료되면 트레이드 로그값은 삭제한다.
         self.data_container.remove_data(data_name=symbol)
+        # 각종 값들을 계산 및 업데이트 한다.
         self.update_data()
 
+    # class의 속성값들을 계산 및 업데이트한다.
     def update_data(self):
-        cloed_trade_data = []
+        # 종료 거래값을 초기화
+        closed_trade_data = []
+        # 진행 거래값을 초기화
         open_trade_data = []
+
+        # 종료 거래내역을 list타입으로 저장하여 closed_trade_data에 추가한다.
         for _, closed_data in self.closed_positions.items():
             for nest_closed_data in closed_data:
-                cloed_trade_data.append(nest_closed_data)
+                closed_trade_data.append(nest_closed_data)
+        # 진행 거래내역을 list타입으로 저장하여 open_trade_data에 추가한다.
         for _, open_data in self.open_positions.items():
             open_trade_data.append(open_data)
 
-        closed_data_array = np.array(object=cloed_trade_data, dtype=float)
+        # closed_trade_data를 np.ndarray 형태로 전환한다.
+        closed_data_array = np.array(object=closed_trade_data, dtype=float)
+        # closed_trade_data의 차원 배열수가 1개면
         if closed_data_array.ndim == 1:
+            # 배열수의 형태를 변경한다.
             closed_data_array = closed_data_array.reshape(1, -1)
 
+        # open_trade_data를 np.ndarray 형태로 전환한다.
         open_data_array = np.array(object=open_trade_data, dtype=float)
+        # open_trade_data의 차원 배열수가 1개면
         if open_data_array.ndim == 1:
+            # 배열수의 형태를 변환한다.
             open_data_array = open_data_array.reshape(1, -1)
 
+        # open_data_array.size 예) [0,0,0,0,0,0,0]경우
+        # 필요한 기능인가??
         if open_data_array.size == 0:
+            # 현재 포지션 수익금
             open_pnl = 0
-            active_value = 0            
+            # 진행중인 비용
+            active_value = 0
         else:
             open_pnl = np.sum(open_data_array[:, 13])
             active_value = np.sum(open_data_array[:, 10])
 
+        # closed_data_array.size 예) [0,0,0,0,0,0,0]경우
+        # 필요한 기능인가?
         if closed_data_array.size == 0:
+            # 종료 포지션 수익금
             closed_pnl = 0
         else:
             # print(closed_data_array)
@@ -455,26 +508,48 @@ class PortfolioManager:
 
         # open_pnl = np.sum(open_data_array[:, 2])
 
+        # 현재 거래중인 포지션 수
         self.number_of_stocks = len(self.open_positions.keys())
+        # 거래중인 금액
         self.active_value = active_value
+        # 예수금
         self.cash_balance = self.initial_balance + closed_pnl - self.active_value
+        # 손익금
         self.profit_loss = closed_pnl + open_pnl
+        # 총 평가 금액
         self.total_balance = self.profit_loss + self.initial_balance
-        # self.profit_loss_ratio = self.profit_loss / self.initial_balance
+        # 손익비율
         self.profit_loss_ratio = (
             self.total_balance - self.initial_balance
         ) / self.initial_balance
 
-
-
         ##=---=####=---=####=---=####=---=####=---=####=---=##
         # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
         ##=---=####=---=####=---=####=---=####=---=####=---=##
-        # safety_pnl = self.total_balance - self.initial_balance - self.safety_pnl
-        # if safety_pnl > 0 and open_data_array.size == 0:
-        #     self.safety_pnl += safety_pnl
-        # if ((self.total_balance - self.safety_pnl) / self.initial_balance) < 0.5:
-        #     raise ValueError(f'청산')
+
+        # 추가개발 계획
+        # live_trad시 new_profit_to_secure 이체시키는 기능이 필요함.
+        new_profit_to_secure = (
+            self.total_balance - self.initial_balance - self.secured_profit
+        )
+        # 수익이 발생하고, 현재 거래중인 항목이 없을경우
+        if new_profit_to_secure > 0 and open_data_array.size == 0:
+            self.secured_profit += new_profit_to_secure
+
+    # 원금을 초과하는 수익금액을 반환 및 수익금액 내역을 초기화한다.
+    # 라이브 트레이딩시 해당 금액을 이체하기 위함이다.
+    def get_secured_profit(self):
+        """
+        1. 기능 : 원금을 초과하는 수익금액을 반환 및 초기화 한다. 라이브 트레이딩 대응용
+        2. 매개변수 : 해당없음.
+
+        논리적 개선이 필요하다.
+
+        """
+        result = self.secured_profit.copy()
+        self.secured_profit = 0
+        return result
+
 
 ##=---=####=---=####=---=####=---=####=---=####=---=##
 # =-=##=---=###=----=###=----=###=----=###=----=###=-=#
@@ -891,58 +966,76 @@ class BacktestDataFactory:
         return kline_data_array, closing_sync, indices_data
 
 
-class BacktestProcessor:
+class TradeCalculator:
     """
     각종 연산이 필요한 함수들의 집함한다.
     """
 
-    def __init__(self, max_leverage: int):
+    def __init__(self, requested_leverage: int, instance: PortfolioManager):
         self.ins_trade_futures_client = FuturesOrder()
         self.ins_trade_spot_client = SpotOrder()
-        # self.ins_trade_stopper = DataProcess.TradeStopper()
-        self.market_type = ["FUTURES", "SPOT"]
-        self.max_leverage = max_leverage
-        self.MIN_LEVERAGE = 5
+        self.market_types = ["FUTURES", "SPOT"]
+        self.requested_leverage = requested_leverage
+        self.ins_portfolio: PortfolioManager = instance
+        self.MIN_LEVERAGE = 1
 
     # 주문이 필요한 Qty, leverage를 계산한다.
-    async def calculate_order_values(
+    async def get_order_params(
         self,
-        symbol: str,
-        leverage: int,
-        balance: float,
+        trading_symbol: str,
+        requested_leverage: int,
+        order_amount: float,
         market_type: str = "futures",
     ):
         """
-        1. 기능 : 조건 신호 발생시 가상의 구매신호를 발생한다.
-        2. 매개변수
+        1. 기능 : 주문과 관련된 파라미터(주문가능여부, 주문 수량, 레버리지값)
+            - 레버리지 값은 희망하는 값과 실제 설정가능한 값이 다르므로
+        2. 매개변수:
+            1) trading_symbol : 거래할 자산의 심볼
+            2) requested_leverage : 요청된 레버리지 값(희망값 / 최대 설정값보다 높을시 최대설정값으로 적용.)
+            3) order_amount : 주문 총 금액(단가 아님)
+            4) market_type : 시장 유형 ("futures" 또는 "spot"). 기본값은 "futures".
+        3. 반환값:
+            - tuple: (계산 성공 여부, 최대 주문 가능량, 설정된 레버리지 값)
         """
+        # 시장 유형 대문자로 변환
         market = market_type.upper()
-        if market not in self.market_type:
-            raise ValueError(f"market type 입력 오류 - {market}")
+        if market not in self.market_types:
+            raise ValueError(f"Market type 입력 오류 - {market}")
 
-        if market == self.market_type[0]:
-            ins_obj = self.ins_trade_futures_client
-        else:
-            ins_obj = self.ins_trade_spot_client
-
-        # position stopper 초기값 설정
-        # self.ins_trade_stopper(symbol=symbol, position=position, entry_price=entry_price)
-
-        # print(date)
-        # leverage 값을 최소 5 ~ 최대 30까지 설정.
-        target_leverage = min(max(leverage, self.MIN_LEVERAGE), self.max_leverage)
-
-        # 현재가 기준 최소 주문 가능량 계산
-        get_min_trade_qty = await ins_obj.get_min_trade_quantity(symbol=symbol)
-        # 조건에 부합하는 최대 주문 가능량 계산
-        get_max_trade_qty = await ins_obj.get_max_trade_quantity(
-            symbol=symbol, leverage=target_leverage, balance=balance
+        # 시장 유형에 따라 거래 객체 설정
+        trade_client = (
+            self.ins_trade_futures_client
+            if market == self.market_types[0]
+            else self.ins_trade_spot_client
         )
 
-        if get_max_trade_qty < get_min_trade_qty:
-            return (False, get_max_trade_qty, target_leverage)
+        # trading_symbol의 설정 가능한 최대 레버리지 값을 확인한다.
+        # spot 시장이면, 어찌할지 코드 재구성이 필요하다.
+        if market == self.market_types[0]:
+            max_allowed_leverage = await trade_client.get_max_leverage(trading_symbol)
+        else:
+            max_allowed_leverage = 1
 
-        return (True, get_max_trade_qty, target_leverage)
+        # 레버리지 값을 최소 1 ~ 최대 125로 설정
+        # 라이브 트레이딩에서 미치지 않고서야 절때 고배율로 하지 말 것. 제정신이냐??
+        target_leverage = min(max_allowed_leverage, self.requested_leverage)
+
+        # 현재가 기준 최소 주문 가능량 계산
+        min_trade_quantity = await trade_client.get_min_trade_quantity(
+            symbol=trading_symbol
+        )
+
+        # 조건에 부합하는 최대 주문 가능량 계산
+        max_trade_quantity = await trade_client.get_max_trade_quantity(
+            symbol=trading_symbol, leverage=target_leverage, balance=order_amount
+        )
+
+        # 최대 주문 가능량이 최소 주문 가능량보다 적으면 실패 반환 / 예수금이 충분하지 않을 경우 발생함.
+        if max_trade_quantity < min_trade_quantity:
+            return (False, max_trade_quantity, target_leverage)
+
+        return (True, max_trade_quantity, target_leverage)
 
 
 class OrderConstraint:
@@ -953,16 +1046,18 @@ class OrderConstraint:
         increase_type: str,
         chance: int,
         step_interval: str,
+        instance: PortfolioManager,
+        max_trade_number: Optional[int] = None,
         safety_ratio: float = 0.2,
         position_limit: int = 3,
     ):
         self.increase_type = increase_type
         self.safety_ratio = safety_ratio
         self.position_limit = position_limit
-
+        self.max_trade_number = max_trade_number
         self.chance: int = chance
         self.step_interval: str = step_interval
-
+        self.ins_portfolio = instance
         self.total_balance: Optional[float] = None
         self.closed_trade_data: Optional[List[Any]] = None
 
@@ -977,6 +1072,18 @@ class OrderConstraint:
 
     #     self.safety_account_ratio = 0.32
 
+    # 동시 거래 횟수를 제한한다.
+    def can_open_more_trades(self) -> bool:
+        """
+        1. 기능 : 동시 거래 횟수를 제한한다.
+        2. 매개변수
+            1) open_position :
+        """
+        if self.max_trade_number is None:
+            return True
+        open_position_count = len(self.ins_portfolio.open_positions)
+        return open_position_count < self.max_trade_number
+
     def __verify_config(self):
         increase_types = ["stepwise", "proportional"]
         if not self.increase_type in increase_types or not isinstance(
@@ -990,18 +1097,15 @@ class OrderConstraint:
         if not isinstance(self.position_limit, int):
             raise ValueError(f"position_limit이 유효하지 않음:{self.position_limit}")
 
-    def update_trading_data(
-        self, closed_position: PortfolioManager, total_balance: PortfolioManager
-    ):
-        self.total_balance = total_balance
-        self.closed_trade_data = closed_position
+    def update_trading_data(self):
+        self.total_balance = self.ins_portfolio.total_balance
+        self.closed_trade_data = self.ins_portfolio.closed_positions
 
     # 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
     def validate_failed_scenario(
         self,
         symbol: str,
         scenario: int,
-        closed_positions: PortfolioManager,
         current_timestamp: Optional[int] = None,
     ):
         """
@@ -1014,11 +1118,11 @@ class OrderConstraint:
         """
 
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
-        if symbol not in closed_positions:
+        if symbol not in self.ins_portfolio.closed_positions:
             return True
 
         # 거래 종료 데이터 np.array화
-        data_array = np.array(closed_positions[symbol], float)
+        data_array = np.array(self.ins_portfolio.closed_positions[symbol], float)
 
         # 현재 타임스탬프 설정
         if current_timestamp is None:
@@ -1115,19 +1219,19 @@ class OrderConstraint:
 
 
 class ResultEvaluator:
-    def __init__(self, trade_analysis_ins):
+    def __init__(self, instance: PortfolioManager):
         """
         초기화 메서드
-        :param trade_analysis_ins: trade_analysis_ins 객체
+        :param ins_portfolio: ins_portfolio 객체
         """
-        self.trade_analysis_ins = trade_analysis_ins
+        self.ins_portfolio: PortfolioManager = instance
         self.closed_positions = (
-            trade_analysis_ins.closed_positions or {}
+            self.ins_portfolio.closed_positions or {}
         )  # 청산된 포지션 초기화
-        self.initial_balance = trade_analysis_ins.initial_balance
-        self.total_balance = trade_analysis_ins.total_balance
-        self.profit_loss = trade_analysis_ins.profit_loss
-        self.profit_loss_ratio = trade_analysis_ins.profit_loss_ratio
+        self.initial_balance = self.ins_portfolio.initial_balance
+        self.total_balance = self.ins_portfolio.total_balance
+        self.profit_loss = self.ins_portfolio.profit_loss
+        self.profit_loss_ratio = self.ins_portfolio.profit_loss_ratio
         self.df = None  # 초기 데이터프레임 설정 (None)
         self.summary = None  # 요약 데이터 초기화
 

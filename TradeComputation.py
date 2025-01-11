@@ -22,7 +22,7 @@ from plotly.subplots import make_subplots
 
 
 ##=--=####=---=###=--=####=---=###=--=##
-# -=##=---==-*   M E  M O  *-==---=##=-#
+#-=##=---==-*   M E  M O   *-==---=##=-#
 ##=--=####=---=###=--=####=---=###=--=##
 
 # TickerDataManager.get_ticker_above_price에 적용될 dummy data 생성 함수 만들기
@@ -75,11 +75,11 @@ class TradingLog:
     fee_rate: float = 0.05  # 수수료율
     init_stop_rate: float = 0.015  # 초기(진입시) 손절율
     use_scale_stop: bool = True  # final 손절율 or scale손절율 적용 여부
-    adj_timer: bool = False  # interval 시간 간격마다 adj_start_price 변동 적용여부
-    adj_rate: Optional[float] = (
+    is_dynamic_adjustment: bool = False  # interval 시간 간격마다 adj_start_price 변동 적용여부
+    dynamic_adjustment_rate: Optional[float] = (
         0.0007  # scale_stop_ratio option, 시계흐름에 따른 시작가 변화적용율
     )
-    adj_interval: Optional[str] = "3m"  # scale_stop_ratio option, 시계흐름의 범위 기준
+    dynamic_adjustment_interval: Optional[str] = "3m"  # scale_stop_ratio option, 시계흐름의 범위 기준
     adj_start_price: Optional[float] = None  # 최초 또는 시작가 변화율 적용 금액
     stop_price: Optional[float] = None  # 포지션 종료 가격 지정.
     stop_signal: bool = (
@@ -117,9 +117,9 @@ class TradingLog:
         if self.last_timestamp is None:
             self.last_timestamp = self.start_timestamp
         # 손절지정을 scale로 미설정시
-        if not self.adj_timer:
-            self.adj_rate = None
-            self.adj_interval = None
+        if not self.is_dynamic_adjustment:
+            self.dynamic_adjustment_rate = None
+            self.dynamic_adjustment_interval = None
         # 진입가가 0이하면 오류발생
         if self.entry_price <= 0:
             raise ValueError(
@@ -198,7 +198,7 @@ class TradingLog:
     # Stoploss가격을 계산한다. 포지션 종료의 기준이 가격이 된다.
     def __calculate_stop_price(self):
         # scale stop 미사용시 손절율을 최종가에 반영한다.
-        if not self.adj_timer:
+        if not self.is_dynamic_adjustment:
             # 시작 손절율을 0로 만든다. 시작 손절율은 self.stop_rate로 대체한다.
             self.init_stop_rate = 0
             # 시작 가격은 진입가로 대처한다.
@@ -216,21 +216,21 @@ class TradingLog:
             else:
                 raise ValueError(f"position입력 오류: {self.position}")
             return
-        # adj_timer가 적용된다면,
+        # is_dynamic_adjustment가 적용된다면,
         # (시간이 지날수록 시작가격을 점점 상승 또는 하락반영하여 start_rate를 끌어올린다. 장기간 가격변화없을것을 대비함.)
-        elif self.adj_timer:
+        elif self.is_dynamic_adjustment:
             # 종료시간과 시작시간의 차이를 구하고
             time_diff = self.last_timestamp - self.start_timestamp
-            # 현재 설정된(self.adj_interval)값을 조회한다.
-            target_ms_seconds = utils._get_interval_ms_seconds(self.adj_interval)
-            # 만일 adj_interval을 잘못입력시 오류발생시킨다.
+            # 현재 설정된(self.dynamic_adjustment_interval)값을 조회한다.
+            target_ms_seconds = utils._get_interval_ms_seconds(self.dynamic_adjustment_interval)
+            # 만일 dynamic_adjustment_interval을 잘못입력시 오류발생시킨다.
             if target_ms_seconds is None:
                 # 이미 검증을 했지만, 혹시 모를 재검증.
-                raise ValueError(f"interval값이 유효하지 않음: {self.adj_interval}")
+                raise ValueError(f"interval값이 유효하지 않음: {self.dynamic_adjustment_interval}")
             # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
-            dynamic_rate = int(time_diff / target_ms_seconds) * self.adj_rate
+            dynamic_rate = int(time_diff / target_ms_seconds) * self.dynamic_adjustment_rate
 
-        # 시작 손절 비율을 계산한다. adj_timer 설정에 따라 start_rate가 달라진다.
+        # 시작 손절 비율을 계산한다. is_dynamic_adjustment 설정에 따라 start_rate가 달라진다.
         # dynamic_rate값이 음수로 바뀔경우 start_rate는 증가된다. 맞나??
         start_rate = self.init_stop_rate - dynamic_rate
 
@@ -239,7 +239,7 @@ class TradingLog:
             # 손절 반영 시작값은 시작가 기준
             # 반영가격은 high_price
 
-            # 만약 self.adj_timer가 false면 start_rate는 시작 손절가 그대로임.
+            # 만약 self.is_dynamic_adjustment가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 - start_rate)
             self.stop_price = self.adj_start_price + (
                 (self.high_price - self.adj_start_price) * (1 - self.stop_rate)
@@ -249,7 +249,7 @@ class TradingLog:
             # 손절 반영 시작값은 시작가 기준
             # 반영가격은 high_price
 
-            # 만약 self.adj_timer가 false면 start_rate는 시작 손절가 그대로임.
+            # 만약 self.is_dynamic_adjustment가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 + start_rate)
             self.stop_price = self.adj_start_price + (
                 (self.adj_start_price - self.low_price) * (1 + self.stop_rate)
@@ -327,7 +327,7 @@ class PortfolioManager:
     속성명을 수정하지 말것.
     """
 
-    def __init__(self, initial_balance: float = 1_000):
+    def __init__(self, is_profit_preservation:bool=True, initial_balance: float = 1_000):
         self.data_container = utils.DataContainer()
         self.trade_history: List[TradingLog] = []
         self.closed_positions: Dict[str, List[List[Any]]] = {}
@@ -345,6 +345,7 @@ class PortfolioManager:
         # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
         ##=---=####=---=####=---=####=---=####=---=####=---=##
         self.secured_profit: float = 0  # init_balance를 초과하는 수익금액
+        self.is_profit_preservation:bool = is_profit_preservation
         # self.trading_log_attr_maps:Dict[str, int] = utils._info_trade_log_attr_maps()
 
     # 현재 TradingLog정보를 List[Dict] 타입으로 변환 후 pickle 형태로 저장한다.
@@ -533,7 +534,7 @@ class PortfolioManager:
             self.total_balance - self.initial_balance - self.secured_profit
         )
         # 수익이 발생하고, 현재 거래중인 항목이 없을경우
-        if new_profit_to_secure > 0 and open_data_array.size == 0:
+        if self.is_profit_preservation and new_profit_to_secure > 0 and open_data_array.size == 0:
             self.secured_profit += new_profit_to_secure
 
     # 원금을 초과하는 수익금액을 반환 및 수익금액 내역을 초기화한다.
@@ -549,6 +550,19 @@ class PortfolioManager:
         result = self.secured_profit.copy()
         self.secured_profit = 0
         return result
+    
+    # 계좌 수익금 이체 후 기초자금을 리셋한다.
+    # 이체 후 해당 자업 미실행시 실제 계좌와 데이터 불균형 발생함.
+    def reset_initial_balance(self, balance):
+        """
+        1. 기능 : 초기자금을 지정한 금액(balance)로 초기화 한다.
+        2. 매개변수
+            1) balance : 초기화할 금액
+        3. 추가정보
+            - 자금 이체 후 해당작업 미실행시 실제 계좌와 PortfolioManager값 데이터 불균형 발생함.
+        
+        """
+        self.initial_balance = balance
 
 
 ##=---=####=---=####=---=####=---=####=---=####=---=##
@@ -760,125 +774,255 @@ class BacktestDataFactory:
         # 결과 반환.
         return indices_data
 
-    # 1분봉 종가 가격을 각 interval에 반영한 테스트용 더미 데이터를 생성한다.
-    def generate_kline_closing_sync(
-        self, kline_data: Dict, save: bool = False
-    ) -> Dict[str, Dict[str, np.ndarray]]:
-        """
-        1. 기능 : 백테스트시 데이터의 흐름을 구현하기 위하여 1분봉의 누적데이터를 반영 및 1분봉의 길이와 맞춘다.
-        2. 매개변수
-            1) kline_data : kline_data 를 numpy.array화 하여 적용
-            2) save : 생성된 데이터 저장여부.
+    # # 1분봉 종가 가격을 각 interval에 반영한 테스트용 더미 데이터를 생성한다.
+    # def generate_kline_closing_sync(
+    #     self, kline_data: Dict, save: bool = False
+    # ) -> Dict[str, Dict[str, np.ndarray]]:
+    #     """
+    #     1. 기능 : 백테스트시 데이터의 흐름을 구현하기 위하여 1분봉의 누적데이터를 반영 및 1분봉의 길이와 맞춘다.
+    #     2. 매개변수
+    #         1) kline_data : kline_data 를 numpy.array화 하여 적용
+    #         2) save : 생성된 데이터 저장여부.
 
-        3. 처음부터 인터별간 데이터의 길이는 다르지만, open_timestamp와 end_timestamp가 일치한다. kline_data수신기에는 이상이 없다.
-            dummy_data가 불필요하다는 소리....해당 함수를 완전 재구성해야한다. 그동안 잘못된 데이터로 백테스를 수행하였다. 데이터의 신뢰성을
-            먼저 확보해야만 한다.
-        """
+    #     3. 처음부터 인터별간 데이터의 길이는 다르지만, open_timestamp와 end_timestamp가 일치한다. kline_data수신기에는 이상이 없다.
+    #         dummy_data가 불필요하다는 소리....해당 함수를 완전 재구성해야한다. 그동안 잘못된 데이터로 백테스를 수행하였다. 데이터의 신뢰성을
+    #         먼저 확보해야만 한다.
+    #     """
 
-        # 심볼 및 interval 값을 리스트로 변환
+    #     # 심볼 및 interval 값을 리스트로 변환
+    #     symbols_list = list(kline_data.keys())
+    #     intervals_list = list(kline_data[symbols_list[0]].keys())
+    #     closing_sync_data = {}
+
+    #     ##=---=####=---=####=---=####=---=####=---=####=---=##
+    #     # =-=###=----=###=---=# P O I N T #=---=###=----=###=-#
+    #     ##=---=####=---=####=---=####=---=####=---=####=---=##
+    #     ### indices의 arange(step)기능의 오점을 개선하고자 첫번째 데이터는 더미데이터를 넣는다.
+    #     data_lengh = len(kline_data[symbols_list[0]][intervals_list[0]][0])
+    #     dummy_data = [0 for _ in range(data_lengh)]
+
+    #     for symbol in symbols_list:
+    #         for interval in intervals_list:
+    #             # print(type(kline_data[symbol][interval]))
+    #             kline_data[symbol][interval].insert(0, dummy_data)
+
+    #     kline_array = utils._convert_to_array(kline_data)
+
+    #     ### np.ndarray로 구성된 dict자료형태를 Loop 순환 ###
+    #     for symbol, symbol_data in kline_array.items():
+    #         closing_sync_data[symbol] = {}
+
+    #         ### base data 생성(각 symbol별 첫번째 interval값 기준 ###
+    #         base_data = symbol_data[
+    #             self.intervals[0]
+    #         ]  # 첫번재 index데이터값 기준으로 생성함.
+
+    #         ### interval Loop 대입 ###
+    #         for interval in self.intervals:
+    #             ### interval 첫번재 index값은 continue처리한다.(base_data값은 위에 선언 했으므로)
+    #             if interval == self.intervals[0]:
+    #                 closing_sync_data[symbol][interval] = base_data
+    #                 continue
+
+    #             timestamp_range = utils._get_interval_ms_seconds(interval) - 1
+    #             ### 목표 interval 데이터값을 조회한다.###
+    #             interval_data = kline_array[symbol][interval]
+
+    #             ### 데이터를 저장할 임시 변수를 초기화 한다. ###
+    #             temp_data = []
+
+    #             ### base data를 활용하여 index를 구현하고, index별 데이터를 순환한다.###
+    #             for index, data in enumerate(base_data):
+    #                 open_timestamp = data[0]  # 시작 타임스템프
+    #                 open_price = data[1]  # 시작 가격
+    #                 high_price = data[2]  # 최고 가격
+    #                 low_price = data[3]  # 최저 가격
+    #                 close_price = data[4]  # 마지막 가격
+    #                 volume = data[5]  # 거래량(단위 : coin)
+    #                 close_timestamp = data[6]  # 종료 타임스템프
+    #                 volume_total_usdt = data[7]  # 거래량(단위 : usdt)
+    #                 trades_count = data[8]  # 총 거래횟수
+    #                 taker_asset_volume = data[9]  # 시장가 주문 거래량(단위 : coin)
+    #                 taker_quote_volume = data[10]  # 시장가 주문 거래량(단위 : usdt)
+
+    #                 ### base_data가 적용되는 interval_data의 index값을 확보한다.
+    #                 condition = np.where(
+    #                     (interval_data[:, 0] <= open_timestamp)
+    #                     & (interval_data[:, 6] >= close_timestamp)
+    #                 )
+
+    #                 ### interval 전체 데이터에서 해당 interval 데이터만 추출한다. ###
+    #                 ### 용도는 start_timestap / end_timestamp추출 및 new_data에 적용을 위함. ###
+    #                 target_data = interval_data[condition]
+
+    #                 target_open_timestamp = target_data[0, 0]  # 단일값이 확실할 경우
+    #                 target_close_timestamp = target_data[0, 6]  # 단일값이 확실할 경우
+
+    #                 new_data_condition = np.where(
+    #                     (base_data[:, 0] >= target_open_timestamp)
+    #                     & (base_data[:, 6] <= close_timestamp)
+    #                 )  # close_timestamp는 현재 data종료 시간 기준으로 해야한다.
+
+    #                 new_base_data = base_data[new_data_condition]
+
+    #                 timestamp_diff = new_base_data[-1, 6] - new_base_data[0, 0]
+    #                 if timestamp_range == timestamp_diff:
+    #                     new_data = target_data[0]
+    #                 else:
+    #                     new_data = [
+    #                         target_open_timestamp,
+    #                         new_base_data[0, 1],
+    #                         np.max(new_base_data[:, 2]),
+    #                         np.min(new_base_data[:, 3]),
+    #                         new_base_data[-1, 4],
+    #                         np.sum(new_base_data[:, 5]),
+    #                         target_close_timestamp,
+    #                         np.sum(new_base_data[:, 7]),
+    #                         np.sum(new_base_data[:, 8]),
+    #                         np.sum(new_base_data[:, 9]),
+    #                         np.sum(new_base_data[:, 10]),
+    #                         0,
+    #                     ]
+    #                 temp_data.append(new_data)
+    #             closing_sync_data[symbol][interval] = np.array(temp_data, float)
+    #     if save:
+    #         path = os.path.join(
+    #             self.parent_directory, self.storeage, self.kline_closing_sync_data
+    #         )
+    #         with open(file=path, mode="wb") as file:
+    #             pickle.dump(closing_sync_data, file)
+    #     return closing_sync_data
+
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
+    def __process_interval(self, symbol, base_data, interval, shared_data):
+        """심볼과 간격 데이터를 처리하는 함수"""
+        interval_data = shared_data[symbol][interval]
+        temp_data = []
+        timestamp_range = utils._get_interval_ms_seconds(interval) - 1
+
+        for index, data in enumerate(base_data):
+            open_timestamp, close_timestamp = data[0], data[6]
+
+            # 조건에 맞는 interval 데이터 찾기
+            condition = np.where(
+                (interval_data[:, 0] <= open_timestamp)
+                & (interval_data[:, 6] >= close_timestamp)
+            )
+            target_data = interval_data[condition]
+
+            if target_data.size == 0:
+                continue
+
+            target_open_timestamp = target_data[0, 0]
+            target_close_timestamp = target_data[0, 6]
+
+            # 조건에 맞는 base 데이터 찾기
+            new_data_condition = np.where(
+                (base_data[:, 0] >= target_open_timestamp)
+                & (base_data[:, 6] <= close_timestamp)
+            )
+            new_base_data = base_data[new_data_condition]
+
+            timestamp_diff = new_base_data[-1, 6] - new_base_data[0, 0]
+            if timestamp_range == timestamp_diff:
+                new_data = target_data[0]
+            else:
+                new_data = [
+                    target_open_timestamp,
+                    new_base_data[0, 1],
+                    np.max(new_base_data[:, 2]),
+                    np.min(new_base_data[:, 3]),
+                    new_base_data[-1, 4],
+                    np.sum(new_base_data[:, 5]),
+                    target_close_timestamp,
+                    np.sum(new_base_data[:, 7]),
+                    np.sum(new_base_data[:, 8]),
+                    np.sum(new_base_data[:, 9]),
+                    np.sum(new_base_data[:, 10]),
+                    0,
+                ]
+            temp_data.append(new_data)
+
+        return interval, np.array(temp_data, float)
+
+    def __process_symbol(self, args):
+        """심볼 데이터를 처리하는 함수"""
+        symbol, base_data, intervals, shared_data = args
+        symbol_closing_sync = {intervals[0]: base_data}
+
+        for interval in intervals[1:]:
+            interval, temp_data = self.__process_interval(
+                symbol, base_data, interval, shared_data
+            )
+            symbol_closing_sync[interval] = temp_data
+
+        return symbol, symbol_closing_sync
+
+    def generate_kline_closing_sync(self, kline_data: dict, save: bool = False) -> dict:
+        """
+        kline_data를 정리하고 멀티프로세싱을 통해 데이터 동기화를 수행.
+        """
         symbols_list = list(kline_data.keys())
         intervals_list = list(kline_data[symbols_list[0]].keys())
         closing_sync_data = {}
 
-        ##=---=####=---=####=---=####=---=####=---=####=---=##
-        # =-=###=----=###=---=# P O I N T #=---=###=----=###=-#
-        ##=---=####=---=####=---=####=---=####=---=####=---=##
-        ### indices의 arange(step)기능의 오점을 개선하고자 첫번째 데이터는 더미데이터를 넣는다.
-        data_lengh = len(kline_data[symbols_list[0]][intervals_list[0]][0])
-        dummy_data = [0 for _ in range(data_lengh)]
-
-        for symbol in symbols_list:
-            for interval in intervals_list:
-                # print(type(kline_data[symbol][interval]))
-                kline_data[symbol][interval].insert(0, dummy_data)
-
+        # 1분봉 데이터를 np.ndarray로 변환
         kline_array = utils._convert_to_array(kline_data)
 
-        ### np.ndarray로 구성된 dict자료형태를 Loop 순환 ###
-        for symbol, symbol_data in kline_array.items():
-            closing_sync_data[symbol] = {}
+        # 더미 데이터를 추가
+        data_length = len(kline_data[symbols_list[0]][intervals_list[0]][0])
+        dummy_data = [0 for _ in range(data_length)]
+        for symbol in symbols_list:
+            for interval in intervals_list:
+                # Convert the interval data to a list, add the dummy row, and convert back to np.ndarray
+                interval_data = kline_array[symbol][interval].tolist()
+                interval_data.insert(0, dummy_data)
+                kline_array[symbol][interval] = np.array(interval_data, dtype=float)
 
-            ### base data 생성(각 symbol별 첫번째 interval값 기준 ###
-            base_data = symbol_data[
-                self.intervals[0]
-            ]  # 첫번재 index데이터값 기준으로 생성함.
+        # Manager 객체 생성
+        manager = Manager()
+        shared_data = manager.dict(kline_array)
 
-            ### interval Loop 대입 ###
-            for interval in self.intervals:
-                ### interval 첫번재 index값은 continue처리한다.(base_data값은 위에 선언 했으므로)
-                if interval == self.intervals[0]:
-                    closing_sync_data[symbol][interval] = base_data
-                    continue
-
-                timestamp_range = utils._get_interval_ms_seconds(interval) - 1
-                ### 목표 interval 데이터값을 조회한다.###
-                interval_data = kline_array[symbol][interval]
-
-                ### 데이터를 저장할 임시 변수를 초기화 한다. ###
-                temp_data = []
-
-                ### base data를 활용하여 index를 구현하고, index별 데이터를 순환한다.###
-                for index, data in enumerate(base_data):
-                    open_timestamp = data[0]  # 시작 타임스템프
-                    open_price = data[1]  # 시작 가격
-                    high_price = data[2]  # 최고 가격
-                    low_price = data[3]  # 최저 가격
-                    close_price = data[4]  # 마지막 가격
-                    volume = data[5]  # 거래량(단위 : coin)
-                    close_timestamp = data[6]  # 종료 타임스템프
-                    volume_total_usdt = data[7]  # 거래량(단위 : usdt)
-                    trades_count = data[8]  # 총 거래횟수
-                    taker_asset_volume = data[9]  # 시장가 주문 거래량(단위 : coin)
-                    taker_quote_volume = data[10]  # 시장가 주문 거래량(단위 : usdt)
-
-                    ### base_data가 적용되는 interval_data의 index값을 확보한다.
-                    condition = np.where(
-                        (interval_data[:, 0] <= open_timestamp)
-                        & (interval_data[:, 6] >= close_timestamp)
+        try:
+            # 멀티프로세싱 수행
+            with Pool(processes=cpu_count()) as pool:
+                args = [
+                    (
+                        symbol,
+                        shared_data[symbol][intervals_list[0]],
+                        intervals_list,
+                        shared_data,
                     )
+                    for symbol in symbols_list
+                ]
+                results = pool.map(self.process_symbol_wrapper, args, chunksize=10)
 
-                    ### interval 전체 데이터에서 해당 interval 데이터만 추출한다. ###
-                    ### 용도는 start_timestap / end_timestamp추출 및 new_data에 적용을 위함. ###
-                    target_data = interval_data[condition]
+            for symbol, data in results:
+                closing_sync_data[symbol] = data
 
-                    target_open_timestamp = target_data[0, 0]  # 단일값이 확실할 경우
-                    target_close_timestamp = target_data[0, 6]  # 단일값이 확실할 경우
+        finally:
+            # Manager 객체 종료
+            manager.shutdown()
 
-                    new_data_condition = np.where(
-                        (base_data[:, 0] >= target_open_timestamp)
-                        & (base_data[:, 6] <= close_timestamp)
-                    )  # close_timestamp는 현재 data종료 시간 기준으로 해야한다.
-
-                    new_base_data = base_data[new_data_condition]
-
-                    timestamp_diff = new_base_data[-1, 6] - new_base_data[0, 0]
-                    if timestamp_range == timestamp_diff:
-                        new_data = target_data[0]
-                    else:
-                        new_data = [
-                            target_open_timestamp,
-                            new_base_data[0, 1],
-                            np.max(new_base_data[:, 2]),
-                            np.min(new_base_data[:, 3]),
-                            new_base_data[-1, 4],
-                            np.sum(new_base_data[:, 5]),
-                            target_close_timestamp,
-                            np.sum(new_base_data[:, 7]),
-                            np.sum(new_base_data[:, 8]),
-                            np.sum(new_base_data[:, 9]),
-                            np.sum(new_base_data[:, 10]),
-                            0,
-                        ]
-                    temp_data.append(new_data)
-                closing_sync_data[symbol][interval] = np.array(temp_data, float)
+        # 데이터 저장
         if save:
             path = os.path.join(
                 self.parent_directory, self.storeage, self.kline_closing_sync_data
             )
             with open(file=path, mode="wb") as file:
                 pickle.dump(closing_sync_data, file)
+
         return closing_sync_data
 
+    def process_symbol_wrapper(self, args):
+        """__process_symbol을 호출하는 래퍼 함수 (멀티프로세싱 호환)"""
+        return self.__process_symbol(args)
+
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
     # generate_kline_closing_sync index 자료를 생성한다.
     def get_indices_data(
         self,
@@ -971,19 +1115,20 @@ class TradeCalculator:
     각종 연산이 필요한 함수들의 집함한다.
     """
 
-    def __init__(self, requested_leverage: int, instance: PortfolioManager):
+    def __init__(self, max_held_symbols:int, requested_leverage: int, instance: PortfolioManager, safe_asset_ratio:float = 0.2,):
         self.ins_trade_futures_client = FuturesOrder()
         self.ins_trade_spot_client = SpotOrder()
         self.market_types = ["FUTURES", "SPOT"]
         self.requested_leverage = requested_leverage
         self.ins_portfolio: PortfolioManager = instance
+        self.safe_asset_ratio = safe_asset_ratio
+        self.max_held_symbols = max_held_symbols
         self.MIN_LEVERAGE = 1
 
     # 주문이 필요한 Qty, leverage를 계산한다.
     async def get_order_params(
         self,
         trading_symbol: str,
-        requested_leverage: int,
         order_amount: float,
         market_type: str = "futures",
     ):
@@ -992,9 +1137,8 @@ class TradeCalculator:
             - 레버리지 값은 희망하는 값과 실제 설정가능한 값이 다르므로
         2. 매개변수:
             1) trading_symbol : 거래할 자산의 심볼
-            2) requested_leverage : 요청된 레버리지 값(희망값 / 최대 설정값보다 높을시 최대설정값으로 적용.)
-            3) order_amount : 주문 총 금액(단가 아님)
-            4) market_type : 시장 유형 ("futures" 또는 "spot"). 기본값은 "futures".
+            2) order_amount : 주문 총 금액(단가 아님)
+            3) market_type : 시장 유형 ("futures" 또는 "spot"). 기본값은 "futures".
         3. 반환값:
             - tuple: (계산 성공 여부, 최대 주문 가능량, 설정된 레버리지 값)
         """
@@ -1031,11 +1175,60 @@ class TradeCalculator:
             symbol=trading_symbol, leverage=target_leverage, balance=order_amount
         )
 
+
         # 최대 주문 가능량이 최소 주문 가능량보다 적으면 실패 반환 / 예수금이 충분하지 않을 경우 발생함.
         if max_trade_quantity < min_trade_quantity:
             return (False, max_trade_quantity, target_leverage)
 
         return (True, max_trade_quantity, target_leverage)
+
+    def get_trade_reference_amount(self) -> dict:
+        """
+        총 자금과 안전 비율을 기반으로 보유 가능량과 다음 목표 금액 계산.
+
+        Returns:
+            dict: 계산 결과를 담은 딕셔너리.
+        """
+        # 초기 안전 자금 및 유효 자금 계산
+        initial_safety_amount = round(self.ins_portfolio.total_balance * self.safe_asset_ratio, 3)
+        initial_usable_amount = self.ins_portfolio.total_balance - initial_safety_amount
+
+        # 자금이 10 미만일 경우 초기값 반환
+        if self.ins_portfolio.total_balance < 10:
+            return {
+                "nextTargetAmount": 10,  # 다음 목표 금액
+                "safetyAmount": initial_safety_amount,  # 안전 금액
+                "usableAmount": initial_usable_amount,  # 유효 금액
+                "maxTradeAmount": initial_usable_amount,  # 회당 최대 거래 가능 금액
+            }
+
+        # 증가 단계와 초기 목표 금액
+        growth_factors = [2, 3]  # 증가율 단계
+        initial_target = 5  # 초기 목표 금액
+        available_steps = 0  # 가능한 단계 수
+        last_valid_target = 0  # 초과 이전 유효한 목표 금액
+
+        # 증가율 순환
+        for growth_factor in growth_factors:
+            while initial_target <= self.ins_portfolio.total_balance:
+                last_valid_target = initial_target  # 초과 전 단계 값 저장
+                initial_target *= growth_factor
+                available_steps += 1
+                if initial_target > self.ins_portfolio.total_balance:
+                    break
+
+        # 안전 금액 및 유효 금액 계산
+        safety_amount = last_valid_target * self.safe_asset_ratio
+        usable_amount = last_valid_target - safety_amount
+        max_trade_amount = usable_amount / self.max_held_symbols
+
+        # 결과 반환
+        return {
+            "nextTargetAmount": last_valid_target,  # 다음 목표 금액
+            "safetyAmount": safety_amount,  # 안전 금액
+            "usableAmount": usable_amount,  # 유효 금액
+            "maxTradeAmount": max_trade_amount,  # 회당 최대 거래 가능 금액
+        }
 
 
 class OrderConstraint:
@@ -1045,18 +1238,16 @@ class OrderConstraint:
         self,
         increase_type: str,
         chance: int,
-        step_interval: str,
+        loss_recovery_interval: str,
         instance: PortfolioManager,
-        max_trade_number: Optional[int] = None,
+        max_held_symbols: Optional[int] = None,
         safety_ratio: float = 0.2,
-        position_limit: int = 3,
     ):
         self.increase_type = increase_type
         self.safety_ratio = safety_ratio
-        self.position_limit = position_limit
-        self.max_trade_number = max_trade_number
+        self.max_held_symbols = max_held_symbols
         self.chance: int = chance
-        self.step_interval: str = step_interval
+        self.loss_recovery_interval: str = loss_recovery_interval
         self.ins_portfolio = instance
         self.total_balance: Optional[float] = None
         self.closed_trade_data: Optional[List[Any]] = None
@@ -1079,10 +1270,10 @@ class OrderConstraint:
         2. 매개변수
             1) open_position :
         """
-        if self.max_trade_number is None:
+        if self.max_held_symbols is None:
             return True
         open_position_count = len(self.ins_portfolio.open_positions)
-        return open_position_count < self.max_trade_number
+        return open_position_count < self.max_held_symbols
 
     def __verify_config(self):
         increase_types = ["stepwise", "proportional"]
@@ -1093,9 +1284,6 @@ class OrderConstraint:
 
         if self.safety_ratio >= 1 or not isinstance(self.safety_ratio, float):
             raise ValueError(f"sefty ratio가 유효하지 않음:{self.safety_ratio}")
-
-        if not isinstance(self.position_limit, int):
-            raise ValueError(f"position_limit이 유효하지 않음:{self.position_limit}")
 
     def update_trading_data(self):
         self.total_balance = self.ins_portfolio.total_balance
@@ -1129,7 +1317,7 @@ class OrderConstraint:
             current_timestamp = int(time.time() * 1_000)
 
         # interval별 밀리초 계산
-        ms_seconds = utils._get_interval_ms_seconds(self.step_interval)
+        ms_seconds = utils._get_interval_ms_seconds(self.loss_recovery_interval)
         target_timestamp = current_timestamp - ms_seconds
 
         # print(utils._convert_to_datetime(target_timestamp))

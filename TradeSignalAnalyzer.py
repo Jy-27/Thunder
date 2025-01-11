@@ -139,7 +139,7 @@ class AnalysisManager:
         self.base_config = BaseConfig(test_mode=back_test)
         self.intervals = self.base_config.intervals
         self.interval_idx_map = self.base_config.intervals_idx_map
-        self.lookbact_days = self.base_config.lookback_days
+        self.lookback_days = self.base_config.lookback_days
         self.processing = Processing()
         self.symbols = []
         self.kline_data = {}

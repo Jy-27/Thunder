@@ -487,7 +487,7 @@ class TradeManager:
         # interval day기간을 속성에 저장 후 현재 로딩 데이터의 길이가 유효한지 검토하는 목적
         self.interval_days = days
 
-        interval_map = self._generate_time_intervals()
+        interval_map = self.__generate_time_intervals()
         time_units = ["hours", "minutes"]
         KLINE_LMIT: Final[int] = 300
 

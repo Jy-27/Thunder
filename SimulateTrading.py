@@ -18,7 +18,7 @@ class BackTesterManager:
     def __init__(
         self,
         symbols: list[str],
-        max_held_symbols:int,
+        max_held_symbols: int,
         seed_money: Union[int, float],
         start_date: str,
         end_date: str,
@@ -32,7 +32,7 @@ class BackTesterManager:
         safe_asset_ratio: float = 0.2,
         is_download: bool = True,
         requested_leverage: int = 10,
-        is_profit_preservation:bool=True,
+        is_profit_preservation: bool = True,
         # 주문신호 유효성 검토(브레이크 기능)
         is_order_break: bool = True,
         allowed_loss_streak: int = 2,
@@ -55,11 +55,13 @@ class BackTesterManager:
         self.dynamic_adjustment_interval = dynamic_adjustment_interval
         self.is_use_scale_stop = is_use_scale_stop
         self.requested_leverage = requested_leverage
-        self.is_profit_preservation=is_profit_preservation
+        self.is_profit_preservation = is_profit_preservation
         # 반복적인 손실발생시 해당 시나리오는 브레이크 타임을 갖는다.
         self.is_order_break = is_order_break
         # 시나리오 브레이크임 진입전 손실 횟수
-        self.allowed_loss_streak: Optional[int] = allowed_loss_streak if self.is_order_break else None
+        self.allowed_loss_streak: Optional[int] = (
+            allowed_loss_streak if self.is_order_break else None
+        )
         # 브레이크타임을 시간 지정 : interval값을 밀리미터로 변환.
         self.loss_recovery_interval: Optional[str] = (
             loss_recovery_interval if self.is_order_break else None
@@ -85,17 +87,21 @@ class BackTesterManager:
         self.seed_money = seed_money
         self.ins_portfolio = TradeComputation.PortfolioManager(
             is_profit_preservation=self.is_profit_preservation,
-            initial_balance=self.seed_money
+            initial_balance=self.seed_money,
         )
         self.ins_trade_calculator = TradeComputation.TradeCalculator(
-            max_held_symbols=self.max_held_symbols, requested_leverage=self.requested_leverage, instance=self.ins_portfolio, safe_asset_ratio=safe_asset_ratio)
+            max_held_symbols=self.max_held_symbols,
+            requested_leverage=self.requested_leverage,
+            instance=self.ins_portfolio,
+            safe_asset_ratio=safe_asset_ratio,
+        )
         self.constraint = TradeComputation.OrderConstraint(
             max_held_symbols=self.max_held_symbols,
             increase_type=increase_type,
             chance=self.allowed_loss_streak,
             instance=self.ins_portfolio,
             safety_ratio=safe_asset_ratio,
-            loss_recovery_interval=self.loss_recovery_interval
+            loss_recovery_interval=self.loss_recovery_interval,
         )
         # self.symbol_map = None
         # self.interval_map = None
@@ -243,9 +249,13 @@ class BackTesterManager:
             conctraint = self.ins_trade_calculator.get_trade_reference_amount()
 
             # 주문 신호 발생기
-            status, quantity, leverage = await self.ins_trade_calculator.get_order_params(
-                trading_symbol=symbol,  #타겟 심볼
-                order_amount=conctraint.get("maxTradeAmount"),  #최대 거래 가능 금액 반영
+            status, quantity, leverage = (
+                await self.ins_trade_calculator.get_order_params(
+                    trading_symbol=symbol,  # 타겟 심볼
+                    order_amount=conctraint.get(
+                        "maxTradeAmount"
+                    ),  # 최대 거래 가능 금액 반영
+                )
             )
             margin_ = (quantity / leverage) * price
             is_cash_margin = self.ins_portfolio.cash_balance > margin_
@@ -436,7 +446,9 @@ class BackTesterManager:
         print(f"    13. Comparison  : {self.comparison}")
         print(f"    14. Absolute    : {self.absolute}")
         print(f"\n {header}\n")
-        print("     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL       Profit_Preservation")
+        print(
+            "     DateTime       Trading  trade_count   PnL_Ratio       Gross_PnL       Profit_Preservation"
+        )
 
     # 백테스트 실행.
     async def run(self):
@@ -484,7 +496,7 @@ class BackTesterManager:
 
                         ### DEBUG
                         if self.ins_portfolio.profit_loss_ratio <= -0.95:
-                            raise ValueError(f'원금 청산')
+                            raise ValueError(f"원금 청산")
                         # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
 
@@ -647,18 +659,20 @@ if __name__ == "__main__":
     safety_balance_ratio = 0.4  # 잔고 안전금액 지정 비율
     stop_loss_rate = 0.65  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
-    is_dynamic_adjustment = True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
-    dynamic_adjustment_rate = 0.0007   # 시간 흐름에 따른 시작가 변동율
-    dynamic_adjustment_interval = "3m" # 변동율 반영 스텝
+    is_dynamic_adjustment = (
+        True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
+    )
+    dynamic_adjustment_rate = 0.0007  # 시간 흐름에 따른 시작가 변동율
+    dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
     use_scale_stop = True  # final손절(False), Scale손절(True)
-    seed_money = 350    # 시작금액
-    leverage = 15   # 레버리지
-    init_stop_rate = 0.035   # 시작 손절가
-    is_order_break = True   # 반복 손실 발생시 주문 거절여부
-    allowed_loss_streak = 2 # 반복 손실 발생 유예횟수
-    loss_recovery_interval = "4h"    # 반복 손실 시간 범위
-    max_held_symbols = 4    # 동시 거래 가능 수량
-    is_profit_preservation = True  #수익보존여부
+    seed_money = 350  # 시작금액
+    leverage = 15  # 레버리지
+    init_stop_rate = 0.035  # 시작 손절가
+    is_order_break = True  # 반복 손실 발생시 주문 거절여부
+    allowed_loss_streak = 2  # 반복 손실 발생 유예횟수
+    loss_recovery_interval = "4h"  # 반복 손실 시간 범위
+    max_held_symbols = 4  # 동시 거래 가능 수량
+    is_profit_preservation = True  # 수익보존여부
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하
     absolute = True  # True : 비율 절대값, False : 비율 실제값
@@ -668,7 +682,7 @@ if __name__ == "__main__":
 
     ins_backtest = BackTesterManager(
         symbols=symbols,
-        max_held_symbols = max_held_symbols,
+        max_held_symbols=max_held_symbols,
         start_date=start_date,
         end_date=end_date,
         safe_asset_ratio=safety_balance_ratio,
@@ -689,7 +703,7 @@ if __name__ == "__main__":
         value=value,
         percent=target_percent,
         quote_type=quote_type,
-        is_profit_preservation=is_profit_preservation
+        is_profit_preservation=is_profit_preservation,
     )
 
     asyncio.run(ins_backtest.run())

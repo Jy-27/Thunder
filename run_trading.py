@@ -22,7 +22,7 @@ if __name__ == "__main__":
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 9.85   # 시작금액
     leverage = 15  # 레버리지
-    init_stop_rate = 0.035  # 시작 손절가
+    init_stop_rate = 0.015  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 2  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위
@@ -30,8 +30,8 @@ if __name__ == "__main__":
     is_profit_preservation = True  # 수익보존여부
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하
-    absolute = True  # True : 비율 절대값, False : 비율 실제값
-    value = 250_000_000  # 거래대금 : 단위 USD
+    absolute = False  # True : 비율 절대값, False : 비율 실제값
+    value = 200_000_000  # 거래대금 : 단위 USD
     target_percent = 0.035  # 변동 비율폭 : 음수 가능
     quote_type = "usdt"  # 쌍거래 거래화폐
 

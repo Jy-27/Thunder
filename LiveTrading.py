@@ -565,8 +565,8 @@ class LiveTradingManager:
                 # 데이터셋을 비운다.
                 self.interval_dataset.clear_all_data()
 
-                #DEBUG
-                start = time.time()
+                # #DEBUG
+                # start = time.time()
                 
                 # 심볼을 추출
                 for symbol in self.select_symbols:
@@ -591,9 +591,9 @@ class LiveTradingManager:
                         symbol=symbol, scenario_data=scenario_data
                     )
                     
-                # DEBUG
-                end = time.time()
-                print(f'{len(self.select_symbols)}종 연산 소요 시간 : {end-start:,.2f} sec')
+                # # DEBUG
+                # end = time.time()
+                # print(f'{len(self.select_symbols)}종 연산 소요 시간 : {end-start:,.2f} sec')
                 
                 # 20초 대기한다.
                 await asyncio.sleep(20)

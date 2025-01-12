@@ -11,6 +11,8 @@ import nest_asyncio
 import utils
 import datetime
 import MarketDataFetcher
+import time
+
 from collections import defaultdict
 
 from typing import Dict, Final, List, Any, Union, Tuple, cast
@@ -21,6 +23,7 @@ class LiveTradingManager:
     def __init__(
         self,
         seed_money: float,  # 초기 자금
+        market:str, # 거래중인 시장 정보
         increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
         max_held_symbols: int = 4,  # 동시 거래가능 횟수 제한
         safe_asset_ratio: float = 0.02,  # 전체 금액 안전 자산 비율
@@ -42,6 +45,7 @@ class LiveTradingManager:
         symbols_quote_currency: str = "usdt",  # 쌍거래 기준 화폐
     ):
         self.seed_money = seed_money
+        self.market = market
         self.increase_type = increase_type
         self.max_held_symbols = max_held_symbols
         self.safe_asset_ratio = safe_asset_ratio
@@ -96,7 +100,7 @@ class LiveTradingManager:
 
         ### 기본 설정 ###
         self.kline_period: Final[int] = 2  # kline_data 수신시 기간을 지정
-        self.intervals: List[str] = [
+        self.convert_intervals: List[str] = [
             "kline_" + interval for interval in self.ins_analyzer.intervals
         ]  # interval 정보를 가져옴.
 
@@ -151,7 +155,8 @@ class LiveTradingManager:
         mandatory_tickers = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
 
         if self.ins_portfolio.open_positions:
-            for symbol, _ in self.ins_portfolio.open_positions.items():
+            for symbol_code, _ in self.ins_portfolio.open_positions.items():
+                symbol = symbol_code.split('_')[1]
                 mandatory_tickers.append(symbol)
 
         filtered_ticker_data = await self.__collect_filtered_ticker_data()
@@ -162,10 +167,8 @@ class LiveTradingManager:
         final_ticker_list = list(
             set(
                 mandatory_tickers
-                + common_filtered_tickers
-                + list(self.ins_portfolio.open_positions.keys())
+                + common_filtered_tickers)
             )
-        )
 
         return final_ticker_list
 
@@ -269,7 +272,7 @@ class LiveTradingManager:
         while not self.select_symbols:
             await asyncio.sleep(
                 2
-            )  # utils._wait_time_sleep을 asyncio.sleep으로 대체하여 비동기 방식으로 대기
+            )  # awaitutils._wait_time_sleep을 asyncio.sleep으로 대체하여 비동기 방식으로 대기
 
         # 모든 활성화된 티커에 대해 데이터를 수집 및 업데이트
         for ticker in self.select_symbols:
@@ -429,7 +432,7 @@ class LiveTradingManager:
                 # print(len(self.select_symbols))
 
                 await self.ins_handler.connect_kline_limit(
-                    symbols=self.select_symbols, intervals=self.intervals
+                    symbols=self.select_symbols, intervals=self.convert_intervals
                 )
 
                 print(f"tickers update complete - {utils._get_time_component()}")
@@ -447,6 +450,7 @@ class LiveTradingManager:
         2. 매개변수 : 해당없음.
         """
         while True:
+            # DEBUG
             # queue 데이터가 존재한다면,
             if not self.ins_handler.asyncio_queue.empty():
                 # 웹소켓 메시지를 queue에서 획득하고
@@ -460,12 +464,19 @@ class LiveTradingManager:
                 self.final_message_received[symbol][interval] = websocket_message
 
                 # 현재 보유중인 포지션이 있을경우 손절여부를 검토한다.
-
+                # DEBUG
+                # print(websocket_message)
                 # orignal_code
                 if self.__stop_loss_monitor(websocket_message):
                     await self.submit_order_close_signal(symbol=symbol)
-                    print(f"{symbol} - 포지션 종료 발생")
-
+                    print("\n" + "=" * 30)
+                    print("Portfolio Summary".center(30))
+                    print("=" * 30)
+                    print(f"1. Init Balance  : {self.ins_portfolio.initial_balance:,.2f} USD")
+                    print(f"2. Total Balance : {self.ins_portfolio.total_balance:,.2f} USD")
+                    print(f"3. PNL           : {self.ins_portfolio.profit_loss:,.2f} USD")
+                    print(f"4. PNL Ratio     : {self.ins_portfolio.profit_loss_ratio * 100:,.1f} %")
+                    print("=" * 30 + "\n")
             else:
                 await asyncio.sleep(2)
 
@@ -554,6 +565,9 @@ class LiveTradingManager:
                 # 데이터셋을 비운다.
                 self.interval_dataset.clear_all_data()
 
+                #DEBUG
+                start = time.time()
+                
                 # 심볼을 추출
                 for symbol in self.select_symbols:
                     # interval을 추출
@@ -569,11 +583,18 @@ class LiveTradingManager:
                     # 컨테이너 데이터를 분석 클라스의 속성값에 넣는다.
                     self.ins_analyzer.data_container = self.interval_dataset
                     # 분석을 시작한다.
+                    #debug
+                    # print(symbol)
                     scenario_data = self.ins_analyzer.scenario_run()
                     # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
                     await self.submit_order_open_signal(
                         symbol=symbol, scenario_data=scenario_data
                     )
+                    
+                # DEBUG
+                end = time.time()
+                print(f'{len(self.select_symbols)}종 연산 소요 시간 : {end-start:,.2f} sec')
+                
                 # 20초 대기한다.
                 await asyncio.sleep(20)
             # 데이터가 온전치 못할경우 5초 대기한다.
@@ -591,7 +612,7 @@ class LiveTradingManager:
 
         for symbol, log in api_balance.items():
             log_data = TradeComputation.TradingLog(
-                symbol=symbol,
+                symbol=f'{self.market}_{symbol}',
                 start_timestamp=int(log["updateTime"]),
                 entry_price=float(log["entryPrice"]),
                 position=1 if log["positionAmt"] > 0 else 2,
@@ -619,22 +640,34 @@ class LiveTradingManager:
         """
         # 웹소켓 메시지에서 심볼 정보를 추출한다.
         symbol = str(websocket_message["s"])
+        
+        convert_to_symbol = f'{self.market}_{symbol}'
         # 보유 여부를 확인한다.
-        if self.ins_portfolio.open_positions.get(symbol, None):
+        if self.ins_portfolio.open_positions.get(convert_to_symbol, None) is None:
             return False
         # 웹소켓 메시지에서 interval 값을 추출한다.
         kline_data = websocket_message["k"]
         interval = kline_data["i"]
         event_timestamp = websocket_message["E"]
-        # 과도한 연산을 방지하기 위하여 최소 interval값을 반영하는것이다. (current_price는 동일하므로)
-        if interval == self.intervals[0]:
+
+        # 과도한 연산을 방지하기 위하여 최소 interval값을 반영하는것이다. (current_price는 동일하므로)        
+        if interval == self.ins_analyzer.intervals[0]:
+            #DEBUG 
             # 현재 가격을 추출한다.
             current_price = float(kline_data["c"])
-            # 현재 시간을 추출한다.
+
+            # original code
             # 데이터를 업데이트하고 포지션 종료여부 신호를 반환한다.
             return self.ins_portfolio.update_log_data(
-                symbol=symbol, price=current_price, timestamp=event_timestamp
+                symbol=convert_to_symbol, price=current_price, timestamp=event_timestamp
             )
+            
+            # # debug
+            # signal_ = self.ins_portfolio.update_log_data(
+            #     symbol=convert_to_symbol, price=current_price, timestamp=event_timestamp
+            # )
+            # print(signal_)
+            # pprint(self.ins_portfolio.data_container.get_data(convert_to_symbol))
 
     # 포지션 진입 또는 종료시 보유상태를 점검한다. (submit_order_open_signal // sumbit_order_close_signal)
     async def __verify_position(
@@ -647,7 +680,8 @@ class LiveTradingManager:
             2) order_type : 점검하고자 하는 주문 종류
         """
         # 포트폴리오 포지션 확인
-        portfolio_position = self.ins_portfolio.open_positions.get(symbol, None)
+        convert_to_symbol = f'{self.market}_{symbol}'
+        portfolio_position = self.ins_portfolio.open_positions.get(convert_to_symbol, None)
 
         # API를 통한 전체 보유 현황 조회
         get_account_balance = await self.ins_client.get_account_balance()
@@ -716,16 +750,16 @@ class LiveTradingManager:
             return
 
         # 마진 타입 설정
-        self.ins_client.set_margin_type(symbol=symbol, margin_type="ISOLATED")
+        await self.ins_client.set_margin_type(symbol=symbol, margin_type="ISOLATED")
         # 레버리지 값 설정
-        self.ins_client.set_leverage(symbol=symbol, leverage=leverage)
+        await self.ins_client.set_leverage(symbol=symbol, leverage=leverage)
         # 주문 신호 전송
         order_log = await self.ins_client.submit_order(
-            symbol=symbol, side=position, order_type="MARKET", quantity=quantity
+            symbol=symbol, side=side_order, order_type="MARKET", quantity=quantity
         )
 
         # API 1초 대기
-        utils._wait_time_sleep(time_unit="second", duration=1)
+        await utils._wait_time_sleep(time_unit="second", duration=1)
         # balance 데이터 수신
         account_balance = await self.ins_client.get_account_balance()
         # 대상 데이터 조회
@@ -767,7 +801,7 @@ class LiveTradingManager:
             return
 
         # 보유수량을 조회한다.
-        position_amount = api_data["positionAmt"]
+        position_amount = float(api_data["positionAmt"])
 
         # 거래종료시 진입 포지션과 반대 포지션 구매신호를 보내야 한다.
         order_side = "SELL" if position_amount > 0 else "BUY"
@@ -782,7 +816,7 @@ class LiveTradingManager:
         )
 
         # 거래종료시 트레이드 정보를 삭제한다.(이후 저장은 아래 함수에서 알아서 처리함.)
-        self.ins_portfolio.remove_order_data(symbol=symbol)
+        self.ins_portfolio.remove_order_data(symbol=f'{self.market}_{symbol}')
 
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit="second", duration=1)

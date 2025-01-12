@@ -18,6 +18,7 @@ class BackTesterManager:
     def __init__(
         self,
         symbols: list[str],
+        market:str,
         max_held_symbols: int,
         seed_money: Union[int, float],
         start_date: str,
@@ -44,6 +45,7 @@ class BackTesterManager:
         quote_type: str = "usdt",
     ):
         self.symbols = [symbol.upper() for symbol in symbols]
+        self.market = market
         self.max_held_symbols = max_held_symbols
         self.start_date = start_date
         self.end_date = end_date
@@ -212,7 +214,7 @@ class BackTesterManager:
             # 현재 포지션 유지중이라면 데이터를 업데이트한다.
             # 포지션 종료신호를 반환한다. (True / False)
             return self.ins_portfolio.update_log_data(
-                symbol=symbol, price=price, timestamp=close_timestamp
+                symbol=f'{self.market}_{symbol}', price=price, timestamp=close_timestamp
             )
         # 현재 포지션이 없다면,
         else:
@@ -231,6 +233,7 @@ class BackTesterManager:
         3. 추가사항
             - 주문 전 open_position 사전 점검하기는 한다만...혹시 모르니 추가했다.
         """
+        symbol = f'{self.market}_{symbol}'
         if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
@@ -397,7 +400,7 @@ class BackTesterManager:
 
         # 브레이크 타임 검토 후 미적용시 주문정보 생성.
         log_data = TradeComputation.TradingLog(
-            symbol=symbol,
+            symbol=f'{self.market}_{symbol}',
             start_timestamp=start_timestamp,
             entry_price=price,
             position=position,
@@ -420,7 +423,7 @@ class BackTesterManager:
         # 포지션 종료 신호를 수신해도 symbol값 기준으로 position 유효성 검토한다.
         if self.__validate_cloes_position(symbol=symbol):
             # 유효성 확인시 해당 내용을 제거한다.
-            self.ins_portfolio.remove_order_data(symbol=symbol)
+            self.ins_portfolio.remove_order_data(symbol=f'{self.market}_{symbol}')
 
     # 백테스트 시작시 현재 설정정보를 출력한다.
     def start_masage(self):

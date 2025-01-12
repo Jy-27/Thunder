@@ -19,7 +19,7 @@ from matplotlib import style, ticker
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
+from pprint import pprint
 
 ##=--=####=---=###=--=####=---=###=--=##
 # -=##=---==-*   M E  M O   *-==---=##=-#
@@ -463,9 +463,16 @@ class PortfolioManager:
             # 신규로 생성하여 데이터를 저장한다.
             self.closed_positions[symbol] = [open_position_data]
 
+        trade_log_data = self.data_container.get_data(data_name=symbol)
+
         # 트레이드 히스토리에 현재 트레이드 로그값을 저장한다.
-        self.trade_history.append(self.data_container.get_data(data_name=symbol))
+        self.trade_history.append(trade_log_data)
         # 저장이 완료되면 트레이드 로그값은 삭제한다.
+        
+        # TEST 모드일경우 거래내역 출력
+        if not trade_log_data.test_mode:
+            pprint(trade_log_data)
+        
         self.data_container.remove_data(data_name=symbol)
         # 각종 값들을 계산 및 업데이트 한다.
         self.update_data()

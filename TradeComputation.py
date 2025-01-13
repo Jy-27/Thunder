@@ -170,17 +170,18 @@ class TradingLog:
         # 최저가를 계산한다.
         self.low_price = min(self.low_price, self.current_price)
 
-        # 거래 시작시 발생 비용을 계산한다. 수수료 제외 
+        # 거래 시작시 발생 비용을 계산한다. 수수료 제외
         self.initial_value = (self.quantity / self.leverage) * self.entry_price
-        
+
         # 현재 가격 반영하여 가치 계산한다. 수수료 제외
         if self.position == 1:
             self.current_value = (self.current_price * self.quantity) / self.leverage
 
         elif self.position == 2:
-            pnl = ((self.entry_price - self.current_price) * self.quantity) / self.leverage
+            pnl = (
+                (self.entry_price - self.current_price) * self.quantity
+            ) / self.leverage
             self.current_value = pnl + self.initial_value
-
 
         # 총 수수료를 계산한다.
         total_fees = self.entry_fee + self.exit_fee
@@ -229,28 +230,34 @@ class TradingLog:
             return
         # is_dynamic_adjustment가 적용된다면,
         # (시간이 지날수록 시작가격을 점점 상승 또는 하락반영하여 start_rate를 끌어올린다. 장기간 가격변화없을것을 대비함.)
-        elif self.is_dynamic_adjustment:
-            # 종료시간과 시작시간의 차이를 구하고
-            time_diff = self.last_timestamp - self.start_timestamp
-            # 현재 설정된(self.dynamic_adjustment_interval)값을 조회한다.
-            target_ms_seconds = utils._get_interval_ms_seconds(
-                self.dynamic_adjustment_interval
+
+        # 종료시간과 시작시간의 차이를 구하고
+        time_diff = self.last_timestamp - self.start_timestamp
+        # 현재 설정된(self.dynamic_adjustment_interval)값을 조회한다.
+        target_ms_seconds = utils._get_interval_ms_seconds(
+            self.dynamic_adjustment_interval
+        )
+        # 만일 dynamic_adjustment_interval을 잘못입력시 오류발생시킨다.
+        if target_ms_seconds is None:
+            # 이미 검증을 했지만, 혹시 모를 재검증.
+            raise ValueError(
+                f"interval값이 유효하지 않음: {self.dynamic_adjustment_interval}"
             )
-            # 만일 dynamic_adjustment_interval을 잘못입력시 오류발생시킨다.
-            if target_ms_seconds is None:
-                # 이미 검증을 했지만, 혹시 모를 재검증.
-                raise ValueError(
-                    f"interval값이 유효하지 않음: {self.dynamic_adjustment_interval}"
-                )
-            # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
-            dynamic_rate = (
-                int(time_diff / target_ms_seconds) * self.dynamic_adjustment_rate
-            )
+        # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
+        dynamic_rate = (
+            int(time_diff / target_ms_seconds) * self.dynamic_adjustment_rate
+        )
+        
+        # DEBUG
+        # print(dynamic_rate)
 
         # 시작 손절 비율을 계산한다. is_dynamic_adjustment 설정에 따라 start_rate가 달라진다.
         # dynamic_rate값이 음수로 바뀔경우 start_rate는 증가된다. 맞나??
         start_rate = self.init_stop_rate - dynamic_rate
 
+        # DEBUG
+        # print(start_rate)
+        
         # 포지션이 롱이면,
         if self.position == 1:
             # 손절 반영 시작값은 시작가 기준
@@ -268,9 +275,8 @@ class TradingLog:
 
             # 만약 self.is_dynamic_adjustment가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 + start_rate)
-            self.stop_price = self.adj_start_price + (
-                (self.adj_start_price - self.low_price) * (1 + self.stop_rate)
-            )
+            self.stop_price = self.adj_start_price - (
+                (self.adj_start_price - self.low_price) * (1 - self.stop_rate))
 
         # 오입력 발생시 오류로 프로그래밍 종료처리.
         else:
@@ -345,8 +351,12 @@ class PortfolioManager:
     """
 
     def __init__(
-        self, is_profit_preservation: bool = True, initial_balance: float = 1_000
+        self,
+        market: str,
+        is_profit_preservation: bool = True,
+        initial_balance: float = 1_000,
     ):
+        self.market = market
         self.data_container = utils.DataContainer()
         self.trade_history: List[TradingLog] = []
         self.closed_positions: Dict[str, List[List[Any]]] = {}
@@ -360,9 +370,7 @@ class PortfolioManager:
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0  # 총 체결 횟수
         ### 정확한 공식을 대입하지 못해서 LiveTrading거래 종료시 강제 데이터 기입 로직 있음.
-        
-        
-        
+
         ##=---=####=---=####=---=####=---=####=---=####=---=##
         # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
         ##=---=####=---=####=---=####=---=####=---=####=---=##
@@ -391,8 +399,9 @@ class PortfolioManager:
 
     # 현재 진행중인 거래가 있는지 여부를 점검한다.
     def validate_open_position(self, symbol: str):
+        convert_to_symbol = f"{self.market}_{symbol}"
         # open_position에 해당 symbol이 있을경우
-        if symbol in self.open_positions:
+        if convert_to_symbol in self.open_positions:
             return True
         # 없을경우
         else:
@@ -401,7 +410,9 @@ class PortfolioManager:
     # TradingLog 클라스를 컨테이너 데이터에 저장한다.
     def add_log_data(self, log_data: TradingLog):
         # symbol정보를 조회한다.
+        # log값에 이미 market 데이터가 들어있다.
         symbol = log_data.symbol
+
         # container name은 symbol로 정하고 데이터는 TradingLog를 넣는다.
         self.data_container.set_data(data_name=symbol, data=log_data)
         # log data를 LIST형태로 반환한다.
@@ -414,22 +425,25 @@ class PortfolioManager:
 
     # 데이터를 업데이트하는 동시에 stop 신호를 반환받는다.
     def update_log_data(self, symbol: str, price: float, timestamp: int) -> bool:
+        convert_to_symbol = f"{self.market}_{symbol}"
+
         # container 데이터에 해당 symbol값이 없으면
-        if not symbol in self.data_container.get_all_data_names():
+        if not convert_to_symbol in self.data_container.get_all_data_names():
             # stop 거절 신호를 반환한다. (아무일도 발생하지 않음.)
             return False
         # 데이터를 업데이트 한다.
-        self.data_container.get_data(data_name=symbol).update_trade_data(
+        self.data_container.get_data(data_name=convert_to_symbol).update_trade_data(
             current_price=price, current_timestamp=timestamp
         )
+        
         # 컨테이너에서 데이터를 불러온다.
-        log_data = self.data_container.get_data(data_name=symbol)
+        log_data = self.data_container.get_data(data_name=convert_to_symbol)
         trade_data = self.__extract_valid_data(data=log_data)
         # print(trade_data)
-        self.open_positions[symbol] = trade_data
+        self.open_positions[convert_to_symbol] = trade_data
         # portpolid의 각 값들을 계산하여 업데이트 한다.
         self.update_data()
-        return self.data_container.get_data(data_name=symbol).stop_signal
+        return self.data_container.get_data(data_name=convert_to_symbol).stop_signal
 
     # 필요한 값만 추출하여 리스트 형태로 반환한다.
     def __extract_valid_data(self, data: TradingLog):
@@ -455,35 +469,37 @@ class PortfolioManager:
 
     # 거래종료시 open_position 데이터를 정리한다.
     def remove_order_data(self, symbol: str):
+
+        convert_to_symbol = f"{self.market}_{symbol}"
         # 해당 symbol이 거래중이 아니면 오류를 발생시킨다. 오류가 맞음.
-        if not self.open_positions.get(symbol):
+        if not self.open_positions.get(convert_to_symbol):
             raise ValueError(f"진행중인 거래 없음: {symbol}")
 
         # open_positions 데이터를 복사 및 변수로 저장한다.
-        open_position_data = self.open_positions[symbol].copy()
+        open_position_data = self.open_positions[convert_to_symbol].copy()
         # open_position 데이터를 삭제한다.
-        del self.open_positions[symbol]
+        del self.open_positions[convert_to_symbol]
 
         # 거래종료 positions에 해당 symbol이 있으면,
-        if symbol in self.closed_positions.keys():
+        if convert_to_symbol in self.closed_positions.keys():
             # 데이터를 끝에 추가한다.
-            self.closed_positions[symbol].append(open_position_data)
+            self.closed_positions[convert_to_symbol].append(open_position_data)
         # 만약에 없으면
-        elif not symbol in self.closed_positions.keys():
+        elif not convert_to_symbol in self.closed_positions.keys():
             # 신규로 생성하여 데이터를 저장한다.
-            self.closed_positions[symbol] = [open_position_data]
+            self.closed_positions[convert_to_symbol] = [open_position_data]
 
-        trade_log_data = self.data_container.get_data(data_name=symbol)
+        trade_log_data = self.data_container.get_data(data_name=convert_to_symbol)
 
         # 트레이드 히스토리에 현재 트레이드 로그값을 저장한다.
         self.trade_history.append(trade_log_data)
         # 저장이 완료되면 트레이드 로그값은 삭제한다.
-        
+
         # TEST 모드일경우 거래내역 출력
         if not trade_log_data.test_mode:
             pprint(trade_log_data)
-        
-        self.data_container.remove_data(data_name=symbol)
+
+        self.data_container.remove_data(data_name=convert_to_symbol)
         # 각종 값들을 계산 및 업데이트 한다.
         self.update_data()
 
@@ -1233,7 +1249,7 @@ class TradeCalculator:
             self.ins_portfolio.total_balance * self.safe_asset_ratio, 3
         )
         initial_usable_amount = self.ins_portfolio.total_balance - initial_safety_amount
-
+                
         # 자금이 10 미만일 경우 초기값 반환
         if self.ins_portfolio.total_balance < 10:
             return {

@@ -18,7 +18,8 @@ class BackTesterManager:
     def __init__(
         self,
         symbols: list[str],
-        market:str,
+        market: str,
+        kline_period:int,
         max_held_symbols: int,
         seed_money: Union[int, float],
         start_date: str,
@@ -74,7 +75,7 @@ class BackTesterManager:
         self.closing_sync_data: Optional[Dict[str, Dict[str, List[Any]]]] = None
         # self.kline_data: Optional[Dict[str,Dict[str,List[Any]]]] = None
         # 백테스트에 사용될 kline_data의 길이 지정(단위 : day)
-        self.kline_period = 2
+        self.kline_period = kline_period
         self.ins_signal_analyzer = TradeSignalAnalyzer.AnalysisManager(
             back_test=self.test_mode
         )
@@ -90,6 +91,7 @@ class BackTesterManager:
         self.ins_portfolio = TradeComputation.PortfolioManager(
             is_profit_preservation=self.is_profit_preservation,
             initial_balance=self.seed_money,
+            market=self.market,
         )
         self.ins_trade_calculator = TradeComputation.TradeCalculator(
             max_held_symbols=self.max_held_symbols,
@@ -210,11 +212,11 @@ class BackTesterManager:
         # 현재 타임스템프
         close_timestamp = data[-1][6]
         # 해당 symbol이 현재 진행중인 포지션이 있는지 확인한다.
-        if symbol in self.ins_portfolio.open_positions:
+        if f"{self.market}_{symbol}" in self.ins_portfolio.open_positions:
             # 현재 포지션 유지중이라면 데이터를 업데이트한다.
             # 포지션 종료신호를 반환한다. (True / False)
             return self.ins_portfolio.update_log_data(
-                symbol=f'{self.market}_{symbol}', price=price, timestamp=close_timestamp
+                symbol=symbol, price=price, timestamp=close_timestamp
             )
         # 현재 포지션이 없다면,
         else:
@@ -233,7 +235,7 @@ class BackTesterManager:
         3. 추가사항
             - 주문 전 open_position 사전 점검하기는 한다만...혹시 모르니 추가했다.
         """
-        symbol = f'{self.market}_{symbol}'
+        convert_to_symbol = f"{self.market}_{symbol}"
         if self.__validate_cloes_position(symbol=symbol):
             return False, 0, 0
         else:
@@ -400,7 +402,7 @@ class BackTesterManager:
 
         # 브레이크 타임 검토 후 미적용시 주문정보 생성.
         log_data = TradeComputation.TradingLog(
-            symbol=f'{self.market}_{symbol}',
+            symbol=f"{self.market}_{symbol}",
             start_timestamp=start_timestamp,
             entry_price=price,
             position=position,
@@ -421,9 +423,10 @@ class BackTesterManager:
     # 포지션 종료를 위한 함수.
     def active_close_position(self, symbol: str):
         # 포지션 종료 신호를 수신해도 symbol값 기준으로 position 유효성 검토한다.
-        if self.__validate_cloes_position(symbol=symbol):
+        convert_to_symbol = f"{self.market}_{symbol}"
+        if self.__validate_cloes_position(symbol=convert_to_symbol):
             # 유효성 확인시 해당 내용을 제거한다.
-            self.ins_portfolio.remove_order_data(symbol=f'{self.market}_{symbol}')
+            self.ins_portfolio.remove_order_data(symbol=symbol)
 
     # 백테스트 시작시 현재 설정정보를 출력한다.
     def start_masage(self):

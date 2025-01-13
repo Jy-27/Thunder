@@ -23,12 +23,13 @@ class LiveTradingManager:
     def __init__(
         self,
         seed_money: float,  # 초기 자금
-        market:str, # 거래중인 시장 정보
+        market: str,  # 거래중인 시장 정보
+        kline_period:int,
         increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
         max_held_symbols: int = 4,  # 동시 거래가능 횟수 제한
         safe_asset_ratio: float = 0.02,  # 전체 금액 안전 자산 비율
         use_scale_stop: bool = True,  # 스케일 손절 적용여부 (최고가 / 최저가에 따른 손절가 변동)
-        stop_loss_rate: float = 0.065,  # 손절가 비율
+        stop_loss_rate: float = 0.035,  # 손절가 비율
         is_dynamic_adjustment: bool = True,  # 시간 흐름에 따른 손절비율 축소
         dynamic_adjustment_rate: float = 0.0007,  # 시간 흐름에 따른 손절 축소 비율
         dynamic_adjustment_interval: str = "3m",  # 축소비율 적용 시간 간격 (3분 / interval값 사용할 것.)
@@ -46,6 +47,7 @@ class LiveTradingManager:
     ):
         self.seed_money = seed_money
         self.market = market
+        self.kline_period = kline_period
         self.increase_type = increase_type
         self.max_held_symbols = max_held_symbols
         self.safe_asset_ratio = safe_asset_ratio
@@ -73,6 +75,7 @@ class LiveTradingManager:
         self.ins_portfolio = TradeComputation.PortfolioManager(
             is_profit_preservation=self.is_profit_preservation,
             initial_balance=self.seed_money,
+            market=self.market,
         )  # >> 거래정보 관리 모듈
         self.ins_trade_calculator = TradeComputation.TradeCalculator(
             max_held_symbols=self.max_held_symbols,
@@ -156,7 +159,7 @@ class LiveTradingManager:
 
         if self.ins_portfolio.open_positions:
             for symbol_code, _ in self.ins_portfolio.open_positions.items():
-                symbol = symbol_code.split('_')[1]
+                symbol = symbol_code.split("_")[1]
                 mandatory_tickers.append(symbol)
 
         filtered_ticker_data = await self.__collect_filtered_ticker_data()
@@ -164,11 +167,7 @@ class LiveTradingManager:
         common_filtered_tickers = utils._find_common_elements(*filtered_ticker_data)
 
         # 필수 티커와 공통 필터링된 티커를 합쳐 중복 제거
-        final_ticker_list = list(
-            set(
-                mandatory_tickers
-                + common_filtered_tickers)
-            )
+        final_ticker_list = list(set(mandatory_tickers + common_filtered_tickers))
 
         return final_ticker_list
 
@@ -201,7 +200,7 @@ class LiveTradingManager:
                 async with self.lock:
                     self.kline_data.clear()
                 # # ticker 초기화시 전체 kline을 업데이트 한다.abs
-                await self.update_all_klines(days=2)
+                await self.update_all_klines(days=self.kline_period)
                 # self.kline_data_update_flag = True
 
             except Exception as e:
@@ -281,7 +280,7 @@ class LiveTradingManager:
                     limit_ = 30
                 else:
                     limit_ = self.__get_kline_limit_by_days(
-                        interval=interval, days=days
+                        interval=interval, days=self.kline_period
                     )
                 # Kline 데이터를 수집하고 self.kline_data에 업데이트
                 self.kline_data[ticker][interval] = (
@@ -472,10 +471,18 @@ class LiveTradingManager:
                     print("\n" + "=" * 30)
                     print("Portfolio Summary".center(30))
                     print("=" * 30)
-                    print(f"1. Init Balance  : {self.ins_portfolio.initial_balance:,.2f} USD")
-                    print(f"2. Total Balance : {self.ins_portfolio.total_balance:,.2f} USD")
-                    print(f"3. PNL           : {self.ins_portfolio.profit_loss:,.2f} USD")
-                    print(f"4. PNL Ratio     : {self.ins_portfolio.profit_loss_ratio * 100:,.1f} %")
+                    print(
+                        f"1. Init Balance  : {self.ins_portfolio.initial_balance:,.2f} USD"
+                    )
+                    print(
+                        f"2. Total Balance : {self.ins_portfolio.total_balance:,.2f} USD"
+                    )
+                    print(
+                        f"3. PNL           : {self.ins_portfolio.profit_loss:,.2f} USD"
+                    )
+                    print(
+                        f"4. PNL Ratio     : {self.ins_portfolio.profit_loss_ratio * 100:,.1f} %"
+                    )
                     print("=" * 30 + "\n")
             else:
                 await asyncio.sleep(2)
@@ -567,7 +574,7 @@ class LiveTradingManager:
 
                 # #DEBUG
                 # start = time.time()
-                
+
                 # 심볼을 추출
                 for symbol in self.select_symbols:
                     # interval을 추출
@@ -583,18 +590,18 @@ class LiveTradingManager:
                     # 컨테이너 데이터를 분석 클라스의 속성값에 넣는다.
                     self.ins_analyzer.data_container = self.interval_dataset
                     # 분석을 시작한다.
-                    #debug
+                    # debug
                     # print(symbol)
                     scenario_data = self.ins_analyzer.scenario_run()
                     # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
                     await self.submit_order_open_signal(
                         symbol=symbol, scenario_data=scenario_data
                     )
-                    
+
                 # # DEBUG
                 # end = time.time()
                 # print(f'{len(self.select_symbols)}종 연산 소요 시간 : {end-start:,.2f} sec')
-                
+
                 # 20초 대기한다.
                 await asyncio.sleep(20)
             # 데이터가 온전치 못할경우 5초 대기한다.
@@ -608,30 +615,33 @@ class LiveTradingManager:
     async def start_update_account(self):
         # 총 평가금액을 불러온다.
         api_total_balance = await self.ins_client.get_total_wallet_balance()
-        
+
         # 거래중인 항목을 불러온다.
         api_balance = await self.ins_client.get_account_balance()
-        
+
         # 초기 설정 자금보다 실제 자금이 작을경우
         if self.seed_money > api_total_balance:
             # 실제 자금으로 시드머니를 조정한다.
-            print(f"seed money 조정 : {self.seed_money :,.2f} -> {api_total_balance:,.2f}")
+            print(
+                f"seed money 조정 : {self.seed_money :,.2f} -> {api_total_balance:,.2f}"
+            )
             self.seed_money = api_total_balance
             # instance 재설정.
             self.ins_portfolio = TradeComputation.PortfolioManager(
-            is_profit_preservation=self.is_profit_preservation,
-            initial_balance=self.seed_money)  # >> 거래정보 관리 모듈
-        
+                is_profit_preservation=self.is_profit_preservation,
+                initial_balance=self.seed_money,
+                market=self.market
+            )  # >> 거래정보 관리 모듈
+
         # 거래중인 항목이 없으면,
         if not api_balance:
             # 아무것도 하지 않는다.
             return
 
-            
         # 거래중인 항목 내역을 트레이딩 로그에 기록한다.
         for symbol, log in api_balance.items():
             log_data = TradeComputation.TradingLog(
-                symbol=f'{self.market}_{symbol}',
+                symbol=f"{self.market}_{symbol}",
                 start_timestamp=int(log["updateTime"]),
                 entry_price=float(log["entryPrice"]),
                 position=1 if log["positionAmt"] > 0 else 2,
@@ -659,8 +669,8 @@ class LiveTradingManager:
         """
         # 웹소켓 메시지에서 심볼 정보를 추출한다.
         symbol = str(websocket_message["s"])
-        
-        convert_to_symbol = f'{self.market}_{symbol}'
+
+        convert_to_symbol = f"{self.market}_{symbol}"
         # 보유 여부를 확인한다.
         if self.ins_portfolio.open_positions.get(convert_to_symbol, None) is None:
             return False
@@ -669,18 +679,18 @@ class LiveTradingManager:
         interval = kline_data["i"]
         event_timestamp = websocket_message["E"]
 
-        # 과도한 연산을 방지하기 위하여 최소 interval값을 반영하는것이다. (current_price는 동일하므로)        
+        # 과도한 연산을 방지하기 위하여 최소 interval값을 반영하는것이다. (current_price는 동일하므로)
         if interval == self.ins_analyzer.intervals[0]:
-            #DEBUG 
+            # DEBUG
             # 현재 가격을 추출한다.
             current_price = float(kline_data["c"])
 
             # original code
             # 데이터를 업데이트하고 포지션 종료여부 신호를 반환한다.
             return self.ins_portfolio.update_log_data(
-                symbol=convert_to_symbol, price=current_price, timestamp=event_timestamp
+                symbol=symbol, price=current_price, timestamp=event_timestamp
             )
-            
+
             # # debug
             # signal_ = self.ins_portfolio.update_log_data(
             #     symbol=convert_to_symbol, price=current_price, timestamp=event_timestamp
@@ -699,8 +709,10 @@ class LiveTradingManager:
             2) order_type : 점검하고자 하는 주문 종류
         """
         # 포트폴리오 포지션 확인
-        convert_to_symbol = f'{self.market}_{symbol}'
-        portfolio_position = self.ins_portfolio.open_positions.get(convert_to_symbol, None)
+        convert_to_symbol = f"{self.market}_{symbol}"
+        portfolio_position = self.ins_portfolio.open_positions.get(
+            convert_to_symbol, None
+        )
 
         # API를 통한 전체 보유 현황 조회
         get_account_balance = await self.ins_client.get_account_balance()
@@ -758,13 +770,20 @@ class LiveTradingManager:
             return
 
         reference_data = self.ins_trade_calculator.get_trade_reference_amount()
+        
+        if reference_data["maxTradeAmount"] < self.ins_portfolio.cash_balance:
+            amount = reference_data["maxTradeAmount"]
+        else:
+            amount = self.ins_portfolio.cash_balance
+            
         is_order_available, quantity, leverage = (
             await self.ins_trade_calculator.get_order_params(
-                trading_symbol=symbol, order_amount=reference_data["maxTradeAmount"]
+                trading_symbol=symbol, order_amount=amount
             )
         )
         # 자금이 부족하여 주문이 불가한 경우
         if not is_order_available:
+            print(f'주문불가: {symbol} / 잔액 부족')
             # 종료한다.
             return
 
@@ -786,7 +805,7 @@ class LiveTradingManager:
 
         # 거래내역을 log형태로 저장한다.
         log_data = TradeComputation.TradingLog(
-            symbol=f'{self.market}_{symbol}',
+            symbol=f"{self.market}_{symbol}",
             start_timestamp=int(order_log["updateTime"]),
             entry_price=float(select_balance_data["entryPrice"]),
             position=position,
@@ -833,24 +852,23 @@ class LiveTradingManager:
             quantity=abs(position_amount),  # 매각 수량 : 절대값 반영해야함.
             reduce_only=True,  # 매각처리 여부 : 거래종료시 소수점 단위까지 전량 매각 처리됨.
         )
-        
+
         # 거래 정보를 조회한다.
         trade_history = await self.ins_client.fetch_order_history(symbol)
         # 최종 데이터를 획득한다.
         last_trade_history = trade_history[-1]
-        
+
         # 종료 가격을 조회한다.
-        closed_price = float(last_trade_history['avgPrice'])
+        closed_price = float(last_trade_history["avgPrice"])
         # 종료 시간을 조회한다.
-        closed_timestamp = int(last_trade_history['time'])
-        # 심볼값을 코드화 한다.
-        convert_to_symbol = f'{self.market}_{symbol}'
+        closed_timestamp = int(last_trade_history["time"])
+
         # 종료시 정보를 업데이트한다.
-        self.ins_portfolio.update_log_data(symbol=convert_to_symbol,
-                                           price=closed_price,
-                                           timestamp=closed_timestamp)
+        self.ins_portfolio.update_log_data(
+            symbol=symbol, price=closed_price, timestamp=closed_timestamp
+        )
         # 거래종료시 트레이드 정보를 삭제한다.(이후 저장은 아래 함수에서 알아서 처리함.)
-        self.ins_portfolio.remove_order_data(symbol=convert_to_symbol)
+        self.ins_portfolio.remove_order_data(symbol=symbol)
 
         # 임시 코드.
         # 포지션이 없을경우 현재 계좌정보를 강제 조정한다. 정확한 공식이 확인될때까지 현 코드를 유지한다.
@@ -861,10 +879,12 @@ class LiveTradingManager:
             self.ins_portfolio.cash_balance = api_total_balance
             self.ins_portfolio.total_balance = api_total_balance
             # 손익부분을 계산한다.
-            self.ins_portfolio.profit_loss = api_total_balance - self.ins_portfolio.initial_balance
-            self.ins_portfolio.profit_loss_ratio = self.ins_portfolio.profit_loss / self.ins_portfolio.initial_balance
-            
-            
+            self.ins_portfolio.profit_loss = (
+                api_total_balance - self.ins_portfolio.initial_balance
+            )
+            self.ins_portfolio.profit_loss_ratio = (
+                self.ins_portfolio.profit_loss / self.ins_portfolio.initial_balance
+            )
 
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit="second", duration=1)
@@ -878,7 +898,7 @@ class LiveTradingManager:
         tasks = [
             asyncio.create_task(self.ticker_update_loop()),
             asyncio.create_task(self.websocket_loop()),
-            asyncio.create_task(self.collect_kline_by_interval_loop()),
+            asyncio.create_task(self.collect_kline_by_interval_loop(days=self.kline_period)),
             asyncio.create_task(self.final_message_stop_loss_check()),
             asyncio.create_task(self.trade_siganl_analyzer_loop()),
         ]

@@ -358,7 +358,7 @@ class AnalysisManager:
 
         data_1h_mean = np.mean(data_1h[:, 4])
         data_1h_ratio = (data_1h[:, 4] - data_1h_mean) / data_1h_mean
-
+        
         data_1h_min_close_price = np.min(data_1h[:, 4])
         is_last_price = data_1h_min_close_price == data_1h[-1][4]
 
@@ -380,7 +380,7 @@ class AnalysisManager:
         if data_15m_taker_ratio > 0.2:
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
-        success_signal = (True, 1, scenario_number)
+        success_signal = (True, 2, scenario_number)
         self.scenario_data.set_data(scenario_name, success_signal)
 
     def scenario_run(self):
@@ -389,7 +389,7 @@ class AnalysisManager:
         # self.scenario_1()
         # self.scenario_2()
         self.scenario_3()
-        # self.scenario_4()
+        self.scenario_4()
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

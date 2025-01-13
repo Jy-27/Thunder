@@ -10,11 +10,11 @@ if __name__ == "__main__":
     market = "futures"
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
-    kline_period = 1
+    kline_period = 2
     start_date = "2025-1-1 09:00:00"  # 시작 시간
     end_date = "2025-1-13 08:59:59"  # 종료 시간
     safety_balance_ratio = 0.4  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.65  # 스톱 로스 비율
+    stop_loss_rate = 0.35  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     is_dynamic_adjustment = (
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)

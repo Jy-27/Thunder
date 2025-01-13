@@ -380,7 +380,7 @@ class AnalysisManager:
         if data_15m_taker_ratio > 0.2:
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
-        success_signal = (True, 2, scenario_number)
+        success_signal = (True, 1, scenario_number)
         self.scenario_data.set_data(scenario_name, success_signal)
 
     def scenario_run(self):

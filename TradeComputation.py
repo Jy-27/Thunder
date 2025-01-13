@@ -170,10 +170,17 @@ class TradingLog:
         # 최저가를 계산한다.
         self.low_price = min(self.low_price, self.current_price)
 
-        # 거래 시작시 발생 비용을 계산한다. 수수료 제외
+        # 거래 시작시 발생 비용을 계산한다. 수수료 제외 
         self.initial_value = (self.quantity / self.leverage) * self.entry_price
+        
         # 현재 가격 반영하여 가치 계산한다. 수수료 제외
-        self.current_value = (self.current_price * self.quantity) / self.leverage
+        if self.position == 1:
+            self.current_value = (self.current_price * self.quantity) / self.leverage
+
+        elif self.position == 2:
+            pnl = ((self.entry_price - self.current_price) * self.quantity) / self.leverage
+            self.current_value = pnl + self.initial_value
+
 
         # 총 수수료를 계산한다.
         total_fees = self.entry_fee + self.exit_fee
@@ -352,7 +359,10 @@ class PortfolioManager:
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0  # 총 체결 횟수
-
+        ### 정확한 공식을 대입하지 못해서 LiveTrading거래 종료시 강제 데이터 기입 로직 있음.
+        
+        
+        
         ##=---=####=---=####=---=####=---=####=---=####=---=##
         # -=###=----=#=- DEBUG CODE           -=##=----=###=-#
         ##=---=####=---=####=---=####=---=####=---=####=---=##
@@ -532,6 +542,7 @@ class PortfolioManager:
         self.number_of_stocks = len(self.open_positions.keys())
         # 거래중인 금액
         self.active_value = active_value
+
         # 예수금
         self.cash_balance = self.initial_balance + closed_pnl - self.active_value
         # 손익금

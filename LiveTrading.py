@@ -78,7 +78,7 @@ class LiveTradingManager:
             max_held_symbols=self.max_held_symbols,
             requested_leverage=self.requested_leverage,
             instance=self.ins_portfolio,
-            safe_asset_ratio=safe_asset_ratio,
+            safe_asset_ratio=self.safe_asset_ratio,
         )  # >> 거래관련 계산 관리 모듈
         self.ins_constraint = TradeComputation.OrderConstraint(
             max_held_symbols=self.max_held_symbols,
@@ -606,17 +606,36 @@ class LiveTradingManager:
 
     # 프로그램 시작시 계좌정보를 업데이트한다.
     async def start_update_account(self):
+        # 총 평가금액을 불러온다.
+        api_total_balance = await self.ins_client.get_total_wallet_balance()
+        
+        # 거래중인 항목을 불러온다.
         api_balance = await self.ins_client.get_account_balance()
+        
+        # 초기 설정 자금보다 실제 자금이 작을경우
+        if self.seed_money > api_total_balance:
+            # 실제 자금으로 시드머니를 조정한다.
+            print(f"seed money 조정 : {self.seed_money :,.2f} -> {api_total_balance:,.2f}")
+            self.seed_money = api_total_balance
+            # instance 재설정.
+            self.ins_portfolio = TradeComputation.PortfolioManager(
+            is_profit_preservation=self.is_profit_preservation,
+            initial_balance=self.seed_money)  # >> 거래정보 관리 모듈
+        
+        # 거래중인 항목이 없으면,
         if not api_balance:
+            # 아무것도 하지 않는다.
             return
 
+            
+        # 거래중인 항목 내역을 트레이딩 로그에 기록한다.
         for symbol, log in api_balance.items():
             log_data = TradeComputation.TradingLog(
                 symbol=f'{self.market}_{symbol}',
                 start_timestamp=int(log["updateTime"]),
                 entry_price=float(log["entryPrice"]),
                 position=1 if log["positionAmt"] > 0 else 2,
-                quantity=log["positionAmt"],
+                quantity=abs(log["positionAmt"]),
                 leverage=log["leverage"],
                 trade_scenario=0,
                 test_mode=False,
@@ -767,7 +786,7 @@ class LiveTradingManager:
 
         # 거래내역을 log형태로 저장한다.
         log_data = TradeComputation.TradingLog(
-            symbol=symbol,
+            symbol=f'{self.market}_{symbol}',
             start_timestamp=int(order_log["updateTime"]),
             entry_price=float(select_balance_data["entryPrice"]),
             position=position,
@@ -814,9 +833,38 @@ class LiveTradingManager:
             quantity=abs(position_amount),  # 매각 수량 : 절대값 반영해야함.
             reduce_only=True,  # 매각처리 여부 : 거래종료시 소수점 단위까지 전량 매각 처리됨.
         )
-
+        
+        # 거래 정보를 조회한다.
+        trade_history = await self.ins_client.fetch_order_history(symbol)
+        # 최종 데이터를 획득한다.
+        last_trade_history = trade_history[-1]
+        
+        # 종료 가격을 조회한다.
+        closed_price = float(last_trade_history['avgPrice'])
+        # 종료 시간을 조회한다.
+        closed_timestamp = int(last_trade_history['time'])
+        # 심볼값을 코드화 한다.
+        convert_to_symbol = f'{self.market}_{symbol}'
+        # 종료시 정보를 업데이트한다.
+        self.ins_portfolio.update_log_data(symbol=convert_to_symbol,
+                                           price=closed_price,
+                                           timestamp=closed_timestamp)
         # 거래종료시 트레이드 정보를 삭제한다.(이후 저장은 아래 함수에서 알아서 처리함.)
-        self.ins_portfolio.remove_order_data(symbol=f'{self.market}_{symbol}')
+        self.ins_portfolio.remove_order_data(symbol=convert_to_symbol)
+
+        # 임시 코드.
+        # 포지션이 없을경우 현재 계좌정보를 강제 조정한다. 정확한 공식이 확인될때까지 현 코드를 유지한다.
+        if not self.ins_portfolio.open_positions:
+            # API 계좌 금액정보를 조회한다.
+            api_total_balance = await self.ins_client.get_total_wallet_balance()
+            # 금액 정보로 전체 평가금액과 예수금액을 수정한다.
+            self.ins_portfolio.cash_balance = api_total_balance
+            self.ins_portfolio.total_balance = api_total_balance
+            # 손익부분을 계산한다.
+            self.ins_portfolio.profit_loss = api_total_balance - self.ins_portfolio.initial_balance
+            self.ins_portfolio.profit_loss_ratio = self.ins_portfolio.profit_loss / self.ins_portfolio.initial_balance
+            
+            
 
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit="second", duration=1)

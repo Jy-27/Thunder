@@ -100,6 +100,7 @@ class BackTesterManager:
             safe_asset_ratio=safe_asset_ratio,
         )
         self.constraint = TradeComputation.OrderConstraint(
+            market=self.market,
             max_held_symbols=self.max_held_symbols,
             increase_type=increase_type,
             chance=self.allowed_loss_streak,

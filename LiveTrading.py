@@ -84,6 +84,7 @@ class LiveTradingManager:
         #     safe_asset_ratio=self.safe_asset_ratio,
         # )  # >> 거래관련 계산 관리 모듈
         self.ins_constraint = TradeComputation.OrderConstraint(
+            market=self.market,
             max_held_symbols=self.max_held_symbols,
             increase_type=self.increase_type,
             chance=self.allowed_loss_streak,

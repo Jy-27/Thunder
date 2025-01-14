@@ -1299,6 +1299,7 @@ class OrderConstraint:
 
     def __init__(
         self,
+        market:str,
         increase_type: str,
         chance: int,
         loss_recovery_interval: str,
@@ -1306,6 +1307,7 @@ class OrderConstraint:
         max_held_symbols: Optional[int] = None,
         safety_ratio: float = 0.2,
     ):
+        self.market = market
         self.increase_type = increase_type
         self.safety_ratio = safety_ratio
         self.max_held_symbols = max_held_symbols
@@ -1368,12 +1370,14 @@ class OrderConstraint:
             6) current_timestamp : 현재 시간, None일 경우 현재 시간을 생성
         """
 
+        convert_to_symbol = f'{self.market}_{symbol}'
+        
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
-        if symbol not in self.ins_portfolio.closed_positions:
+        if convert_to_symbol not in self.ins_portfolio.closed_positions:
             return True
 
         # 거래 종료 데이터 np.array화
-        data_array = np.array(self.ins_portfolio.closed_positions[symbol], float)
+        data_array = np.array(self.ins_portfolio.closed_positions[convert_to_symbol], float)
 
         # 현재 타임스탬프 설정
         if current_timestamp is None:

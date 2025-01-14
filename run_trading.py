@@ -6,29 +6,29 @@ import TradeComputation
 
 
 if __name__ == "__main__":
-    symbols = ["aptusdt", "agldusdt", "xrpusdt", "ethusdt", "suiusdt"]  # 확인하고자 하는 심볼 정보
+    symbols = ["agldusdt", "xrpusdt", "dogeusdt", "suiusdt", "btcusdt", "ethusdt"]  # 확인하고자 하는 심볼 정보
     market = "futures"
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
-    kline_period = 2
-    start_date = "2025-1-10 09:00:00"  # 시작 시간
+    kline_period = 1
+    start_date = "2024-11-1 09:00:00"  # 시작 시간
     end_date = "2025-1-14 08:59:59"  # 종료 시간
-    safety_balance_ratio = 0.3  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.035  # 스톱 로스 비율
-    is_download = True  # 기존 데이터로 할경우 False, 신규 다운로드 True
+    safety_balance_ratio = 0.2  # 잔고 안전금액 지정 비율
+    stop_loss_rate = 0.5  # 스톱 로스 비율
+    is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     is_dynamic_adjustment = (
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     )
     dynamic_adjustment_rate = 0.0007  # 시간 흐름에 따른 시작가 변동율
     dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
-    use_scale_stop = False  # final손절(False), Scale손절(True)
+    use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 250  # 시작금액
-    leverage = 15  # 레버리지
-    init_stop_rate = 0.01  # 시작 손절가
+    leverage = 20  # 레버리지
+    init_stop_rate = 0.025  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 2  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위
-    max_held_symbols = 2  # 동시 거래 가능 수량
+    max_held_symbols = 4  # 동시 거래 가능 수량
     is_profit_preservation = True  # 수익보존여부
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하

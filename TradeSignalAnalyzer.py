@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["5m", "15m", "1h"]  # , "2h", "1d"]
+    selected_intervals = ["5m"]#, "15m", "1h"]  # , "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -212,6 +212,7 @@ class AnalysisManager:
         is_price_max = price_max == data_1h[-1][open_price]
         is_price_min = price_min == data_1h[-1][open_price]
 
+        
         if not (is_price_max or is_price_min):
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
@@ -376,20 +377,78 @@ class AnalysisManager:
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
         data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
-
+        print(True)
         if data_15m_taker_ratio > 0.2:
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
         success_signal = (True, 2, scenario_number)
         self.scenario_data.set_data(scenario_name, success_signal)
 
+    def scenario_5(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_number)
+        """
+        시나리오.
+        =1시간 5분봉 데이터를 수집한다.
+        =마지막 3포인트는 연속성을 가진다.
+        =전체 비율에 up 또는 down의 방향성을 가진다.
+        3개 데이터씩 4개 그룹으로 나뉜다. 나뉜 그룹의 상승 또는 하락 여부를 True와 False로 구분 한다.
+        True가 3 이상이고 마지막값이 연속성을 가지면 long
+        False가 3 이상이고 마지막값이 연속성을 가지면 short
+        =시작부터 종료까지 1.5% 차이나면 True
+        """
+        data_5m = self.data_container.get_data("interval_5m")
+        data_slice_1 = data_5m[-16:-12]
+        data_slice_2 = data_5m[-12:-8]
+        data_slice_3 = data_5m[-8:-4]
+        data_slice_4 = data_5m[-4:]
+        
+        slice_1_score = np.sum(np.diff(data_slice_1[:,4]) > 0)
+        slice_2_score = np.sum(np.diff(data_slice_2[:,4]) > 0)
+        slice_3_score = np.sum(np.diff(data_slice_3[:,4]) > 0)
+        slice_4_score = np.sum(np.diff(data_slice_4[:,4]) > 0)
+        
+        if not (slice_4_score ==3 or slice_4_score == 0):
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+
+        max_close_price = np.max(data_5m[:, 4])
+        min_close_price = np.min(data_5m[:, 4])
+        last_close_price = data_5m[-1][4]
+        
+        ratio_diff = abs((min_close_price / max_close_price) - 1)
+        
+        target_ratio = 0.02
+        if ratio_diff < target_ratio:
+            return self.scenario_data.set_data(scenario_name, fail_signal)
+        
+        total_score = np.sum(np.array([slice_1_score, slice_2_score, slice_3_score, slice_4_score]))
+        # total_score = np.array([slice_2_score, slice_3_score, slice_4_score])
+        # print(total_score)
+        is_long_score = np.sum(total_score==3) > 2
+        is_short_score = np.sum(total_score==0) > 2
+        
+        candle_body_length = np.sum(data_5m[:,4] - data_5m[:, 1])
+        if candle_body_length > 0 and total_score >= 9 and slice_4_score ==3 and max_close_price == last_close_price:
+            success_signal = (True, 1, scenario_number)
+            self.scenario_data.set_data(scenario_name, success_signal)
+            return
+        
+        elif candle_body_length < 0 and total_score <= 3 and slice_4_score ==0 and min_close_price == last_close_price:
+            success_signal = (True, 2, scenario_number)
+            self.scenario_data.set_data(scenario_name, success_signal)
+            return
+        self.scenario_data.set_data(scenario_name, fail_signal)
+
+
+
+
     def scenario_run(self):
         fail_signal = (False, 0, 0)
         ### scenario 함수 실행 공간
         # self.scenario_1()
         # self.scenario_2()
-        self.scenario_3()
-        self.scenario_4()
+        # self.scenario_4()
+        self.scenario_5()
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:

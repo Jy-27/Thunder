@@ -411,12 +411,11 @@ class AnalysisManager:
         if not (slice_4_score ==3 or slice_4_score == 0):
             return self.scenario_data.set_data(scenario_name, fail_signal)
 
-        max_close_price = np.max(data_5m[:, 4])
-        min_close_price = np.min(data_5m[:, 4])
+        max_high_price = np.max(data_5m[-16:, 2])
+        min_low_price = np.min(data_5m[-16:, 3])
         last_close_price = data_5m[-1][4]
         
-        ratio_diff = abs((min_close_price / max_close_price) - 1)
-        
+        ratio_diff = (max_high_price - min_low_price) / last_close_price
         target_ratio = 0.02
         if ratio_diff < target_ratio:
             return self.scenario_data.set_data(scenario_name, fail_signal)
@@ -428,12 +427,12 @@ class AnalysisManager:
         is_short_score = np.sum(total_score==0) > 2
         
         candle_body_length = np.sum(data_5m[:,4] - data_5m[:, 1])
-        if candle_body_length > 0 and total_score >= 9 and slice_4_score ==3 and max_close_price == last_close_price:
+        if candle_body_length > 0 and total_score >= 9 and slice_4_score ==3 and max_high_price == last_close_price:
             success_signal = (True, 1, scenario_number)
             self.scenario_data.set_data(scenario_name, success_signal)
             return
         
-        elif candle_body_length < 0 and total_score <= 3 and slice_4_score ==0 and min_close_price == last_close_price:
+        elif candle_body_length < 0 and total_score <= 3 and slice_4_score ==0 and min_closmin_low_price_price == last_close_price:
             success_signal = (True, 2, scenario_number)
             self.scenario_data.set_data(scenario_name, success_signal)
             return

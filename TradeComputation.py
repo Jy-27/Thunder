@@ -153,7 +153,7 @@ class TradingLog:
     def __calculate_fees(self):
         # 수수료율을 단위 변환한다.
         adjusted_fee_rate = self.fee_rate / 100
-        # 진입 수수료를 계산 및 속성에 저장한다
+        # 테스트 버전시 진입 수수료를 계산 및 속성에 저장한다.
         self.entry_fee = (
             self.entry_price * adjusted_fee_rate * self.quantity  # * self.leverage
         )
@@ -170,8 +170,9 @@ class TradingLog:
         # 최저가를 계산한다.
         self.low_price = min(self.low_price, self.current_price)
 
-        # 거래 시작시 발생 비용을 계산한다. 수수료 제외
-        self.initial_value = (self.quantity / self.leverage) * self.entry_price
+        # 테스트 버전시 거래 시작시 발생 비용을 계산한다. 수수료 제외
+        if self.initial_value is None:
+            self.initial_value = (self.quantity / self.leverage) * self.entry_price
 
         # 현재 가격 반영하여 가치 계산한다. 수수료 제외
         if self.position == 1:
@@ -197,6 +198,9 @@ class TradingLog:
             self.net_profit_loss = (
                 self.entry_price - self.current_price
             ) * self.quantity
+
+        else:
+            raise ValueError(f'test중인가요? 포지션 정보 오류:{self.position}')
 
         # 수수료 제외 손익률
         self.net_profit_loss_rate = self.net_profit_loss / self.initial_value
@@ -317,10 +321,6 @@ class TradingLog:
             raise ValueError(
                 f"백테트시 current_timestamp값 입력해야함: {current_timestamp}"
             )
-        # 테스트 모드가 아닐경우 현재 타임스템프를 확보한다.
-        #   >> 아니면 websocket data의 close_timestamp반영하는것도 검토해볼 필요가 있다. 그렇게 할까....?
-        elif not self.test_mode:
-            current_timestamp = int(time.time() * 1_000)
 
         # 현재 시간 업데이트
         self.last_timestamp = current_timestamp
@@ -328,8 +328,9 @@ class TradingLog:
         self.current_price = current_price
 
         # >>> 각 연산은 별대의 함수로 나누어 개별처리 한다. <<<
-        # 수수료 값 업데이트
-        self.__calculate_fees()
+        # 테스트 모일때만 수수료 값 업데이트
+        if self.test_mode:
+            self.__calculate_fees()
         # trade log 데이터의 전반적인 평가 계산
         self.__calculate_trade_values()
         # 손절 가격을 업데이트
@@ -363,9 +364,9 @@ class PortfolioManager:
         self.open_positions: Dict[str, List[List[Any]]] = {}
         self.number_of_stocks: int = 0
         self.initial_balance: float = initial_balance  # 초기 자산
-        self.total_balance: float = initial_balance  # 총 평가 자산
+        self.total_wallet_balance: float = initial_balance  # 총 평가 자산
         self.active_value: float = 0  # 거래 중 자산 가치
-        self.cash_balance: float = initial_balance  # 사용 가능한 예수금
+        self.available_balance: float = initial_balance  # 사용 가능한 예수금
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
         self.trade_count: int = 0  # 총 체결 횟수
@@ -477,6 +478,7 @@ class PortfolioManager:
 
         # open_positions 데이터를 복사 및 변수로 저장한다.
         open_position_data = self.open_positions[convert_to_symbol].copy()
+        
         # open_position 데이터를 삭제한다.
         del self.open_positions[convert_to_symbol]
 
@@ -560,14 +562,14 @@ class PortfolioManager:
         self.active_value = active_value
 
         # 예수금
-        self.cash_balance = self.initial_balance + closed_pnl - self.active_value
+        self.available_balance = self.initial_balance + closed_pnl - self.active_value
         # 손익금
         self.profit_loss = closed_pnl + open_pnl
         # 총 평가 금액
-        self.total_balance = self.profit_loss + self.initial_balance
+        self.total_wallet_balance = self.profit_loss + self.initial_balance
         # 손익비율
         self.profit_loss_ratio = (
-            self.total_balance - self.initial_balance
+            self.total_wallet_balance - self.initial_balance
         ) / self.initial_balance
 
         ##=---=####=---=####=---=####=---=####=---=####=---=##
@@ -577,7 +579,7 @@ class PortfolioManager:
         # 추가개발 계획
         # live_trad시 new_profit_to_secure 이체시키는 기능이 필요함.
         new_profit_to_secure = (
-            self.total_balance - self.initial_balance - self.secured_profit
+            self.total_wallet_balance - self.initial_balance - self.secured_profit
         )
         # 수익이 발생하고, 현재 거래중인 항목이 없을경우
         if (
@@ -1246,12 +1248,16 @@ class TradeCalculator:
         """
         # 초기 안전 자금 및 유효 자금 계산
         initial_safety_amount = round(
-            self.ins_portfolio.total_balance * self.safe_asset_ratio, 3
+            self.ins_portfolio.total_wallet_balance * self.safe_asset_ratio, 3
         )
-        initial_usable_amount = self.ins_portfolio.total_balance - initial_safety_amount
+        # debug
+        # print(self.safe_asset_ratio)
+        # print(self.ins_portfolio.total_wallet_balance)
+        
+        initial_usable_amount = self.ins_portfolio.total_wallet_balance - initial_safety_amount
                 
         # 자금이 10 미만일 경우 초기값 반환
-        if self.ins_portfolio.total_balance < 10:
+        if self.ins_portfolio.total_wallet_balance < 10:
             return {
                 "nextTargetAmount": 10,  # 다음 목표 금액
                 "safetyAmount": initial_safety_amount,  # 안전 금액
@@ -1267,11 +1273,11 @@ class TradeCalculator:
 
         # 증가율 순환
         for growth_factor in growth_factors:
-            while initial_target <= self.ins_portfolio.total_balance:
+            while initial_target <= self.ins_portfolio.total_wallet_balance:
                 last_valid_target = initial_target  # 초과 전 단계 값 저장
                 initial_target *= growth_factor
                 available_steps += 1
-                if initial_target > self.ins_portfolio.total_balance:
+                if initial_target > self.ins_portfolio.total_wallet_balance:
                     break
 
         # 안전 금액 및 유효 금액 계산
@@ -1306,7 +1312,7 @@ class OrderConstraint:
         self.chance: int = chance
         self.loss_recovery_interval: str = loss_recovery_interval
         self.ins_portfolio = instance
-        self.total_balance: Optional[float] = None
+        self.total_wallet_balance: Optional[float] = None
         self.closed_trade_data: Optional[List[Any]] = None
 
         self.__verify_config()
@@ -1343,7 +1349,7 @@ class OrderConstraint:
             raise ValueError(f"sefty ratio가 유효하지 않음:{self.safety_ratio}")
 
     def update_trading_data(self):
-        self.total_balance = self.ins_portfolio.total_balance
+        self.total_wallet_balance = self.ins_portfolio.total_wallet_balance
         self.closed_trade_data = self.ins_portfolio.closed_positions
 
     # 반복적인 실패 Scenario주문을 방지하고자 실패 시나리오일 경우 주문 거절 신호를 발생한다.
@@ -1474,7 +1480,7 @@ class ResultEvaluator:
             self.ins_portfolio.closed_positions or {}
         )  # 청산된 포지션 초기화
         self.initial_balance = self.ins_portfolio.initial_balance
-        self.total_balance = self.ins_portfolio.total_balance
+        self.total_wallet_balance = self.ins_portfolio.total_wallet_balance
         self.profit_loss = self.ins_portfolio.profit_loss
         self.profit_loss_ratio = self.ins_portfolio.profit_loss_ratio
         self.df = None  # 초기 데이터프레임 설정 (None)
@@ -1689,7 +1695,7 @@ class ResultEvaluator:
         :return: None
         """
         print(f"Initial Balance: {self.initial_balance:,.2f}")
-        print(f"Total Balance: {self.total_balance:,.2f}")
+        print(f"Total Balance: {self.total_wallet_balance:,.2f}")
         print(f"Gross Profit/Loss: {self.profit_loss:,.2f}")
         print(f"Profit/Loss Ratio: {self.profit_loss_ratio*100:.2f} %\n")
 

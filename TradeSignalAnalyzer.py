@@ -187,7 +187,7 @@ class AnalysisManager:
 
     def scenario_1(self):
         scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_name)
+        fail_signal = self.__fail_signal(scenario_number)
         """
         시나리오 1
             1. 48시간 기준 가장 최고/최저 점 도딜시점에 5분봉 연속 하락 또는 상승
@@ -249,7 +249,7 @@ class AnalysisManager:
 
     def scenario_2(self):
         scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_name)
+        fail_signal = self.__fail_signal(scenario_number)
 
         open_price = 1
         high_price = 2
@@ -295,7 +295,7 @@ class AnalysisManager:
 
     def scenario_3(self):
         scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_name)
+        fail_signal = self.__fail_signal(scenario_number)
 
         """"
         시나리오
@@ -343,7 +343,7 @@ class AnalysisManager:
 
     def scenario_4(self):
         scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_name)
+        fail_signal = self.__fail_signal(scenario_number)
 
         """"
         시나리오

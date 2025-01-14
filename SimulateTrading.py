@@ -243,14 +243,14 @@ class BackTesterManager:
             ### DEBUG START
             if self.ins_portfolio.secured_profit > 0:
                 total_balance = (
-                    self.ins_portfolio.total_balance - self.ins_portfolio.secured_profit
+                    self.ins_portfolio.total_wallet_balance - self.ins_portfolio.secured_profit
                 )
             elif self.ins_portfolio.secured_profit <= 0:
-                total_balance = self.ins_portfolio.total_balance
+                total_balance = self.ins_portfolio.total_wallet_balance
             ### DEBUG END
 
             ### ORIGINAL CODE
-            # total_balance = self.ins_portfolio.total_balance
+            # total_balance = self.ins_portfolio.total_wallet_balance
             conctraint = self.ins_trade_calculator.get_trade_reference_amount()
 
             # 주문 신호 발생기
@@ -263,7 +263,7 @@ class BackTesterManager:
                 )
             )
             margin_ = (quantity / leverage) * price
-            is_cash_margin = self.ins_portfolio.cash_balance > margin_
+            is_cash_margin = self.ins_portfolio.available_balance > margin_
             is_trade_count = self.ins_portfolio.number_of_stocks < self.max_held_symbols
 
             if not status or not is_cash_margin or not is_trade_count:

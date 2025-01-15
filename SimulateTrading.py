@@ -19,7 +19,7 @@ class BackTesterManager:
         self,
         symbols: list[str],
         market: str,
-        kline_period:int,
+        kline_period: int,
         max_held_symbols: int,
         seed_money: Union[int, float],
         start_date: str,
@@ -226,7 +226,7 @@ class BackTesterManager:
 
     # position open전 주문 유효 점검 및 주문가능수량을 반환한다.
     async def __validate_open_signal(
-        self, symbol: str, price: float
+        self, symbol: str, price: float, scenario_leverage:int
     ):  # , leverage: int):
         """
         1. 기능 : position open전 주문 유효 점검 및 주문 가능 수량을 계산 반환한다.
@@ -244,7 +244,8 @@ class BackTesterManager:
             ### DEBUG START
             if self.ins_portfolio.secured_profit > 0:
                 total_balance = (
-                    self.ins_portfolio.total_wallet_balance - self.ins_portfolio.secured_profit
+                    self.ins_portfolio.total_wallet_balance
+                    - self.ins_portfolio.secured_profit
                 )
             elif self.ins_portfolio.secured_profit <= 0:
                 total_balance = self.ins_portfolio.total_wallet_balance
@@ -253,19 +254,27 @@ class BackTesterManager:
             ### ORIGINAL CODE
             # total_balance = self.ins_portfolio.total_wallet_balance
             conctraint = self.ins_trade_calculator.get_trade_reference_amount()
-
+            order_amount = conctraint["maxTradeAmount"] / self.max_held_symbols
+            
+            
             # 주문 신호 발생기
             status, quantity, leverage = (
                 await self.ins_trade_calculator.get_order_params(
                     trading_symbol=symbol,  # 타겟 심볼
-                    order_amount=conctraint.get(
-                        "maxTradeAmount"
-                    ),  # 최대 거래 가능 금액 반영
+                    order_amount=order_amount,  # 최대 거래 가능 금액 반영
+                    scenario_leverage=scenario_leverage
                 )
             )
+            
+            leverage = int(leverage)
+            
+            # DEBUG            
             margin_ = (quantity / leverage) * price
             is_cash_margin = self.ins_portfolio.available_balance > margin_
             is_trade_count = self.ins_portfolio.number_of_stocks < self.max_held_symbols
+
+            print(self.ins_portfolio.available_balance)
+            print(margin_)
 
             if not status or not is_cash_margin or not is_trade_count:
                 return False, 0, 0
@@ -360,7 +369,7 @@ class BackTesterManager:
         position: int,
         start_timestamp: int,
         scenario_type: int,
-        leverage: Optional[int] = None,
+        scenario_leverage: Optional[int] = None,
     ):
         """
         1. 기능 : position open 주문을 생성한다.
@@ -370,7 +379,7 @@ class BackTesterManager:
             3) position : 1:long, 2:short
             4) start_timestamp : 시작 타임스템프
             5) secnario_type : intma() / 시나리오 종류
-            6) leverage : 레버리지
+            6) scenario_leverage : 레버리지
         """
 
         # 주문전 유효성 검사 1
@@ -378,9 +387,12 @@ class BackTesterManager:
             return
         # 주문전 유효성 검사 2
         is_open_signal, quantity, leverage = await self.__validate_open_signal(
-            symbol=symbol, price=price
+            symbol=symbol, price=price, scenario_leverage=scenario_leverage
         )
 
+        #debug
+        
+        
         # 주문 유혀성 검토 결과 False면,
         if not is_open_signal:
             # 함수 종료
@@ -475,7 +487,6 @@ class BackTesterManager:
         for index in range(data_length):
             for symbol in self.symbols:
                 timestamp_min = []
-                self.interval_dataset.clear_all_data()
                 for interval in self.intervals:
                     select_indices_ = self.closing_indices_data.get_data(
                         f"interval_{interval}"
@@ -483,7 +494,7 @@ class BackTesterManager:
                     select_data = self.closing_sync_data[symbol][interval][
                         select_indices_
                     ]
-
+                    
                     price = select_data[-1][4]
                     end_timestamp = select_data[-1][6]
                     timestamp_min.append(end_timestamp)
@@ -507,42 +518,47 @@ class BackTesterManager:
                         # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
 
+                    if np.all(select_data==0):
+                        continue
+                    # # symbol의 조건에 맞는지 여부, 보유여부를 점검한다.
+                    # if not await self.validate_ticker_conditions(
+                    #     symbol=symbol, data=select_data
+                    # ) or self.ins_portfolio.validate_open_position(symbol):
+                    #     continue
                     self.interval_dataset.set_data(
-                        data_name=f"interval_{interval}", data=select_data
+                        data_name=f"{self.market}_{symbol}_{interval}", data=select_data
                     )
 
-                if np.all(select_data == 0):
-                    continue
-                # print(select_data)
-                # print('\n')
-                # print('='*15)
-                # print(select_data)
-                # print(type(select_data))
-                # print('='*15)
+            # if np.all(select_data == 0):
+            #     continue
+            # print(select_data)
+            # print('\n')
+            # print('='*15)
+            # print(select_data)
+            # print(type(select_data))
+            # print('='*15)
 
-                # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
-                if not await self.validate_ticker_conditions(
-                    symbol=symbol, data=select_data
-                ) or self.ins_portfolio.validate_open_position(symbol):
-                    continue
-                ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-                self.ins_signal_analyzer.data_container = self.interval_dataset
-                # self.ins_signal_analyzer.dummy_d = dummy_data
+            # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
 
-                trade_signal = self.ins_signal_analyzer.scenario_run()
-                if not trade_signal[0]:
-                    continue
+            ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
+            self.ins_signal_analyzer.data_container = self.interval_dataset
+            # self.ins_signal_analyzer.dummy_d = dummy_data
 
-                current_timestamp = min(timestamp_min)
+            trade_signal = self.ins_signal_analyzer.scenario_run()
+            self.interval_dataset.clear_all_data()
+            if not trade_signal[0]:
+                continue
+            
+            current_timestamp = min(timestamp_min)
 
-                await self.active_open_position(
-                    symbol=symbol,
-                    price=price,
-                    position=trade_signal[1],
-                    leverage=self.requested_leverage,
-                    start_timestamp=current_timestamp,
-                    scenario_type=trade_signal[2],
-                )
+            await self.active_open_position(
+                symbol=trade_signal[1],
+                price=price,
+                position=trade_signal[2],
+                scenario_leverage=trade_signal[4],
+                start_timestamp=current_timestamp,
+                scenario_type=trade_signal[3],
+            )
 
         self.ins_portfolio.export_trading_logs()
         print("\n\nEND")

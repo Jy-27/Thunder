@@ -6,7 +6,14 @@ import TradeComputation
 
 
 if __name__ == "__main__":
-    symbols = ["agldusdt", "xrpusdt", "dogeusdt", "suiusdt", "btcusdt", "ethusdt"]  # 확인하고자 하는 심볼 정보
+    symbols = [
+        "agldusdt",
+        "xrpusdt",
+        "dogeusdt",
+        "suiusdt",
+        "btcusdt",
+        "ethusdt",
+    ]  # 확인하고자 하는 심볼 정보
     market = "futures"
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
@@ -33,8 +40,9 @@ if __name__ == "__main__":
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하
     absolute = False  # True : 비율 절대값, False : 비율 실제값
-    value = 350_000_000  # 거래대금 : 단위 USD
+    value = 250_000_000  # 거래대금 : 단위 USD
     target_percent = 0.035  # 변동 비율폭 : 음수 가능
+    
     quote_type = "usdt"  # 쌍거래 거래화폐
 
     ### 테스트 여부 확인 ###
@@ -53,7 +61,7 @@ if __name__ == "__main__":
     ins_backtest = BackTesterManager(
         symbols=symbols,
         market=market,
-        kline_period = kline_period,
+        kline_period=kline_period,
         max_held_symbols=max_held_symbols,
         start_date=start_date,
         end_date=end_date,
@@ -82,7 +90,7 @@ if __name__ == "__main__":
         seed_money=seed_money,
         market=market,
         kline_period=kline_period,
-        safe_asset_ratio = safety_balance_ratio,
+        safe_asset_ratio=safety_balance_ratio,
         max_held_symbols=max_held_symbols,
         use_scale_stop=use_scale_stop,
         init_stop_rate=init_stop_rate,

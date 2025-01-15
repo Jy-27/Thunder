@@ -23,7 +23,7 @@ class LiveTradingManager:
         self,
         seed_money: float,  # 초기 자금
         market: str,  # 거래중인 시장 정보
-        kline_period:int,
+        kline_period: int,
         increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
         max_held_symbols: int = 4,  # 동시 거래가능 횟수 제한
         safe_asset_ratio: float = 0.02,  # 전체 금액 안전 자산 비율
@@ -33,6 +33,7 @@ class LiveTradingManager:
         dynamic_adjustment_rate: float = 0.0007,  # 시간 흐름에 따른 손절 축소 비율
         dynamic_adjustment_interval: str = "3m",  # 축소비율 적용 시간 간격 (3분 / interval값 사용할 것.)
         requested_leverage: int = 10,  # 지정 레버리지 (symbol별 최대 레버리지값을 초과할 경우 최대 레버리지 적용됨.)
+        max_leverage: int = 30,  # 최대 레버리지값
         init_stop_rate: float = 0.035,  # 시작 손절 비율 (use_scale_stop:False일경우 stop_loss_rate반영)
         is_order_break: bool = True,  # 반복 손실시 주문 불가 신호 발생
         allowed_loss_streak: int = 2,  # 반복 손실 유예 횟수
@@ -56,6 +57,7 @@ class LiveTradingManager:
         self.dynamic_adjustment_rate = dynamic_adjustment_rate
         self.dynamic_adjustment_interval = dynamic_adjustment_interval
         self.requested_leverage = requested_leverage
+        self.max_leverage = max_leverage
         self.init_stop_rate = init_stop_rate
         self.is_order_break = is_order_break
         self.allowed_loss_streak = allowed_loss_streak
@@ -76,7 +78,9 @@ class LiveTradingManager:
             initial_balance=self.seed_money,
             market=self.market,
         )  # >> 거래정보 관리 모듈
-        self.ins_trade_calculator:Optional[TradeComputation] = None  # >> 거래관련 계산 관리 모듈 // start_update_account함수에서 재선언함.
+        self.ins_trade_calculator: Optional[TradeComputation] = (
+            None  # >> 거래관련 계산 관리 모듈 // start_update_account함수에서 재선언함.
+        )
         # self.ins_trade_calculator = TradeComputation.TradeCalculator(
         #     max_held_symbols=self.max_held_symbols,
         #     requested_leverage=self.requested_leverage,
@@ -586,18 +590,17 @@ class LiveTradingManager:
                         )
                         # 각 interval 데이터를 컨테이너 데이터화 한다.
                         self.interval_dataset.set_data(
-                            data_name=f"interval_{interval}", data=array_
+                            data_name=f"{self.market}_{symbol}_{interval}", data=array_
                         )
-                    # 컨테이너 데이터를 분석 클라스의 속성값에 넣는다.
-                    self.ins_analyzer.data_container = self.interval_dataset
-                    # 분석을 시작한다.
-                    # debug
-                    # print(symbol)
-                    scenario_data = self.ins_analyzer.scenario_run()
-                    # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
-                    await self.submit_order_open_signal(
-                        symbol=symbol, scenario_data=scenario_data
-                    )
+                # 컨테이너 데이터를 분석 클라스의 속성값에 넣는다.
+                self.ins_analyzer.data_container = self.interval_dataset
+                # 분석을 시작한다.
+                # debug
+                # print(symbol)
+                scenario_data = self.ins_analyzer.scenario_run()
+                
+                # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
+                await self.submit_order_open_signal(scenario_data=scenario_data)
 
                 # # DEBUG
                 # end = time.time()
@@ -631,15 +634,15 @@ class LiveTradingManager:
             self.ins_portfolio = TradeComputation.PortfolioManager(
                 is_profit_preservation=self.is_profit_preservation,
                 initial_balance=self.seed_money,
-                market=self.market
+                market=self.market,
             )  # >> 거래정보 관리 모듈
             self.ins_trade_calculator = TradeComputation.TradeCalculator(
-                        max_held_symbols=self.max_held_symbols,
-                        requested_leverage=self.requested_leverage,
-                        instance=self.ins_portfolio,
-                        safe_asset_ratio=self.safe_asset_ratio,
-                    )  # >> 거래관련 계산 관리 모듈
-            
+                max_held_symbols=self.max_held_symbols,
+                requested_leverage=self.requested_leverage,
+                instance=self.ins_portfolio,
+                safe_asset_ratio=self.safe_asset_ratio,
+            )  # >> 거래관련 계산 관리 모듈
+
         # 거래중인 항목이 없으면,
         if not api_balance:
             # 아무것도 하지 않는다.
@@ -648,8 +651,8 @@ class LiveTradingManager:
         # 거래중인 항목 내역을 트레이딩 로그에 기록한다.
         for symbol, log in api_balance.items():
 
-            initial_margin = log['initialMargin']
-            isolated_wallet = log['isolatedWallet']
+            initial_margin = log["initialMargin"]
+            isolated_wallet = log["isolatedWallet"]
             entry_fee = initial_margin - isolated_wallet
             exit_fee = 0
 
@@ -668,11 +671,11 @@ class LiveTradingManager:
                 dynamic_adjustment_rate=self.dynamic_adjustment_rate,
                 dynamic_adjustment_interval=self.dynamic_adjustment_interval,
                 use_scale_stop=self.use_scale_stop,
-                initial_value = initial_margin,
+                initial_value=initial_margin,
                 entry_fee=entry_fee,
-                exit_fee=exit_fee
+                exit_fee=exit_fee,
             )
-            
+
             # debug
             pprint(log_data)
             # 거래시작시 트레이드 정보를 저장한다.
@@ -764,12 +767,18 @@ class LiveTradingManager:
 
     # position 진입 신호를 발생한다.
     async def submit_order_open_signal(
-        self, symbol: str, scenario_data: tuple
+        self, scenario_data: tuple
     ) -> Dict[str, Union[Any]]:
-        # 포지션 보유 상태를 점검한다.
-        is_verify, _ = await self.__verify_position(symbol=symbol, order_type="open")
-        # None이 아닐 경우,
-        if not is_verify:
+
+        order_signal =scenario_data[0]
+        symbol =scenario_data[1]
+        position =scenario_data[2]
+        scenario_type =scenario_data[3]
+        scenario_leverage = scenario_data[4]
+        select_leverage = min(scenario_leverage, self.max_leverage)
+
+        # 분석결과 order_signal이 false면
+        if not order_signal:
             # 종료한다.
             return
 
@@ -778,37 +787,41 @@ class LiveTradingManager:
             # 종료한다.
             return
 
-        order_signal = scenario_data[0]
-        position = scenario_data[1]
-        scenario_type = scenario_data[2]
-
-        side_order = "BUY" if position == 1 else "SELL"
-        # 분석결과 order_signal이 false면
-        if not order_signal:
+        # 포지션 보유 상태를 점검한다.
+        is_verify, _ = await self.__verify_position(symbol=symbol, order_type="open")
+        # None이 아닐 경우,
+        if not is_verify:
             # 종료한다.
             return
+
+        side_order = "BUY" if position == 1 else "SELL"
 
         reference_data = self.ins_trade_calculator.get_trade_reference_amount()
         # debug
         # pprint(reference_data)
-        if reference_data['maxTradeAmount'] * 1.025 < self.ins_portfolio.available_balance:
-            amount = reference_data['maxTradeAmount']
+        if (
+            reference_data["maxTradeAmount"] * 1.025
+            < self.ins_portfolio.available_balance
+        ):
+            amount = reference_data["maxTradeAmount"]
         else:
             amount = 0
         # DEBUG
         # print(amount)
         is_order_available, quantity, leverage = (
             await self.ins_trade_calculator.get_order_params(
-                trading_symbol=symbol, order_amount=amount
+                trading_symbol=symbol,
+                order_amount=amount,
+                scenario_leverage=select_leverage,
             )
         )
         # 자금이 부족하여 주문이 불가한 경우
         if not is_order_available:
-            print(f'주문불가: {symbol} / 잔액 부족')
+            print(f"주문불가: {symbol} - {leverage} / 잔액 부족")
             # 종료한다.
             return
 
-        #debug
+        # debug
         # print(symbol)
         # 마진 타입 설정
         await self.ins_client.set_margin_type(symbol=symbol, margin_type="ISOLATED")
@@ -826,8 +839,8 @@ class LiveTradingManager:
         # 대상 데이터 조회
         select_balance_data = account_balance[symbol]
 
-        initial_margin = select_balance_data['initialMargin']
-        isolated_wallet = select_balance_data['isolatedWallet']
+        initial_margin = select_balance_data["initialMargin"]
+        isolated_wallet = select_balance_data["isolatedWallet"]
         entry_fee = initial_margin - isolated_wallet
         exit_fee = 0
 
@@ -849,7 +862,7 @@ class LiveTradingManager:
             use_scale_stop=self.use_scale_stop,
             initial_value=initial_margin,
             entry_fee=entry_fee,
-            exit_fee=exit_fee
+            exit_fee=exit_fee,
         )
         # 거래시작시 트레이드 정보를 저장한다.
         self.ins_portfolio.add_log_data(log_data=log_data)
@@ -877,7 +890,7 @@ class LiveTradingManager:
 
         # 매각 전 예수금
         before_sell_balance = await self.ins_client.get_available_balance()
-        
+
         # 주문 정보를 발송한다.
         order_log = await self.ins_client.submit_order(
             symbol=symbol,  # 목표 symbol
@@ -886,7 +899,7 @@ class LiveTradingManager:
             quantity=abs(position_amount),  # 매각 수량 : 절대값 반영해야함.
             reduce_only=True,  # 매각처리 여부 : 거래종료시 소수점 단위까지 전량 매각 처리됨.
         )
-        
+
         # 매각 후 예수금
         after_sell_balance = await self.ins_client.get_available_balance()
 
@@ -895,7 +908,7 @@ class LiveTradingManager:
         last_trade_history = trade_history[-1]
 
         # 최종 데이터를 획득한다.
-        commission = float(last_trade_history['commission'])
+        commission = float(last_trade_history["commission"])
         # 종료 가격을 조회한다.
         closed_price = float(last_trade_history["price"])
         # 종료 시간을 조회한다.
@@ -907,14 +920,17 @@ class LiveTradingManager:
         self.ins_portfolio.update_log_data(
             symbol=symbol, price=closed_price, timestamp=closed_timestamp
         )
-        
-        convert_to_symbol = f'{self.market}_{symbol}'
-        
+
+        convert_to_symbol = f"{self.market}_{symbol}"
+
         # 상세내역 강제 업데이트한다.
-        self.ins_portfolio.data_container.get_data(convert_to_symbol).exit_fee = commission
-        self.ins_portfolio.data_container.get_data(convert_to_symbol).current_value = sell_balance
-        
-        
+        self.ins_portfolio.data_container.get_data(convert_to_symbol).exit_fee = (
+            commission
+        )
+        self.ins_portfolio.data_container.get_data(convert_to_symbol).current_value = (
+            sell_balance
+        )
+
         # 거래종료시 트레이드 정보를 삭제한다.(이후 저장은 아래 함수에서 알아서 처리함.)
         self.ins_portfolio.remove_order_data(symbol=symbol)
 
@@ -922,8 +938,13 @@ class LiveTradingManager:
         if not self.ins_portfolio.open_positions:
             self.ins_portfolio.available_balance = after_sell_balance
             self.ins_portfolio.total_wallet_balance = after_sell_balance
-            self.ins_portfolio.profit_loss = self.ins_portfolio.total_wallet_balance - self.ins_portfolio.initial_balance
-            self.ins_portfolio.profit_loss_ratio = self.ins_portfolio.profit_loss / self.ins_portfolio.total_wallet_balance
+            self.ins_portfolio.profit_loss = (
+                self.ins_portfolio.total_wallet_balance
+                - self.ins_portfolio.initial_balance
+            )
+            self.ins_portfolio.profit_loss_ratio = (
+                self.ins_portfolio.profit_loss / self.ins_portfolio.total_wallet_balance
+            )
 
         # api서버 과요청 방지
         await utils._wait_time_sleep(time_unit="second", duration=1)
@@ -937,7 +958,9 @@ class LiveTradingManager:
         tasks = [
             asyncio.create_task(self.ticker_update_loop()),
             asyncio.create_task(self.websocket_loop()),
-            asyncio.create_task(self.collect_kline_by_interval_loop(days=self.kline_period)),
+            asyncio.create_task(
+                self.collect_kline_by_interval_loop(days=self.kline_period)
+            ),
             asyncio.create_task(self.final_message_stop_loss_check()),
             asyncio.create_task(self.trade_siganl_analyzer_loop()),
         ]

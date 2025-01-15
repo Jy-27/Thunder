@@ -200,7 +200,7 @@ class TradingLog:
             ) * self.quantity
 
         else:
-            raise ValueError(f'test중인가요? 포지션 정보 오류:{self.position}')
+            raise ValueError(f"test중인가요? 포지션 정보 오류:{self.position}")
 
         # 수수료 제외 손익률
         self.net_profit_loss_rate = self.net_profit_loss / self.initial_value
@@ -248,10 +248,8 @@ class TradingLog:
                 f"interval값이 유효하지 않음: {self.dynamic_adjustment_interval}"
             )
         # 시간차와 래핑값을 나누어 step값을 구하고 비율을 곱하여 반영할 비율을 계산한다.
-        dynamic_rate = (
-            int(time_diff / target_ms_seconds) * self.dynamic_adjustment_rate
-        )
-        
+        dynamic_rate = int(time_diff / target_ms_seconds) * self.dynamic_adjustment_rate
+
         # DEBUG
         # print(dynamic_rate)
 
@@ -261,7 +259,7 @@ class TradingLog:
 
         # DEBUG
         # print(start_rate)
-        
+
         # 포지션이 롱이면,
         if self.position == 1:
             # 손절 반영 시작값은 시작가 기준
@@ -280,7 +278,8 @@ class TradingLog:
             # 만약 self.is_dynamic_adjustment가 false면 start_rate는 시작 손절가 그대로임.
             self.adj_start_price = self.entry_price * (1 + start_rate)
             self.stop_price = self.adj_start_price - (
-                (self.adj_start_price - self.low_price) * (1 - self.stop_rate))
+                (self.adj_start_price - self.low_price) * (1 - self.stop_rate)
+            )
 
         # 오입력 발생시 오류로 프로그래밍 종료처리.
         else:
@@ -436,7 +435,7 @@ class PortfolioManager:
         self.data_container.get_data(data_name=convert_to_symbol).update_trade_data(
             current_price=price, current_timestamp=timestamp
         )
-        
+
         # 컨테이너에서 데이터를 불러온다.
         log_data = self.data_container.get_data(data_name=convert_to_symbol)
         trade_data = self.__extract_valid_data(data=log_data)
@@ -478,7 +477,7 @@ class PortfolioManager:
 
         # open_positions 데이터를 복사 및 변수로 저장한다.
         open_position_data = self.open_positions[convert_to_symbol].copy()
-        
+
         # open_position 데이터를 삭제한다.
         del self.open_positions[convert_to_symbol]
 
@@ -1188,7 +1187,7 @@ class TradeCalculator:
         self,
         trading_symbol: str,
         order_amount: float,
-        scenario_leverage: int,
+        scenario_leverage: int = 5,
         market_type: str = "futures",
     ):
         """
@@ -1222,7 +1221,9 @@ class TradeCalculator:
 
         # 레버리지 값을 최소 1 ~ 최대 125로 설정
         # 라이브 트레이딩에서 미치지 않고서야 절때 고배율로 하지 말 것. 제정신이냐??
-        target_leverage = int(min(max_allowed_leverage, (self.requested_leverage*scenario_leverage)))
+        target_leverage = int(
+            min(max_allowed_leverage, (self.requested_leverage * scenario_leverage))
+        )
 
         # 현재가 기준 최소 주문 가능량 계산
         min_trade_quantity = await trade_client.get_min_trade_quantity(
@@ -1254,9 +1255,11 @@ class TradeCalculator:
         # debug
         # print(self.safe_asset_ratio)
         # print(self.ins_portfolio.total_wallet_balance)
-        
-        initial_usable_amount = self.ins_portfolio.total_wallet_balance - initial_safety_amount
-                
+
+        initial_usable_amount = (
+            self.ins_portfolio.total_wallet_balance - initial_safety_amount
+        )
+
         # 자금이 10 미만일 경우 초기값 반환
         if self.ins_portfolio.total_wallet_balance < 10:
             return {
@@ -1300,7 +1303,7 @@ class OrderConstraint:
 
     def __init__(
         self,
-        market:str,
+        market: str,
         increase_type: str,
         chance: int,
         loss_recovery_interval: str,
@@ -1371,14 +1374,16 @@ class OrderConstraint:
             6) current_timestamp : 현재 시간, None일 경우 현재 시간을 생성
         """
 
-        convert_to_symbol = f'{self.market}_{symbol}'
-        
+        convert_to_symbol = f"{self.market}_{symbol}"
+
         # 거래 종료 이력을 확인하고 없으면 True를 반환한다.
         if convert_to_symbol not in self.ins_portfolio.closed_positions:
             return True
 
         # 거래 종료 데이터 np.array화
-        data_array = np.array(self.ins_portfolio.closed_positions[convert_to_symbol], float)
+        data_array = np.array(
+            self.ins_portfolio.closed_positions[convert_to_symbol], float
+        )
 
         # 현재 타임스탬프 설정
         if current_timestamp is None:

@@ -458,6 +458,7 @@ class AnalysisManager:
         for name in scenario_list:
             signal = self.scenario_data.get_data(data_name=name)
             time_ = utils._convert_to_datetime(time.time() * 1_000)
+            # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
             if signal[0]:
                 print("="*30)
                 print(f"1. Symbol      : {signal[1]}")

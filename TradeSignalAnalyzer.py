@@ -141,8 +141,8 @@ class AnalysisManager:
         self.interval_idx_map = self.base_config.intervals_idx_map
         self.lookback_days = self.base_config.lookback_days
         self.processing = Processing()
-        self.symbols = []
-        self.kline_data = {}
+        self.symbols:List = []
+        self.kline_data:Dict = {}
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
 
         # data:np.ndarray // data_name=f'interval_{interval}' 데이터전달.
@@ -159,10 +159,10 @@ class AnalysisManager:
         self.data_container.clear_all_data()
         self.scenario_data.clear_all_data()
 
-    def __get_scenario_number(self) -> int:
+    def __get_scenario_number(self) -> Tuple:
         stack = inspect.stack()
         parent_function_name = stack[1].function
-        return parent_function_name, int(parent_function_name.split("_")[-1])
+        return (parent_function_name, int(parent_function_name.split("_")[-1]))
 
     def __fail_signal(self, scenario_number: int):
         # 상태, symbol, position, 레버리지, 시나리오 번호

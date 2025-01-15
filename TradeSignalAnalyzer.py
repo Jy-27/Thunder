@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Union, Any, Tuple, Final
 from dataclasses import dataclass, fields, field, asdict
 from numpy.typing import NDArray
 import inspect
-
+import time
 """
 시나리오 1. 
     5분봉 연속 3회 상승
@@ -29,7 +29,7 @@ class BaseConfig:
     ALL_KLINE_INTERVALS = utils._info_kline_intervals()  # 클래스 변수
     OHLCV_COLUMNS = utils._info_kline_columns()
     ACTIVE_COLUMNS_INDEX = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
-    selected_intervals = ["5m"]  # , "15m", "1h"]  # , "2h", "1d"]
+    selected_intervals = ["3m"]  # , "15m", "1h"]  # , "2h", "1d"]
     lookback_days = 2
     """
     kline 1회 최대 수신가능갯수 1,000개 이며,
@@ -191,6 +191,8 @@ class AnalysisManager:
         self.symbols = symbols
         return symbols
 
+
+
     def scenario_1(self):
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_number)
@@ -210,7 +212,7 @@ class AnalysisManager:
         # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
         fail_signal = (False, None, 0, 0, 0)
 
-        target_interval = "5m"
+        target_interval = "3m"
 
         temp_data = {}
 
@@ -229,14 +231,15 @@ class AnalysisManager:
                 candle_ratio = 0.6
 
                 # 데이터 슬라이싱
-                slice_1 = select_data[-12:-8]
-                slice_2 = select_data[-8:-4]
+                slice_1 = select_data[-11:-7]
+                slice_2 = select_data[-7:-4]
                 slice_3 = select_data[-4:]
 
                 # taker 구매비율
                 total_volume = np.sum(slice_3[:,10])
                 taker_volume = np.sum(slice_3[:,7])
                 if total_volume == 0 or taker_volume == 0:
+                    # print(f'1차 {scenario_number} fail - {symbol}')
                     continue
                 
                 # debug
@@ -244,6 +247,7 @@ class AnalysisManager:
                 
                 taker_volume_ratio = taker_volume / total_volume
                 if taker_volume_ratio < taker_ratio:
+                    # print(f'2차 {scenario_number} fail - {symbol}')
                     continue
                 
 
@@ -257,6 +261,7 @@ class AnalysisManager:
                 is_value = (value_1 < value_3) and (value_2 < value_3)
                 # 조건 안맞으면 pass
                 if not is_value:
+                    # print(f'3차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
                 
@@ -269,6 +274,7 @@ class AnalysisManager:
                 is_count = (count_1 < count_3) and (count_2 < count_3)
                 # 거래횟수가 마지막 그룹이 max가 아니면
                 if not is_count:
+                    # print(f'4차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
                 # print(f'4차 통과 - {symbol}')
@@ -279,32 +285,170 @@ class AnalysisManager:
                 diff_close_3 = slice_3[:, 4] - slice_3[:,1]
                 # print(f'AAAAA - {diff_close_3}')
                 if 0 in diff_close_3 or np.all(diff_close_3 < 0):
+                    # print(f'5차 {scenario_number} fail - {symbol}')
                     continue
 
                 # print(f'5차 통과 - {symbol}')
                 wick_close_3 = slice_3[:,2] - slice_3[:,3]
-                candle_body_mean = np.mean(diff_close_3 / wick_close_3)
-                
-                # candle 몸통의 비율이 목표 비율보다 낮으면,
+                body_close_3 = np.abs(diff_close_3)
+                candle_body_mean = np.mean(body_close_3 / wick_close_3)
+                print("=============")
+                print(candle_body_mean)
+                print("=============")
+                # # candle 몸통의 비율이 목표 비율보다 낮으면,
                 if candle_body_mean < candle_ratio:
-                    # 종료
+                    print(f'6차 {scenario_number} fail - {symbol}')
+                #     # 종료
                     continue
                 # print(f'6차 통과 - {symbol}')
                 # 마지막 가격이 24시간 max가격이 아니면
                 max_close_price = np.max(select_data[:, 4])
-                if not max_close_price in slice_3[:, 4]:
+                
+                
+                if max_close_price != slice_3[-1][4]:
+                    # print(f'7차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
                 # print(f'7차 통과 - {symbol}')
-
+                print(f'검토 승인 : {scenario_name} - {symbol}')
+                # continue
                 # debug
                 temp_data[symbol] = value_3
-        
+
+
         if not temp_data:
             return fail_signal
         # print('종점.')
         leverage = len(temp_data)
-        print(f'레버리지 - {leverage}')
+        symbol = min(temp_data, key=temp_data.get)
+        success_signal = (True, symbol, 1, leverage, scenario_number)
+        return self.scenario_data.set_data(scenario_name, success_signal)
+
+    def scenario_2(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_number)
+        """
+        시나리오.
+        4개식 3개의 그룹으로 나눈다.
+        
+        마지막 그룹의 거래대금이 가장 클 것.
+        마지막 그룹의 거래횟수가 가장 높을 것.
+        마지막 그룹이 전부 상승일 것.
+        24시간중 마지막 그룹이 max일 것.
+        마지막 그룹이 앞의 2그룹보다 상승폭이 클 것.
+        
+        최종 집계 후 가장 거래대금이 낮은것을 반환할 것.
+        """
+
+        # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
+        fail_signal = (False, None, 0, 0, 0)
+
+        target_interval = "3m"
+
+        temp_data = {}
+
+        data_names = self.data_container.get_all_data_names()
+        for name in data_names:
+            if target_interval in name:
+                select_data = self.data_container.get_data(name)
+                
+                if len(select_data) <13:
+                    continue
+                
+                symbol = name.split("_")[1]
+
+                reference_ratio = 1.15
+                taker_ratio = 0.4
+                candle_ratio = 0.6
+
+                # 데이터 슬라이싱
+                slice_1 = select_data[-11:-7]
+                slice_2 = select_data[-7:-4]
+                slice_3 = select_data[-4:]
+
+                # taker 구매비율
+                total_volume = np.sum(slice_3[:,10])
+                taker_volume = np.sum(slice_3[:,7])
+                if total_volume == 0 or taker_volume == 0:
+                    # print(f'1차 {scenario_number} fail - {symbol}')
+                    continue
+                
+                # debug
+                # print(f'1차 통과 - {symbol}')
+                
+                taker_volume_ratio = taker_volume / total_volume
+                if taker_volume_ratio > taker_ratio:
+                    # print(f'2차 {scenario_number} fail - {symbol}')
+                    continue
+                
+
+                # print(f'2차 통과 - {symbol}')
+                # 거래대금 검토
+                value_1 = np.sum(slice_1[:, 7]) * reference_ratio
+                value_2 = np.sum(slice_2[:, 7]) * reference_ratio
+                value_3 = np.sum(slice_3[:, 7])
+
+                # 마지막 거래 대금의 합이 제일 커야함.
+                is_value = (value_1 < value_3) and (value_2 < value_3)
+                # 조건 안맞으면 pass
+                if not is_value:
+                    # print(f'3차 {scenario_number} fail - {symbol}')
+                    # 종료
+                    continue
+                
+                # print(f'3차 통과 - {symbol}')
+                # debug
+                count_1 = np.sum(slice_1[:, 8]) * reference_ratio
+                count_2 = np.sum(slice_2[:, 8]) * reference_ratio
+                count_3 = np.sum(slice_3[:, 8])
+
+                is_count = (count_1 < count_3) and (count_2 < count_3)
+                # 거래횟수가 마지막 그룹이 max가 아니면
+                if not is_count:
+                    # print(f'4차 {scenario_number} fail - {symbol}')
+                    # 종료
+                    continue
+                # print(f'4차 통과 - {symbol}')
+
+                # 마지막 그룹이 종가기준 전부 하락일 것.
+                diff_close_1 = slice_1[:, 1] - slice_1[:,4]
+                diff_close_2 = slice_2[:, 1] - slice_2[:,4]
+                diff_close_3 = slice_3[:, 1] - slice_3[:,4]
+                # print(f'AAAAA - {diff_close_3}')
+                if 0 in diff_close_3 or np.all(diff_close_3 > 0):
+                    # print(f'5차 {scenario_number} fail - {symbol}')
+                    continue
+
+                # print(f'5차 통과 - {symbol}')
+                wick_close_3 = slice_3[:,3] - slice_3[:,2]
+                body_close_3 = np.abs(diff_close_3)
+                candle_body_mean = np.mean(body_close_3 / wick_close_3)
+                # print("=============")
+                # print(candle_body_mean)
+                # print("=============")
+                # # candle 몸통의 비율이 목표 비율보다 낮으면,
+                if candle_body_mean < candle_ratio:
+                    print(f'6차 {scenario_number} fail - {symbol}')
+                    # 종료
+                    continue
+                # print(f'6차 통과 - {symbol}')
+                # 마지막 가격이 24시간 max가격이 아니면
+                min_close_price = np.min(select_data[:, 4])
+                if min_close_price != slice_3[-1][4]:
+                    # print(f'7차 {scenario_number} fail - {symbol}')
+                    # 종료
+                    continue
+                # print(f'7차 통과 - {symbol}')
+                print(f'검토 승인 : {scenario_name} - {symbol}')
+                # continue
+                # debug
+                temp_data[symbol] = value_3
+
+
+        if not temp_data:
+            return fail_signal
+        # print('종점.')
+        leverage = len(temp_data)
         symbol = min(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 2, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
@@ -316,12 +460,20 @@ class AnalysisManager:
         self.__get_symbols()
         ### scenario 함수 실행 공간
         self.scenario_1()
+        self.scenario_2()
 
         ###
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:
             signal = self.scenario_data.get_data(data_name=name)
+            time_ = utils._convert_to_datetime(time.time())
             if signal[0]:
+                print("="*30)
+                print(f"1. Symbol      : {signal[1]}")
+                print(f"2. Position    : {signal[2]}")
+                print(f"3. Scenario_no : {signal[3]}")
+                print(f"4. Leverage    : {signal[4]}")
+                print(f"5. time        : {time_}")
                 self.clear_dataset()
                 return signal
         self.clear_dataset()

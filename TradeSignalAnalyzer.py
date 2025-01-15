@@ -9,17 +9,8 @@ from numpy.typing import NDArray
 import inspect
 import time
 """
-시나리오 1. 
-    5분봉 연속 3회 상승
-    첫번째 5분봉 < 두번째 5분봉 < 세번째 5분봉 상승률
-    위꼬리 아래꼬리 합계 전체 몸통대비 40% 초과 금지 
-    
-
-
-1 : long
-2 : short
-3 : None 
-으로 신호 정의함.
+과최적화가 나쁜것만은 아니다.
+내 돈 나가는데 그게 무슨 상관?
 """
 
 
@@ -292,12 +283,12 @@ class AnalysisManager:
                 wick_close_3 = slice_3[:,2] - slice_3[:,3]
                 body_close_3 = np.abs(diff_close_3)
                 candle_body_mean = np.mean(body_close_3 / wick_close_3)
-                print("=============")
-                print(candle_body_mean)
-                print("=============")
+                # print("=============")
+                # print(candle_body_mean)
+                # print("=============")
                 # # candle 몸통의 비율이 목표 비율보다 낮으면,
                 if candle_body_mean < candle_ratio:
-                    print(f'6차 {scenario_number} fail - {symbol}')
+                    # print(f'6차 {scenario_number} fail - {symbol}')
                 #     # 종료
                     continue
                 # print(f'6차 통과 - {symbol}')
@@ -428,7 +419,7 @@ class AnalysisManager:
                 # print("=============")
                 # # candle 몸통의 비율이 목표 비율보다 낮으면,
                 if candle_body_mean < candle_ratio:
-                    print(f'6차 {scenario_number} fail - {symbol}')
+                    # print(f'6차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
                 # print(f'6차 통과 - {symbol}')
@@ -466,7 +457,7 @@ class AnalysisManager:
         scenario_list = self.scenario_data.get_all_data_names()
         for name in scenario_list:
             signal = self.scenario_data.get_data(data_name=name)
-            time_ = utils._convert_to_datetime(time.time())
+            time_ = utils._convert_to_datetime(time.time() * 1_000)
             if signal[0]:
                 print("="*30)
                 print(f"1. Symbol      : {signal[1]}")

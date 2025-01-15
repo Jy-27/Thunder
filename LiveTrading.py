@@ -774,7 +774,7 @@ class LiveTradingManager:
         symbol =scenario_data[1]
         position =scenario_data[2]
         scenario_type =scenario_data[3]
-        scenario_leverage = scenario_data[4]
+        scenario_leverage = scenario_data[4] * self.requested_leverage
         select_leverage = min(scenario_leverage, self.max_leverage)
 
         # 분석결과 order_signal이 false면

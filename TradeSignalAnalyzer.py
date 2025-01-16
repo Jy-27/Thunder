@@ -8,6 +8,7 @@ from dataclasses import dataclass, fields, field, asdict
 from numpy.typing import NDArray
 import inspect
 import time
+
 """
 과최적화가 나쁜것만은 아니다.
 내 돈 나가는데 그게 무슨 상관?
@@ -132,8 +133,8 @@ class AnalysisManager:
         self.interval_idx_map = self.base_config.intervals_idx_map
         self.lookback_days = self.base_config.lookback_days
         self.processing = Processing()
-        self.symbols:List = []
-        self.kline_data:Dict = {}
+        self.symbols: List = []
+        self.kline_data: Dict = {}
         # np.array([])로 초기화 후 추가 하는 작업은 성능저하 생기므로 list화 한 후 np.array처리함.
 
         # data:np.ndarray // data_name=f'interval_{interval}' 데이터전달.
@@ -182,8 +183,6 @@ class AnalysisManager:
         self.symbols = symbols
         return symbols
 
-
-
     def scenario_1(self):
         scenario_name, scenario_number = self.__get_scenario_number()
         fail_signal = self.__fail_signal(scenario_number)
@@ -211,15 +210,15 @@ class AnalysisManager:
         for name in data_names:
             if target_interval in name:
                 select_data = self.data_container.get_data(name)
-                
-                if len(select_data) <13:
+
+                if len(select_data) < 13:
                     continue
-                
+
                 symbol = name.split("_")[1]
 
-                reference_ratio = 1.15
-                taker_ratio = 0.6
-                candle_ratio = 0.6
+                REFERENCE_RATIO = 1.15
+                TAKER_RATIO = 0.65
+                CANDLE_RATIO = 0.6
 
                 # 데이터 슬라이싱
                 slice_1 = select_data[-11:-7]
@@ -227,25 +226,24 @@ class AnalysisManager:
                 slice_3 = select_data[-4:]
 
                 # taker 구매비율
-                total_volume = np.sum(slice_3[:,10])
-                taker_volume = np.sum(slice_3[:,7])
+                total_volume = np.sum(slice_3[:, 10])
+                taker_volume = np.sum(slice_3[:, 7])
                 if total_volume == 0 or taker_volume == 0:
                     # print(f'1차 {scenario_number} fail - {symbol}')
                     continue
-                
+
                 # debug
                 # print(f'1차 통과 - {symbol}')
-                
+
                 taker_volume_ratio = taker_volume / total_volume
-                if taker_volume_ratio < taker_ratio:
+                if taker_volume_ratio < TAKER_RATIO:
                     # print(f'2차 {scenario_number} fail - {symbol}')
                     continue
-                
 
                 # print(f'2차 통과 - {symbol}')
                 # 거래대금 검토
-                value_1 = np.sum(slice_1[:, 7]) * reference_ratio
-                value_2 = np.sum(slice_2[:, 7]) * reference_ratio
+                value_1 = np.sum(slice_1[:, 7]) * REFERENCE_RATIO
+                value_2 = np.sum(slice_2[:, 7]) * REFERENCE_RATIO
                 value_3 = np.sum(slice_3[:, 7])
 
                 # 마지막 거래 대금의 합이 제일 커야함.
@@ -255,11 +253,11 @@ class AnalysisManager:
                     # print(f'3차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
-                
+
                 # print(f'3차 통과 - {symbol}')
                 # debug
-                count_1 = np.sum(slice_1[:, 8]) * reference_ratio
-                count_2 = np.sum(slice_2[:, 8]) * reference_ratio
+                count_1 = np.sum(slice_1[:, 8]) * REFERENCE_RATIO
+                count_2 = np.sum(slice_2[:, 8]) * REFERENCE_RATIO
                 count_3 = np.sum(slice_3[:, 8])
 
                 is_count = (count_1 < count_3) and (count_2 < count_3)
@@ -271,41 +269,39 @@ class AnalysisManager:
                 # print(f'4차 통과 - {symbol}')
 
                 # 마지막 그룹이 종가기준 전부 상승일 것.
-                diff_close_1 = slice_1[:, 4] - slice_1[:,1]
-                diff_close_2 = slice_2[:, 4] - slice_2[:,1]
-                diff_close_3 = slice_3[:, 4] - slice_3[:,1]
+                diff_close_1 = slice_1[:, 4] - slice_1[:, 1]
+                diff_close_2 = slice_2[:, 4] - slice_2[:, 1]
+                diff_close_3 = slice_3[:, 4] - slice_3[:, 1]
                 # print(f'AAAAA - {diff_close_3}')
-                if 0 in diff_close_3 or np.all(diff_close_3 < 0):
+                if not np.all(diff_close_3 > 0):
                     # print(f'5차 {scenario_number} fail - {symbol}')
                     continue
 
                 # print(f'5차 통과 - {symbol}')
-                wick_close_3 = slice_3[:,2] - slice_3[:,3]
+                wick_close_3 = slice_3[:, 2] - slice_3[:, 3]
                 body_close_3 = np.abs(diff_close_3)
                 candle_body_mean = np.mean(body_close_3 / wick_close_3)
                 # print("=============")
                 # print(candle_body_mean)
                 # print("=============")
                 # # candle 몸통의 비율이 목표 비율보다 낮으면,
-                if candle_body_mean < candle_ratio:
+                if not candle_body_mean > CANDLE_RATIO:
                     # print(f'6차 {scenario_number} fail - {symbol}')
-                #     # 종료
+                    #     # 종료
                     continue
                 # print(f'6차 통과 - {symbol}')
                 # 마지막 가격이 24시간 max가격이 아니면
                 max_close_price = np.max(select_data[:, 4])
-                
-                
-                if max_close_price != slice_3[-1][4]:
+
+                if not max_close_price == slice_3[-1][4]:
                     # print(f'7차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
                 # print(f'7차 통과 - {symbol}')
-                print(f'검토 승인 : {scenario_name} - {symbol}')
+                print(f"검토 승인 : {scenario_name} - {symbol}")
                 # continue
                 # debug
                 temp_data[symbol] = value_3
-
 
         if not temp_data:
             return fail_signal
@@ -342,15 +338,15 @@ class AnalysisManager:
         for name in data_names:
             if target_interval in name:
                 select_data = self.data_container.get_data(name)
-                
-                if len(select_data) <13:
+
+                if len(select_data) < 13:
                     continue
-                
+
                 symbol = name.split("_")[1]
 
-                reference_ratio = 1.15
-                taker_ratio = 0.4
-                candle_ratio = 0.6
+                REFERENCE_RATIO = 1.15
+                TAKER_RATIO = 0.35
+                CANDLE_RATIO = 0.6
 
                 # 데이터 슬라이싱
                 slice_1 = select_data[-11:-7]
@@ -358,25 +354,25 @@ class AnalysisManager:
                 slice_3 = select_data[-4:]
 
                 # taker 구매비율
-                total_volume = np.sum(slice_3[:,10])
-                taker_volume = np.sum(slice_3[:,7])
+                total_volume = np.sum(slice_3[:, 7])
+                taker_volume = np.sum(slice_3[:, 10])
                 if total_volume == 0 or taker_volume == 0:
                     # print(f'1차 {scenario_number} fail - {symbol}')
                     continue
-                
+
                 # debug
                 # print(f'1차 통과 - {symbol}')
-                
+
                 taker_volume_ratio = taker_volume / total_volume
-                if taker_volume_ratio > taker_ratio:
+                # print(f'{taker_volume_ratio:,.2f}')
+                if not taker_volume_ratio < TAKER_RATIO:
                     # print(f'2차 {scenario_number} fail - {symbol}')
                     continue
-                
 
                 # print(f'2차 통과 - {symbol}')
                 # 거래대금 검토
-                value_1 = np.sum(slice_1[:, 7]) * reference_ratio
-                value_2 = np.sum(slice_2[:, 7]) * reference_ratio
+                value_1 = np.sum(slice_1[:, 7]) * REFERENCE_RATIO
+                value_2 = np.sum(slice_2[:, 7]) * REFERENCE_RATIO
                 value_3 = np.sum(slice_3[:, 7])
 
                 # 마지막 거래 대금의 합이 제일 커야함.
@@ -386,11 +382,11 @@ class AnalysisManager:
                     # print(f'3차 {scenario_number} fail - {symbol}')
                     # 종료
                     continue
-                
+
                 # print(f'3차 통과 - {symbol}')
                 # debug
-                count_1 = np.sum(slice_1[:, 8]) * reference_ratio
-                count_2 = np.sum(slice_2[:, 8]) * reference_ratio
+                count_1 = np.sum(slice_1[:, 8]) * REFERENCE_RATIO
+                count_2 = np.sum(slice_2[:, 8]) * REFERENCE_RATIO
                 count_3 = np.sum(slice_3[:, 8])
 
                 is_count = (count_1 < count_3) and (count_2 < count_3)
@@ -402,39 +398,39 @@ class AnalysisManager:
                 # print(f'4차 통과 - {symbol}')
 
                 # 마지막 그룹이 종가기준 전부 하락일 것.
-                diff_close_1 = slice_1[:, 1] - slice_1[:,4]
-                diff_close_2 = slice_2[:, 1] - slice_2[:,4]
-                diff_close_3 = slice_3[:, 1] - slice_3[:,4]
+                diff_close_1 = slice_1[:, 1] - slice_1[:, 4]
+                diff_close_2 = slice_2[:, 1] - slice_2[:, 4]
+                diff_close_3 = slice_3[:, 1] - slice_3[:, 4]
+                print(diff_close_3)
                 # print(f'AAAAA - {diff_close_3}')
-                if 0 in diff_close_3 or np.all(diff_close_3 > 0):
-                    # print(f'5차 {scenario_number} fail - {symbol}')
+                if not np.all(diff_close_3 > 0):
+                    # print(f"5차 {scenario_number} fail - {symbol}")
                     continue
 
                 # print(f'5차 통과 - {symbol}')
-                wick_close_3 = slice_3[:,3] - slice_3[:,2]
+                wick_close_3 = slice_3[:, 3] - slice_3[:, 2]
                 body_close_3 = np.abs(diff_close_3)
                 candle_body_mean = np.mean(body_close_3 / wick_close_3)
                 # print("=============")
                 # print(candle_body_mean)
                 # print("=============")
                 # # candle 몸통의 비율이 목표 비율보다 낮으면,
-                if candle_body_mean < candle_ratio:
-                    # print(f'6차 {scenario_number} fail - {symbol}')
+                if not candle_body_mean > CANDLE_RATIO:
+                    # print(f"6차 {scenario_number} fail - {symbol}")
                     # 종료
                     continue
                 # print(f'6차 통과 - {symbol}')
                 # 마지막 가격이 24시간 max가격이 아니면
                 min_close_price = np.min(select_data[:, 4])
-                if min_close_price != slice_3[-1][4]:
-                    # print(f'7차 {scenario_number} fail - {symbol}')
+                if not min_close_price == slice_3[-1][4]:
+                    # print(f"7차 {scenario_number} fail - {symbol}")
                     # 종료
                     continue
                 # print(f'7차 통과 - {symbol}')
-                print(f'검토 승인 : {scenario_name} - {symbol}')
+                print(f"검토 승인 : {scenario_name} - {symbol}")
                 # continue
                 # debug
                 temp_data[symbol] = value_3
-
 
         if not temp_data:
             return fail_signal
@@ -450,7 +446,7 @@ class AnalysisManager:
         # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
         self.__get_symbols()
         ### scenario 함수 실행 공간
-        self.scenario_1()
+        # self.scenario_1()
         self.scenario_2()
 
         ###
@@ -460,7 +456,7 @@ class AnalysisManager:
             time_ = utils._convert_to_datetime(time.time() * 1_000)
             # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
             if signal[0]:
-                print("="*30)
+                print("=" * 30)
                 print(f"1. Symbol      : {signal[1]}")
                 print(f"2. Position    : {signal[2]}")
                 print(f"3. Scenario_no : {signal[3]}")
@@ -621,9 +617,9 @@ class AnalysisManager:
 #     if not is_diff_5m_up:
 #         return self.scenario_data.set_data(scenario_name, fail_signal)
 
-#     data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
+#     data_15m_TAKER_RATIO = data_15m[-1][9] / data_15m[-1][7]
 
-#     if data_15m_taker_ratio < 0.8:
+#     if data_15m_TAKER_RATIO < 0.8:
 #         return self.scenario_data.set_data(scenario_name, fail_signal)
 
 #     success_signal = (True, 1, scenario_number)
@@ -663,9 +659,9 @@ class AnalysisManager:
 #     if not is_diff_5m_down:
 #         return self.scenario_data.set_data(scenario_name, fail_signal)
 
-#     data_15m_taker_ratio = data_15m[-1][9] / data_15m[-1][7]
+#     data_15m_TAKER_RATIO = data_15m[-1][9] / data_15m[-1][7]
 #     print(True)
-#     if data_15m_taker_ratio > 0.2:
+#     if data_15m_TAKER_RATIO > 0.2:
 #         return self.scenario_data.set_data(scenario_name, fail_signal)
 
 #     success_signal = (True, 2, scenario_number)

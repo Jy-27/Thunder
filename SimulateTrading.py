@@ -226,7 +226,7 @@ class BackTesterManager:
 
     # position open전 주문 유효 점검 및 주문가능수량을 반환한다.
     async def __validate_open_signal(
-        self, symbol: str, price: float, scenario_leverage:int
+        self, symbol: str, price: float, scenario_leverage: int
     ):  # , leverage: int):
         """
         1. 기능 : position open전 주문 유효 점검 및 주문 가능 수량을 계산 반환한다.
@@ -255,20 +255,19 @@ class BackTesterManager:
             # total_balance = self.ins_portfolio.total_wallet_balance
             conctraint = self.ins_trade_calculator.get_trade_reference_amount()
             order_amount = conctraint["maxTradeAmount"] / self.max_held_symbols
-            
-            
+
             # 주문 신호 발생기
             status, quantity, leverage = (
                 await self.ins_trade_calculator.get_order_params(
                     trading_symbol=symbol,  # 타겟 심볼
                     order_amount=order_amount,  # 최대 거래 가능 금액 반영
-                    scenario_leverage=scenario_leverage
+                    scenario_leverage=scenario_leverage,
                 )
             )
-            
+
             leverage = int(leverage)
-            
-            # DEBUG            
+
+            # DEBUG
             margin_ = (quantity / leverage) * price
             is_cash_margin = self.ins_portfolio.available_balance > margin_
             is_trade_count = self.ins_portfolio.number_of_stocks < self.max_held_symbols
@@ -390,9 +389,8 @@ class BackTesterManager:
             symbol=symbol, price=price, scenario_leverage=scenario_leverage
         )
 
-        #debug
-        
-        
+        # debug
+
         # 주문 유혀성 검토 결과 False면,
         if not is_open_signal:
             # 함수 종료
@@ -494,7 +492,7 @@ class BackTesterManager:
                     select_data = self.closing_sync_data[symbol][interval][
                         select_indices_
                     ]
-                    
+
                     price = select_data[-1][4]
                     end_timestamp = select_data[-1][6]
                     timestamp_min.append(end_timestamp)
@@ -518,7 +516,7 @@ class BackTesterManager:
                         # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
 
-                    if np.all(select_data==0):
+                    if np.all(select_data == 0):
                         continue
                     # # symbol의 조건에 맞는지 여부, 보유여부를 점검한다.
                     # if not await self.validate_ticker_conditions(
@@ -548,7 +546,7 @@ class BackTesterManager:
             self.interval_dataset.clear_all_data()
             if not trade_signal[0]:
                 continue
-            
+
             current_timestamp = min(timestamp_min)
 
             await self.active_open_position(

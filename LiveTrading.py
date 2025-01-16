@@ -598,9 +598,10 @@ class LiveTradingManager:
                 # debug
                 # print(symbol)
                 scenario_data = self.ins_analyzer.scenario_run()
-                
-                # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
-                await self.submit_order_open_signal(scenario_data=scenario_data)
+
+                # original code // 주문 대기
+                # # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
+                # await self.submit_order_open_signal(scenario_data=scenario_data)
 
                 # # DEBUG
                 # end = time.time()
@@ -770,10 +771,10 @@ class LiveTradingManager:
         self, scenario_data: tuple
     ) -> Dict[str, Union[Any]]:
 
-        order_signal =scenario_data[0]
-        symbol =scenario_data[1]
-        position =scenario_data[2]
-        scenario_type =scenario_data[3]
+        order_signal = scenario_data[0]
+        symbol = scenario_data[1]
+        position = scenario_data[2]
+        scenario_type = scenario_data[3]
         scenario_leverage = scenario_data[4] * self.requested_leverage
         select_leverage = min(scenario_leverage, self.max_leverage)
 

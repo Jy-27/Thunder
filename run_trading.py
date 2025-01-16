@@ -42,7 +42,7 @@ if __name__ == "__main__":
     absolute = False  # True : 비율 절대값, False : 비율 실제값
     value = 250_000_000  # 거래대금 : 단위 USD
     target_percent = 0.035  # 변동 비율폭 : 음수 가능
-    
+
     quote_type = "usdt"  # 쌍거래 거래화폐
 
     ### 테스트 여부 확인 ###

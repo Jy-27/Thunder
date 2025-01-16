@@ -599,9 +599,8 @@ class LiveTradingManager:
                 # print(symbol)
                 scenario_data = self.ins_analyzer.scenario_run()
 
-                # original code // 주문 대기
-                # # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
-                # await self.submit_order_open_signal(scenario_data=scenario_data)
+                # 분석 결과를 주문 함수에 넣는다. false일경우 자동 return
+                await self.submit_order_open_signal(scenario_data=scenario_data)
 
                 # # DEBUG
                 # end = time.time()
@@ -775,7 +774,7 @@ class LiveTradingManager:
         symbol = scenario_data[1]
         position = scenario_data[2]
         scenario_type = scenario_data[3]
-        scenario_leverage = scenario_data[4] * self.requested_leverage
+        scenario_leverage = int(scenario_data[4] * self.requested_leverage)
         select_leverage = min(scenario_leverage, self.max_leverage)
 
         # 분석결과 order_signal이 false면

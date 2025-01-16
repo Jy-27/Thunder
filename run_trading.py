@@ -35,7 +35,7 @@ if __name__ == "__main__":
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 2  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위
-    max_held_symbols = 4  # 동시 거래 가능 수량
+    max_held_symbols = 3  # 동시 거래 가능 수량
     is_profit_preservation = True  # 수익보존여부
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하

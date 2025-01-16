@@ -446,7 +446,7 @@ class AnalysisManager:
         # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
         self.__get_symbols()
         ### scenario 함수 실행 공간
-        # self.scenario_1()
+        self.scenario_1()
         self.scenario_2()
 
         ###
@@ -455,7 +455,7 @@ class AnalysisManager:
             signal = self.scenario_data.get_data(data_name=name)
             time_ = utils._convert_to_datetime(time.time() * 1_000)
             # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
-            if signal[0]:
+            if signal[0] and signal[3]>1:
                 print("=" * 30)
                 print(f"1. Symbol      : {signal[1]}")
                 print(f"2. Position    : {signal[2]}")

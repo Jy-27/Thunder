@@ -14,9 +14,7 @@ T = TypeVar("T")
 
 
 def _info_kline_columns():
-    
-    
-    columns = [
+    return [
         "Open Time",  # 0
         "Open",  # 1
         "High",  # 2
@@ -30,11 +28,6 @@ def _info_kline_columns():
         "Taker Buy Quote Asset Volume",  # 10
         "Ignore",  # 11
     ]
-    result = []
-    for idx, name in enumerate(columns):
-        name = f'{idx}: {name}'
-        result.append(name)
-    return result
 
 
 def _info_kline_intervals():

@@ -26,12 +26,11 @@ if __name__ == "__main__":
     is_dynamic_adjustment = (
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     )
-    # dynamic_adjustment_rate = 0.001  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
-    dynamic_adjustment_rate = 0.005  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
+    dynamic_adjustment_rate = 0.001  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
     dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 250  # 시작금액
-    leverage = 2  # 레버리지
+    leverage = 5  # 레버리지
     init_stop_rate = 0.025  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 2  # 반복 손실 발생 유예횟수

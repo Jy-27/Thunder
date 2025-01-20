@@ -743,8 +743,8 @@ class AnalysisManager:
         self.scenario_1()
         self.scenario_2()
         self.scenario_3()
-        # self.scenario_6()
-        # self.scenario_7()
+        self.scenario_6()
+        self.scenario_7()
 
         ###
         scenario_list = self.scenario_data.get_all_data_names()

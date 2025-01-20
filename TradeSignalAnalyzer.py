@@ -464,7 +464,7 @@ class AnalysisManager:
         target_interval = '3m'
         temp_data = {}
         reference_ratio = 1.2
-        max_body_ratio = 0.6
+        max_body_ratio = 0.8
         
         data_names = self.data_container.get_all_data_names()
         for name in data_names:
@@ -486,29 +486,33 @@ class AnalysisManager:
                 data_group_2 = base_data[-2*true_len:-1*true_len]
                 data_group_3 = base_data[-1*true_len:]
                 # 데이터의 길이가 3개 미만이면
-                if not true_len > 4 :
+                if not true_len >= 3 :
                     # print(f'1차 롱 페일')
                     # 종료
                     continue
                 
-                group_1_value = np.sum(data_group_1[:, 5])
-                group_2_value = np.sum(data_group_2[:, 5])
-                group_3_value = np.sum(data_group_3[:, 5])
+                group_1_volume = np.sum(data_group_1[:, 7])
+                group_2_volume = np.sum(data_group_2[:, 7])
+                group_3_volume = np.sum(data_group_3[:, 7])
                 # 마지막 거래대금이 이전 거래대금보다 1.5배 더 클것.
-                if not (group_1_value < group_3_value) and (group_2_value < group_3_value):
+                if not (group_1_volume < group_3_volume) and (group_2_volume < group_3_volume):
                     # print(f'2차 롱 페일')
                     # 종료
                     continue
                 
-                group_1_count = np.sum(data_group_1[:, 8])
-                group_2_count = np.sum(data_group_2[:, 8])
-                group_3_count = np.sum(data_group_3[:, 8])
-                # 마지막 거래횟수가 이전 거래횟수보다 1.5배 더 클 것.
-                if not (group_1_count < group_3_count) and (group_2_count < group_3_count):
-                    print(f'{symbol} - 3차 롱 페일')
-                    # 종료
-                    continue
+                taker_1_q_volume = np.sum(data_group_1[:,10])
+                taker_2_q_volume = np.sum(data_group_2[:,10])
+                taker_3_q_volume = np.sum(data_group_3[:,10])
                 
+                
+                taker_ratio_1 = taker_1_q_volume / group_1_volume
+                taker_ratio_2 = taker_2_q_volume / group_2_volume
+                taker_ratio_3 = taker_3_q_volume / group_3_volume
+  
+                # 테이커의 비율이 마지막 그룹이 제일 높을 것.
+                if not (taker_ratio_1 < taker_ratio_3) and not (taker_ratio_2 < taker_ratio_3):
+                    continue
+                               
                 candle_total_lengh = base_data[-1*true_len:,2] - base_data[-1*true_len:,3]
                 # print(candle_total_lengh)
                 body_ratio = np.mean(candle_body_lengh[-1*true_len:,] / candle_total_lengh)
@@ -517,15 +521,15 @@ class AnalysisManager:
                     print(f'{symbol} - 4차 롱 페일')
                     # 종료
                     continue
-                temp_data[symbol] = group_3_value
+                temp_data[symbol] = taker_3_q_volume
                 
         if not temp_data:
             return fail_signal
                 
         # leverage = len(temp_data)
-        leverage = 2
+        leverage = 1
         symbol = min(temp_data, key=temp_data.get)
-        success_signal = (True, symbol, 1, leverage, scenario_number)
+        success_signal = (True, symbol, 5, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
     def scenario_4(self):
@@ -738,9 +742,9 @@ class AnalysisManager:
         ### scenario 함수 실행 공간
         self.scenario_1()
         self.scenario_2()
-        # self.scenario_3()
-        self.scenario_6()
-        self.scenario_7()
+        self.scenario_3()
+        # self.scenario_6()
+        # self.scenario_7()
 
         ###
         scenario_list = self.scenario_data.get_all_data_names()

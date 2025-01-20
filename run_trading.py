@@ -34,7 +34,7 @@ if __name__ == "__main__":
     leverage = 3  # 레버리지
     init_stop_rate = 0.025  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
-    allowed_loss_streak = 2  # 반복 손실 발생 유예횟수
+    allowed_loss_streak = 1  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위
     max_held_symbols = 3  # 동시 거래 가능 수량
     is_profit_preservation = True  # 수익보존여부

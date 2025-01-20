@@ -1222,8 +1222,7 @@ class TradeCalculator:
         # 레버리지 값을 최소 1 ~ 최대 125로 설정
         # 라이브 트레이딩에서 미치지 않고서야 절때 고배율로 하지 말 것. 제정신이냐??
         target_leverage = int(
-            min(max_allowed_leverage, (self.requested_leverage * scenario_leverage))
-        )
+            min(max_allowed_leverage, (self.requested_leverage * scenario_leverage)))
 
         # 현재가 기준 최소 주문 가능량 계산
         min_trade_quantity = await trade_client.get_min_trade_quantity(

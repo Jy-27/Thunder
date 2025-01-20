@@ -774,7 +774,7 @@ class LiveTradingManager:
         symbol = scenario_data[1]
         position = scenario_data[2]
         scenario_type = scenario_data[4]
-        scenario_leverage = int(scenario_data[3] * self.requested_leverage)
+        scenario_leverage = scenario_data[3]
         select_leverage = min(scenario_leverage, self.max_leverage)
 
         # 분석결과 order_signal이 false면
@@ -812,15 +812,15 @@ class LiveTradingManager:
             await self.ins_trade_calculator.get_order_params(
                 trading_symbol=symbol,
                 order_amount=amount,
-                scenario_leverage=select_leverage,
+                scenario_leverage=scenario_leverage,
             )
         )
         
-        # debug
-        print(f'staus - {is_order_available}')
-        print(f'quantity - {quantity}')
-        print(leverage)        
-        print(self.ins_portfolio.available_balance)
+        # # debug
+        # print(f'staus - {is_order_available}')
+        # print(f'quantity - {quantity}')
+        # print(leverage)        
+        # print(self.ins_portfolio.available_balance)
         # 자금이 부족하여 주문이 불가한 경우
         if not is_order_available:
             print(f"주문불가: {symbol} - {leverage} / 잔액 부족")

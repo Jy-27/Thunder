@@ -25,7 +25,7 @@ class LiveTradingManager:
         market: str,  # 거래중인 시장 정보
         kline_period: int,
         increase_type: str = "stepwise",  # "stepwise"계단식 // "proportional"비율 증가식
-        max_held_symbols: int = 4,  # 동시 거래가능 횟수 제한
+        max_held_symbols: int = 2,  # 동시 거래가능 횟수 제한
         safe_asset_ratio: float = 0.02,  # 전체 금액 안전 자산 비율
         use_scale_stop: bool = True,  # 스케일 손절 적용여부 (최고가 / 최저가에 따른 손절가 변동)
         stop_loss_rate: float = 0.035,  # 손절가 비율
@@ -213,7 +213,7 @@ class LiveTradingManager:
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
             # interval 지정값 기준 시계 시간을 의미.
-            await utils._wait_until_next_interval(time_unit="hour", interval=2)
+            await utils._wait_until_next_interval(time_unit="minute", interval=30)
 
     ##=--=####=---=###=--=####=---=###=--=##
     # -=##=---=-*kline data수신관련 *-=---=##=-#

@@ -840,18 +840,130 @@ class AnalysisManager:
         success_signal = (True, symbol, 1, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
+    def scenario_9(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_number)
+
+        temp_data = {}
+
+        interval = "3m"
+        names = self.data_container.get_all_data_names()
+        
+        symbols = self.__get_symbols()
+        
+        for symbol in symbols:
+            name = self.__get_data_container_name(interval=f'{symbol}_{interval}', names=names)
+
+            base_data = self.data_container.get_data(name)
+            
+            close_price = base_data[:, 4]
+            
+            ma7 = np.convolve(close_price, np.ones(7)/7, mode='valid')
+            ma25 = np.convolve(close_price, np.ones(25)/25, mode='valid')
+            ma99 = np.convolve(close_price, np.ones(99)/99, mode='valid')
+
+            is_ma = ma7[-1] > ma25[-1] > close_price[-1] > ma99[-1]
+
+            if not is_ma:
+                # print(f'{symbol} - {scenario_number} : 1차 실패')
+                continue
+            
+            
+            
+            taker_quote_volume = base_data[-1, 10]
+            quote_asset_volume = base_data[-1, 7]
+                        
+            taker_ratio = base_data[-1, 10] / base_data[-1, 7]
+            # print(taker_ratio)
+            target_ratio = 0.45
+            
+            if not taker_ratio <= target_ratio:
+                continue
+            
+            # print(close_price[-4:])
+            close_diff = np.diff(close_price[-4:])
+            # print(close_diff)
+            is_down_candle = np.all(close_diff < 0)
+            # print(is_down_candle)
+            if not is_down_candle:
+                # print(f'{symbol} - {scenario_number} : 3차 실패')
+                continue
+            value = np.sum(base_data[-16:,7])
+            temp_data[symbol] = value
+        if not temp_data:
+            return fail_signal
+        
+        leverage = len(temp_data)
+        symbol = min(temp_data, key=temp_data.get)
+        success_signal = (True, symbol, 2, leverage, scenario_number)
+        return self.scenario_data.set_data(scenario_name, success_signal)
+
+    def scenario_10(self):
+        scenario_name, scenario_number = self.__get_scenario_number()
+        fail_signal = self.__fail_signal(scenario_number)
+
+        temp_data = {}
+
+        interval = "3m"
+        names = self.data_container.get_all_data_names()
+        
+        symbols = self.__get_symbols()
+        
+        for symbol in symbols:
+            name = self.__get_data_container_name(interval=f'{symbol}_{interval}', names=names)
+
+            base_data = self.data_container.get_data(name)
+            
+            close_price = base_data[:, 4]
+            
+            ma7 = np.convolve(close_price, np.ones(7)/7, mode='valid')
+            ma25 = np.convolve(close_price, np.ones(25)/25, mode='valid')
+            ma99 = np.convolve(close_price, np.ones(99)/99, mode='valid')
+
+            is_ma = ma7[-1] < ma25[-1] < close_price[-1] < ma99[-1]
+
+            if not is_ma:
+                # print(f'{symbol} - {scenario_number} : 1차 실패')
+                continue
+            
+            taker_ratio = base_data[:, 10] / base_data[:, 7]
+            target_ratio = 0.55
+            
+            if not taker_ratio[-1] >= target_ratio:
+                continue
+            
+            close_diff = np.diff(close_price[-4:])
+            is_down_candle = np.all(close_diff > 0)
+            if not is_down_candle:
+                # print(f'{symbol} - {scenario_number} : 3차 실패')
+                continue
+            value = np.sum(base_data[-16:,7])
+            temp_data[symbol] = value
+        if not temp_data:
+            return fail_signal
+        
+        leverage = len(temp_data)
+        symbol = min(temp_data, key=temp_data.get)
+        success_signal = (True, symbol, 1, leverage, scenario_number)
+        return self.scenario_data.set_data(scenario_name, success_signal)
+            
+            
+            
+
     def scenario_run(self):
         # 진입여부, 포지션, 시나리오 번호, 레버리지.
         fail_signal = (False, None, 0, 0, 0)
         # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
         self.__get_symbols()
         ### scenario 함수 실행 공간
-        self.scenario_1()
-        self.scenario_2()
-        self.scenario_3()
-        self.scenario_6()
-        self.scenario_7()
-        self.scenario_8()
+        # self.scenario_1()
+        # self.scenario_2()
+        # self.scenario_3()
+        # self.scenario_6()
+        # self.scenario_7()
+        # self.scenario_8()
+        self.scenario_9()
+        self.scenario_10()
 
         ###
         scenario_list = self.scenario_data.get_all_data_names()
@@ -859,13 +971,13 @@ class AnalysisManager:
             signal = self.scenario_data.get_data(data_name=name)
             time_ = utils._convert_to_datetime(time.time() * 1_000)
             # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
-            if signal[0]:# and signal[3]>=2:
-                # print("====== 최종 승인 ======")
-                # print(f"1. Symbol      : {signal[1]}")
-                # print(f"2. Position    : {signal[2]}")
-                # print(f"3. Scenario_no : {signal[4]}")
-                # print(f"4. Leverage    : {signal[3]}")
-                # print(f"5. time        : {time_}")
+            if signal[0] and signal[3]>=2:
+                print("====== 최종 승인 ======")
+                print(f"1. Symbol      : {signal[1]}")
+                print(f"2. Position    : {signal[2]}")
+                print(f"3. Scenario_no : {signal[4]}")
+                print(f"4. Leverage    : {signal[3]}")
+                print(f"5. time        : {time_}")
                 self.clear_dataset()
                 return signal
         self.clear_dataset()

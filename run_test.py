@@ -4,7 +4,7 @@ import os
 import utils
 
 class TradingConfig(Enum):
-    symbols: Union[List[str], str] = ['BTCUSDT', 'TRUMPUSDT', 'XRPUSDT']  # 거래 심볼
+    symbols: Union[List[str], str] = ['BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'SOLUSDT', 'BNBUSDT', 'TRXUSDT', 'DOGEUSDT', '']  # 거래 심볼
     reconnect_cycle_hours:int = 2   #웹소켓 재접속 주기(hour) 
     safety_ratio: float = 0.2  # 계좌 안전 비율
     max_leverage: int = 20  # 최대 레버리지
@@ -16,7 +16,7 @@ class TradingConfig(Enum):
     dynamic_stop_loss: bool = True  # 동적 손절 비율 사용 여부
     adjustment_rate: float = 0.005  # 동적 조정 비율
     adjustment_interval: str = '3m'  # 동적 조정 주기
-    initial_stop_loss: float = 0.025  # 초기 손절 비율
+    initial_stop_loss: float = 0.015  # 초기 손절 비율
     reject_repeated_loss_orders: bool = True  # 반복 손실 시 주문 거부
     allowed_loss_streaks: int = 1  # 허용된 연속 손실 횟수
     loss_reset_interval: str = '4h'  # 연속 손실 기준 시간
@@ -30,6 +30,7 @@ class TestConfig(Enum):
     start_datetime: str = '2025-1-20 09:00:00'  # 백테스트 시작 날짜
     end_datetime: str = '2025-1-21 08:59:59'  # 백테스트 종료 날짜
     download_new_data: bool = False  # 새로운 데이터 다운로드 여부
+
 
 while True:
     user_input = input("TEST MODE ? (y/n): ").strip().lower()
@@ -112,6 +113,7 @@ def validate_config(test_config: TestConfig, trading_config: TradingConfig, mode
             print(f'1. 오류내용: kline data의 기간정보 불일치')
             print(f'2. 해결방법: {TestConfig.download_new_data}를 True로 수정필요\n')
             raise ValueError(f'데이터 오류 >> 신규 다운로드 필요함.')
+
 
 
 validate_config(test_config=TestConfig, trading_config=TradingConfig)

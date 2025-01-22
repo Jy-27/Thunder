@@ -213,7 +213,7 @@ class LiveTradingManager:
                 print(f"Error in ticker_update_loop: {e}")
             # 적절한 대기 시간 추가 (예: 짧은 대기)
             # interval 지정값 기준 시계 시간을 의미.
-            await utils._wait_until_next_interval(time_unit="minute", interval=10)
+            await utils._wait_until_next_interval(time_unit="hour", interval=2)
 
     ##=--=####=---=###=--=####=---=###=--=##
     # -=##=---=-*kline data수신관련 *-=---=##=-#

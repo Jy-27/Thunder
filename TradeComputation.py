@@ -497,8 +497,8 @@ class PortfolioManager:
         # 저장이 완료되면 트레이드 로그값은 삭제한다.
 
         # TEST 모드일경우 거래내역 출력
-        if not trade_log_data.test_mode:
-            pprint(trade_log_data)
+        # if not trade_log_data.test_mode:
+        #     pprint(trade_log_data)
 
         self.data_container.remove_data(data_name=convert_to_symbol)
         # 각종 값들을 계산 및 업데이트 한다.

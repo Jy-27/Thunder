@@ -677,7 +677,7 @@ class LiveTradingManager:
             )
 
             # debug
-            pprint(log_data)
+            # pprint(log_data)
             # 거래시작시 트레이드 정보를 저장한다.
             self.ins_portfolio.add_log_data(log_data=log_data)
 
@@ -839,7 +839,7 @@ class LiveTradingManager:
         )
 
         # debug
-        pprint(order_log)
+        # pprint(order_log)
         
         # API 1초 대기
         await utils._wait_time_sleep(time_unit="second", duration=1)

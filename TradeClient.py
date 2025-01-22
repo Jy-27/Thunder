@@ -602,7 +602,7 @@ class FuturesOrder(BinanceOrderManager):
         brackets_data = await self.__get_leverage_brackets(symbol=symbol)
 
         #debug
-        print(brackets_data)
+        # print(brackets_data)
 
         # brackets_data와 필드 검증
         if (

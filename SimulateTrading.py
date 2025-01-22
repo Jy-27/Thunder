@@ -272,8 +272,8 @@ class BackTesterManager:
             is_cash_margin = self.ins_portfolio.available_balance > margin_
             is_trade_count = self.ins_portfolio.number_of_stocks < self.max_held_symbols
 
-            print(self.ins_portfolio.available_balance)
-            print(margin_)
+            # print(self.ins_portfolio.available_balance)
+            # print(margin_)
 
             if not status or not is_cash_margin or not is_trade_count:
                 return False, 0, 0

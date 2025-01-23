@@ -883,8 +883,11 @@ class AnalysisManager:
             ma_25_group = data_group(count=count, minute=minute, data=ma25)
             ma_99_group = data_group(count=count, minute=minute, data=ma99)
             
-            range_b = np.sum(ma_99_group[-2] < 0)
-            range_a = np.sum(ma_99_group[-1] < 0)
+            range_b = np.sum(np.diff(ma_99_group[-2]) < 0)
+            range_a = np.sum(np.diff(ma_99_group[-1]) < 0)
+            
+            print(range_b)
+            print(range_a)
             
             if range_b == 0 or range_a ==0:
                 continue
@@ -967,8 +970,11 @@ class AnalysisManager:
             ma_25_group = data_group(count=count, minute=minute, data=ma25)
             ma_99_group = data_group(count=count, minute=minute, data=ma99)
             
-            range_b = np.sum(ma_99_group[-2] > 0)
-            range_a = np.sum(ma_99_group[-1] > 0)
+            range_b = np.sum(np.diff(ma_99_group[-2]) > 0)
+            range_a = np.sum(np.diff(ma_99_group[-1]) > 0)
+            
+            print(range_b)
+            print(range_a)
             
             if range_b == 0 or range_a ==0:
                 continue

@@ -886,8 +886,8 @@ class AnalysisManager:
             range_b = np.sum(np.diff(ma_99_group[-2]) < 0)
             range_a = np.sum(np.diff(ma_99_group[-1]) < 0)
             
-            print(range_b)
-            print(range_a)
+            # print(range_b)
+            # print(range_a)
             
             if range_b == 0 or range_a ==0:
                 continue
@@ -973,8 +973,8 @@ class AnalysisManager:
             range_b = np.sum(np.diff(ma_99_group[-2]) > 0)
             range_a = np.sum(np.diff(ma_99_group[-1]) > 0)
             
-            print(range_b)
-            print(range_a)
+            # print(range_b)
+            # print(range_a)
             
             if range_b == 0 or range_a ==0:
                 continue
@@ -1021,12 +1021,12 @@ class AnalysisManager:
         # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
         self.__get_symbols()
         ### scenario 함수 실행 공간
-        # self.scenario_1()
-        # self.scenario_2()
-        # self.scenario_3()
-        # self.scenario_6()
-        # self.scenario_7()
-        # self.scenario_8()
+        self.scenario_1()
+        self.scenario_2()
+        self.scenario_3()
+        self.scenario_6()
+        self.scenario_7()
+        self.scenario_8()
         self.scenario_9()
         self.scenario_10()
 

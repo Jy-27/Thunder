@@ -190,6 +190,7 @@ class AnalysisManager:
             raise ValueError(f'Data Container 해당 값 없음: {interval}')
         return result
         
+    # def check_trend(self)
 
     def scenario_1(self):
         scenario_name, scenario_number = self.__get_scenario_number()
@@ -316,7 +317,7 @@ class AnalysisManager:
             return fail_signal
         # print('종점.')
         leverage = len(temp_data)
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 1, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -446,7 +447,7 @@ class AnalysisManager:
             return fail_signal
         # print('종점.')
         leverage = len(temp_data)
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 2, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -539,7 +540,7 @@ class AnalysisManager:
                 
         # leverage = len(temp_data)
         leverage = 1
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 5, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -625,7 +626,7 @@ class AnalysisManager:
                 
         # leverage = len(temp_data)
         leverage = 2
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 2, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -689,7 +690,7 @@ class AnalysisManager:
                 if not start_price < end_price:
                     continue
                 
-                value = np.sum(base_data[-8:, 7])
+                value = np.sum(base_data[-5:, 8])
                 
                 temp_data[symbol] = value
                 
@@ -697,7 +698,7 @@ class AnalysisManager:
             return fail_signal
                 
         leverage = 2
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 2, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -733,7 +734,7 @@ class AnalysisManager:
                 if not start_price > end_price:
                     continue
                 
-                value = np.sum(base_data[-8:, 7])
+                value = np.sum(base_data[-5:, 8])
                 
                 temp_data[symbol] = value
                 
@@ -741,7 +742,7 @@ class AnalysisManager:
             return fail_signal
                 
         leverage = 2
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 1, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -829,14 +830,15 @@ class AnalysisManager:
                 # print(f'{symbol} - 5차 fail')
                 continue
             
-            value = np.sum(data_slice_3m[:, 7])
-            temp_data[symbol] = value
+            
+            trade_number = np.sum(data_slice_3m[-5:, 8])
+            temp_data[symbol] = trade_number
         
         if not temp_data:
             return fail_signal
         
         leverage = len(temp_data)
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 1, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -850,6 +852,10 @@ class AnalysisManager:
         names = self.data_container.get_all_data_names()
         
         symbols = self.__get_symbols()
+        
+        def data_group(count:int, minute:int, data:np.ndarray):
+            step = int((minute / count)*-1)
+            return [data[int(i * step):None if i == 1 else int((i - 1) * step)]for i in range(1, count + 1, 1)]
         
         for symbol in symbols:
             name = self.__get_data_container_name(interval=f'{symbol}_{interval}', names=names)
@@ -868,6 +874,28 @@ class AnalysisManager:
                 # print(f'{symbol} - {scenario_number} : 1차 실패')
                 continue
             
+            count = 5
+            hour = 6
+            interval = 3
+            minute = int((60 * hour) / interval)
+            
+            ma_7_group = data_group(count=count, minute=minute, data=ma7)
+            ma_25_group = data_group(count=count, minute=minute, data=ma25)
+            ma_99_group = data_group(count=count, minute=minute, data=ma99)
+            
+            range_b = np.sum(ma_99_group[-2] < 0)
+            range_a = np.sum(ma_99_group[-1] < 0)
+            
+            if range_b == 0 or range_a ==0:
+                continue
+            
+            range_a_ratio = range_a / (minute/count)
+            range_b_ratio = range_b / (minute/count)
+            
+            target_ratio = 0.8
+            
+            if not range_a_ratio >= target_ratio and not range_b_ratio >= target_ratio:
+                continue
             
             
             taker_quote_volume = base_data[-1, 10]
@@ -888,13 +916,13 @@ class AnalysisManager:
             if not is_down_candle:
                 # print(f'{symbol} - {scenario_number} : 3차 실패')
                 continue
-            value = np.sum(base_data[-16:,7])
-            temp_data[symbol] = value
+            trade_number = np.sum(base_data[-5:,8])
+            temp_data[symbol] = trade_number
         if not temp_data:
             return fail_signal
         
         leverage = len(temp_data)
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 2, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
 
@@ -908,6 +936,10 @@ class AnalysisManager:
         names = self.data_container.get_all_data_names()
         
         symbols = self.__get_symbols()
+        
+        def data_group(count:int, minute:int, data:np.ndarray):
+            step = int((minute / count)*-1)
+            return [data[int(i * step):None if i == 1 else int((i - 1) * step)]for i in range(1, count + 1, 1)]
         
         for symbol in symbols:
             name = self.__get_data_container_name(interval=f'{symbol}_{interval}', names=names)
@@ -926,10 +958,37 @@ class AnalysisManager:
                 # print(f'{symbol} - {scenario_number} : 1차 실패')
                 continue
             
-            taker_ratio = base_data[:, 10] / base_data[:, 7]
-            target_ratio = 0.55
+            count = 5
+            hour = 6
+            interval = 3
+            minute = int((60 * hour) / interval)
             
-            if not taker_ratio[-1] >= target_ratio:
+            ma_7_group = data_group(count=count, minute=minute, data=ma7)
+            ma_25_group = data_group(count=count, minute=minute, data=ma25)
+            ma_99_group = data_group(count=count, minute=minute, data=ma99)
+            
+            range_b = np.sum(ma_99_group[-2] > 0)
+            range_a = np.sum(ma_99_group[-1] > 0)
+            
+            if range_b == 0 or range_a ==0:
+                continue
+            
+            range_a_ratio = range_a / (minute/count)
+            range_b_ratio = range_b / (minute/count)
+            
+            target_ratio = 0.8
+            
+            if not range_a_ratio >= target_ratio and not range_b_ratio >= target_ratio:
+                continue
+            
+            # print(base_data)
+            
+            taker_ratio = base_data[-1, 10] / base_data[-1, 7]
+            target_ratio = 0.55            
+            
+            # print(taker_ratio)
+            
+            if not taker_ratio >= target_ratio:
                 continue
             
             close_diff = np.diff(close_price[-4:])
@@ -937,13 +996,13 @@ class AnalysisManager:
             if not is_down_candle:
                 # print(f'{symbol} - {scenario_number} : 3차 실패')
                 continue
-            value = np.sum(base_data[-16:,7])
-            temp_data[symbol] = value
+            trade_number = np.sum(base_data[-5:,8])
+            temp_data[symbol] = trade_number
         if not temp_data:
             return fail_signal
         
         leverage = len(temp_data)
-        symbol = min(temp_data, key=temp_data.get)
+        symbol = max(temp_data, key=temp_data.get)
         success_signal = (True, symbol, 1, leverage, scenario_number)
         return self.scenario_data.set_data(scenario_name, success_signal)
             

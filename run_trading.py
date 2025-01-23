@@ -7,19 +7,19 @@ import TradeComputation
 
 if __name__ == "__main__":
     symbols = [
-        # "agldusdt",
-        # "xrpusdt",
-        # "dogeusdt",
-        # "trxusdt",
+        "agldusdt",
+        "xrpusdt",
+        "dogeusdt",
+        "trxusdt",
         "btcusdt",
-        # "ethusdt",
+        "ethusdt",
     ]  # 확인하고자 하는 심볼 정보
     market = "futures"
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
     kline_period = 2
-    start_date = "2024-11-1 09:00:00"  # 시작 시간
-    end_date = "2025-1-22 08:59:59"  # 종료 시간
+    start_date = "2025-1-20 09:00:00"  # 시작 시간
+    end_date = "2025-1-23 08:59:59"  # 종료 시간
     safety_balance_ratio = 0.4  # 잔고 안전금액 지정 비율
     stop_loss_rate = 0.4  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     )
     # dynamic_adjustment_rate = 0.001  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
-    dynamic_adjustment_rate = 0.005  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
+    dynamic_adjustment_rate = 0.01  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
     dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 450  # 시작금액

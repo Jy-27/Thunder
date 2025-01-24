@@ -13,7 +13,7 @@ from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
 
-class BinanceOrderManager:
+class BinanceClientManager:
     BASE_URL = ""  # 자식 클래스에서 URL을 설정해야 합니다.
 
     def __init__(self):
@@ -244,7 +244,7 @@ class BinanceOrderManager:
         return await self.__send_request("DELETE", endpoint, params)
 
 
-class SpotOrder(BinanceOrderManager):
+class SpotClient(BinanceClientManager):
     BASE_URL = "https://api.binance.com"
 
     def __init__(self, spot_api: Optional[SpotMarket] = None):
@@ -376,7 +376,7 @@ class SpotOrder(BinanceOrderManager):
         return float(total_balance)
 
 
-class FuturesOrder(BinanceOrderManager):
+class FuturesClient(BinanceClientManager):
     BASE_URL = "https://fapi.binance.com"
 
     def __init__(self, futures_api: Optional[FuturesMarket] = None):
@@ -394,7 +394,7 @@ class FuturesOrder(BinanceOrderManager):
         """
         endpoint = "/fapi/v1/leverageBracket"
         params = {"symbol": symbol.upper(), "timestamp": int(time.time() * 1000)}
-        return await self._BinanceOrderManager__send_request("GET", endpoint, params)
+        return await self._BinanceClientManager__send_request("GET", endpoint, params)
 
     # minQty, stepSize, notional 값을 수신 및 반환한다.
     async def __get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
@@ -452,7 +452,7 @@ class FuturesOrder(BinanceOrderManager):
             "leverage": leverage,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
+        return await self._BinanceClientManager__send_request("POST", endpoint, params)
 
     # Ticker의 margin type 설정
     async def set_margin_type(self, symbol: str, margin_type: str) -> Union[str, Any]:
@@ -497,7 +497,7 @@ class FuturesOrder(BinanceOrderManager):
             "marginType": margin_type,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
+        return await self._BinanceClientManager__send_request("POST", endpoint, params)
 
     # Futures 시장의 주문(long/short)신호를 보낸다.
     async def submit_order(
@@ -565,7 +565,7 @@ class FuturesOrder(BinanceOrderManager):
         params["positionSide"] = position_side
         params["reduceOnly"] = "true" if reduce_only else "false"
 
-        return await self._BinanceOrderManager__send_request("POST", endpoint, params)
+        return await self._BinanceClientManager__send_request("POST", endpoint, params)
 
     # Futures 전체 잔고 수신 후 보유 내역값만 반환
     async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:
@@ -727,8 +727,8 @@ if __name__ == "__main__":
     import nest_asyncio
 
     nest_asyncio.apply()
-    spot_obj = SpotOrder()
-    futures_obj = FuturesOrder()
+    spot_obj = SpotClient()
+    futures_obj = FuturesClient()
 
     target_symbol = "xrpusdt"
     spot_data = asyncio.run(

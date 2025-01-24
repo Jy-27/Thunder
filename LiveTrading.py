@@ -98,7 +98,7 @@ class LiveTradingManager:
         self.ins_tickers = (
             TickerDataFetcher.FuturesTickers()
         )  # >> Future Market 심볼 관리 모듈
-        self.ins_client = TradeClient.FuturesOrder()  # >> Futures Client 주문 모듈
+        self.ins_client = TradeClient.FuturesClient()  # >> Futures Client 주문 모듈
         self.ins_handler = DataHandler.FuturesHandler(
             intervals=self.ins_analyzer.intervals
         )  # >> Futures 데이터 수신 모듈

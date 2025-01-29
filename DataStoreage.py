@@ -1,5 +1,5 @@
 import utils
-from typing import List, Union, Final
+from typing import List, Union, Final, Optional
 from dataclasses import dataclass, fields, field, asdict
 import time
 class KlineData:
@@ -132,7 +132,7 @@ class TradingLog:
     
     ### 주문 관련 정보
     symbol: str  # 심볼 (예: BTCUSDT)
-    position_type: int  # 포지션 유형 (1: Long, 2: Short)
+    position: int  # 포지션 유형 (1: Long, 2: Short)
     quantity: float  # 주문 수량
     hedge_enable: bool  # 헤지 여부 (진행 중인 포지션과 반대 방향의 주문 여부)
     leverage: int  # 레버리지 배율
@@ -168,6 +168,7 @@ class TradingLog:
     
     ### 시스템 세팅
     test_mode: bool = False
+    trade_close: bool = False
     
     ### 수수료 관련
     entry_fee: float=0  # 진입 수수료

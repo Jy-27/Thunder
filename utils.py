@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import numpy as np
+import importlib
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -773,3 +774,26 @@ def _calculate_percentage_change(
     if start_value == 0 or end_value == 0:
         return 0
     return (end_value - start_value) / start_value
+
+def _get_import(module_name:str, class_name:str):
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
+
+def _text_to_decimal(text: str) -> int:
+    """ 문자열을 10진수(int)로 변환 (맨 앞자리가 0이 되지 않도록 처리) """
+    if not text:
+        raise ValueError("입력 문자열이 비어 있습니다.")
+
+    decimal_str = f"{ord(text[0])}"  # 첫 번째 문자는 그대로 사용
+    decimal_str += ''.join(f"{ord(char) + 1000}" for char in text[1:])  # 이후 문자는 +1000 처리
+
+    return int(decimal_str)  # 정수(int)로 변환
+
+def _decimal_to_text(decimal: int) -> str:
+    """ 10진수를 문자열(str)로 복원 """
+    decimal_str = str(decimal)  # 정수를 문자열로 변환
+
+    first_char = chr(int(decimal_str[:2]))  # 첫 번째 문자 (ASCII 변환)
+    rest_chars = ''.join(chr(int(decimal_str[i:i+4]) - 1000) for i in range(2, len(decimal_str), 4))  # 이후 문자들
+
+    return first_char + rest_chars

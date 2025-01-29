@@ -3,13 +3,14 @@ from typing import List, Union, Optional
 import os
 import utils
 import TradeClient
+
 ###검증에 필요함###
 import MarketDataFetcher
 import asyncio
 
 
 class InitialSetup:
-    mode = None  # 클래스 변수로 설정
+    mode:Optional[bool] = None  # 클래스 변수로 설정
 
     @classmethod
     def initialize(cls):
@@ -19,11 +20,11 @@ class InitialSetup:
     def get_mode_input(cls):
         while True:
             user_input = input("Test Mode: (y/n): ").strip().lower()  # 입력값 처리
-            if user_input == 'y':
+            if user_input == "y":
                 cls.mode = True
                 print("Mode set to: Test Mode Enabled (True)")
                 break
-            elif user_input == 'n':
+            elif user_input == "n":
                 cls.mode = False
                 print("Mode set to: Test Mode Disabled (False)")
                 break
@@ -37,38 +38,41 @@ class SystemConfig(Enum):
     ### 분석 설정
     data_analysis_window_days: int = 1  # 데이터 분석 창(일 단위)
 
-
-    ### 폴더이름 
+    ### 폴더이름
     parent_folder_path = os.path.dirname(os.getcwd())
-    api_folder_name = 'API'
-    data_folder_name = 'DataStore'
-    
+    api_folder_name = "API"
+    data_folder_name = "DataStore"
+
     ### 파일이름
-    api_binance = 'binance.json'
-    api_telegram = 'telegram.json'
+    api_binance = "binance.json"
+    api_telegram = "telegram.json"
+    test_trade_history = "test_trade_history.json"
+    live_trade_history = "live_trade_history.json"
+
 
 class SymbolConfig(Enum):
     """
     라이브 트레이딩에 필요한 symbol정보 설정
     """
+
     core_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
     update_hour: Optional[int] = None  # 업데이트 주기 시간
-    market_type: str = "futures"  # 시장 유형
+    market_type: str = "Futures"  # 시장 유형
 
     @classmethod
     async def validate_config(cls):
         error_messages = []
 
         # 시장 유형에 따른 MarketDataFetcher 인스턴스 생성
-        if cls.market_type.value == "futures":
+        if cls.market_type.value == "Futures":
             ins_market = MarketDataFetcher.FuturesMarket()
-        elif cls.market_type.value == "spot":
+        elif cls.market_type.value == "Spot":
             ins_market = MarketDataFetcher.SpotMarket()
         else:
             message = (
                 f"Error : {cls.__name__}.market_type\n"
                 f"  1. 오류내용: market_type 값 입력 오류.\n"
-                f"  2. 해결방법: {cls.__name__}.market_type을 'futures' 또는 'spot' 중 하나로 설정하십시오.\n"
+                f"  2. 해결방법: {cls.__name__}.market_type을 'Futures' 또는 'Spot' 중 하나로 설정하십시오.\n"
                 f"  현재 설정값: {cls.market_type}\n"
             )
             error_messages.append(message)
@@ -102,88 +106,101 @@ class SymbolConfig(Enum):
 
         print(f"{cls.__name__} 검증 성공")
 
+
 class SafetyConfig(Enum):
     reject_repeated_loss_orders_enabled: bool = True  # 반복 손실 주문 거부 여부
     loss_streak_reset_interval: str = "4h"  # 연속 손실 기준 시간
     max_allowed_loss_streak: int = 1  # 허용된 연속 손실 횟수(symbol기준)
     max_strategy_loss_streak: int = 3  # 허용된 연속 손실 횟수(전략기준)
     profit_preservation_enabled: bool = True  # 수익 보존 기능 활성화 여부
-    profit_preservation_amount: float = 0   # 수익 보존 기준 금액 (해당 금액 초과금은 Spot계좌로 이체처리.)
+    profit_preservation_amount: float = (
+        0  # 수익 보존 기준 금액 (해당 금액 초과금은 Spot계좌로 이체처리.)
+    )
     ### 시스템 설정
     account_safety_ratio: float = 0.5  # 계좌 안전 비율
 
+
 class TelegramConfig(Enum):
-    status_message_send_enabled: bool = False         # 메시지 전송 여부
-    status_message_interval_minutes: int = 10       # 상태 메시지 발송 주기
-    open_position_message_enabled: bool = False     # 포지션 진입 시 메시지 발송 여부
-    close_position_message_enabled: bool = False     # 포지션 종료 시 메시지 발송 여부
-    account_balance_message_enabled: bool = False   # 계좌정보 메시지 발송여부
-    
+    status_message_send_enabled: bool = False  # 메시지 전송 여부
+    status_message_interval_minutes: int = 10  # 상태 메시지 발송 주기
+    open_position_message_enabled: bool = False  # 포지션 진입 시 메시지 발송 여부
+    close_position_message_enabled: bool = False  # 포지션 종료 시 메시지 발송 여부
+    account_balance_message_enabled: bool = False  # 계좌정보 메시지 발송여부
+
     @classmethod
     def validate_config(cls):
         error_messages = []
-        
+
         if not isinstance(cls.status_message_send_enabled.value, bool):
             message = (
-                f'Error : {cls.__name__}.status_message_send_enabled\n'
-                f' 1. 오류내용: type 입력 오류\n'
-                f' 2. 해결방법: {cls.__name__}.status_message_send_enabled를 True or False 입력\n'
-                f' 3. 현재설정: {cls.status_message_send_enabled.value}\n'
-            )
-            error_messages.append(message)
-        
-        if not cls.status_message_send_enabled.value and cls.open_position_message_enabled.value:
-            message = (
-                f'Error : {cls.__name__}.open_position_message_enabled\n'
-                f' 1. 오류내용: status_message_send_enabled가 False일때 open_position_message_enabled도 False만 가능.\n'
-                f' 2. 해결방법: {cls.__name__}.open_position_message_enabled에 False값 입력.\n'
-                f' 3. 현재설정: {cls.cls.open_position_message_enabled.value}\n'
+                f"Error : {cls.__name__}.status_message_send_enabled\n"
+                f" 1. 오류내용: type 입력 오류\n"
+                f" 2. 해결방법: {cls.__name__}.status_message_send_enabled를 True or False 입력\n"
+                f" 3. 현재설정: {cls.status_message_send_enabled.value}\n"
             )
             error_messages.append(message)
 
-        if not cls.status_message_send_enabled.value and cls.close_position_message_enabled.value:
+        if (
+            not cls.status_message_send_enabled.value
+            and cls.open_position_message_enabled.value
+        ):
             message = (
-                f'Error : {cls.__name__}.close_position_message_enabled\n'
-                f' 1. 오류내용: status_message_send_enabled가 False일때 close_position_message_enabled도 False만 가능.\n'
-                f' 2. 해결방법: {cls.__name__}.close_position_message_enabled에 False값 입력.\n'
-                f' 3. 현재설정: {cls.cls.close_position_message_enabled.value}\n'
-            )
-            error_messages.append(message)
-            
-
-        if not cls.status_message_send_enabled.value and cls.account_balance_message_enabled.value:
-            message = (
-                f'Error : {cls.__name__}.account_balance_message_enabled\n'
-                f' 1. 오류내용: status_message_send_enabled가 False일때 close_position_message_enabled도 False만 가능.\n'
-                f' 2. 해결방법: {cls.__name__}.account_balance_message_enabled False값 입력.\n'
-                f' 3. 현재설정: {cls.cls.account_balance_message_enabled.value}\n'
+                f"Error : {cls.__name__}.open_position_message_enabled\n"
+                f" 1. 오류내용: status_message_send_enabled가 False일때 open_position_message_enabled도 False만 가능.\n"
+                f" 2. 해결방법: {cls.__name__}.open_position_message_enabled에 False값 입력.\n"
+                f" 3. 현재설정: {cls.cls.open_position_message_enabled.value}\n"
             )
             error_messages.append(message)
 
-                # 오류 메시지 출력 및 예외 처리
+        if (
+            not cls.status_message_send_enabled.value
+            and cls.close_position_message_enabled.value
+        ):
+            message = (
+                f"Error : {cls.__name__}.close_position_message_enabled\n"
+                f" 1. 오류내용: status_message_send_enabled가 False일때 close_position_message_enabled도 False만 가능.\n"
+                f" 2. 해결방법: {cls.__name__}.close_position_message_enabled에 False값 입력.\n"
+                f" 3. 현재설정: {cls.cls.close_position_message_enabled.value}\n"
+            )
+            error_messages.append(message)
+
+        if (
+            not cls.status_message_send_enabled.value
+            and cls.account_balance_message_enabled.value
+        ):
+            message = (
+                f"Error : {cls.__name__}.account_balance_message_enabled\n"
+                f" 1. 오류내용: status_message_send_enabled가 False일때 close_position_message_enabled도 False만 가능.\n"
+                f" 2. 해결방법: {cls.__name__}.account_balance_message_enabled False값 입력.\n"
+                f" 3. 현재설정: {cls.cls.account_balance_message_enabled.value}\n"
+            )
+            error_messages.append(message)
+
+            # 오류 메시지 출력 및 예외 처리
         if error_messages:
             for error_message in error_messages:
                 print(error_message)
             raise ValueError(f"{cls.__name__} 검증 실패")
 
         print(f"{cls.__name__} 검증 성공")
-            
-           
-           
-            
+
+
 class OrderConfig(Enum):
     """
     주문시 필요한 설정정보
     """
+
     hedge_trading_enabled: bool = True  # 헤지 거래 활성화 여부
     max_leverage: int = 125  # 최대 레버리지
     min_leverage: int = 1  # 최소 레버리지
     reference_leverage: Union[int, float] = 1  # 참고용 레버리지
     order_allocation_ratio: Optional[float] = None  # 회당 주문 가능 금액 비율
-    order_allocation_amount: Optional[float] = 100  # 회당 주문 가능 금액 (자산이 해당금액보다 낮아질경우 셧다운 처리할 것.)
+    order_allocation_amount: Optional[float] = (
+        100  # 회당 주문 가능 금액 (자산이 해당금액보다 낮아질경우 셧다운 처리할 것.)
+    )
     max_concurrent_positions: int = 2  # 최대 동시 거래 포지션 수
-    margin_mode: str = 'cross'
-    
+    margin_mode: str = "cross"
+
     @classmethod
     async def validate_config(cls):
         error_messages = []
@@ -291,9 +308,9 @@ class OrderConfig(Enum):
             )
             error_messages.append(message)
 
-        if SymbolConfig.market_type.value=="futures":
+        if SymbolConfig.market_type.value == "Futures":
             ins_client = TradeClient.FuturesClient()
-        elif SymbolConfig.market_type.value=="spot":
+        elif SymbolConfig.market_type.value == "Spot":
             ins_client = TradeClient.SpotClient()
 
         total_balance = await ins_client.get_total_wallet_balance()
@@ -303,30 +320,36 @@ class OrderConfig(Enum):
 
         # live trading 조건을 변수로 분리
         is_live_mode = not InitialSetup.mode
-        is_live_valid_allocation = cls.order_allocation_amount.value is not None and live_available_funds >= cls.order_allocation_amount.value
+        is_live_valid_allocation = (
+            cls.order_allocation_amount.value is not None
+            and live_available_funds >= cls.order_allocation_amount.value
+        )
 
         # live trading 조건문에서 사용
         if is_live_mode and not is_live_valid_allocation:
             message = (
-                f'Error : {cls.__name__}.order_allocation_amount\n'
-                f' 1. 오류내용: 보유 자산보다 주문 금액이 더 높음.\n'
-                f' 2. 해결방법: {cls.__name__}.order_allocation_amount값을 {live_available_funds:,.2f} 이하로 설정\n'
-                f' 3. 현재설정: {cls.order_allocation_amount.value}\n'
+                f"Error : {cls.__name__}.order_allocation_amount\n"
+                f" 1. 오류내용: 보유 자산보다 주문 금액이 더 높음.\n"
+                f" 2. 해결방법: {cls.__name__}.order_allocation_amount값을 {live_available_funds:,.2f} 이하로 설정\n"
+                f" 3. 현재설정: {cls.order_allocation_amount.value}\n"
             )
             error_messages.append(message)
 
         test_available_funds = TestConfig.seed_funds.value * available_ratio
         # test trading 조건을 변수로 분리
         is_test_mode = InitialSetup.mode
-        is_test_valid_allocation = cls.order_allocation_amount.value is not None and test_available_funds >= cls.order_allocation_amount.value
+        is_test_valid_allocation = (
+            cls.order_allocation_amount.value is not None
+            and test_available_funds >= cls.order_allocation_amount.value
+        )
 
         # live trading 조건문에서 사용
         if is_test_mode and not is_test_valid_allocation:
             message = (
-                f'Error : {cls.__name__}.order_allocation_amount\n'
-                f' 1. 오류내용: 보유 자산보다 주문 금액이 더 높음.\n'
-                f' 2. 해결방법: {cls.__name__}.order_allocation_amount값을 {test_available_funds:,.2f} 이하로 설정\n'
-                f' 3. 현재설정: {cls.order_allocation_amount.value}\n'
+                f"Error : {cls.__name__}.order_allocation_amount\n"
+                f" 1. 오류내용: 보유 자산보다 주문 금액이 더 높음.\n"
+                f" 2. 해결방법: {cls.__name__}.order_allocation_amount값을 {test_available_funds:,.2f} 이하로 설정\n"
+                f" 3. 현재설정: {cls.order_allocation_amount.value}\n"
             )
             error_messages.append(message)
 
@@ -347,22 +370,22 @@ class OrderConfig(Enum):
         ### 포지션 보유 수량 관련
         if not isinstance(cls.max_concurrent_positions.value, int):
             message = (
-                f'Error : {cls.__name__}.max_concurrent_positions\n'
-                f' 1. 오류내용: 타입 입력 오류\n'
-                f' 2. 해결방법: 정수값을 입력할 것.\n'
-                f' 3. 현재설정: {type(cls.max_concurrent_positions.value)}\n'
+                f"Error : {cls.__name__}.max_concurrent_positions\n"
+                f" 1. 오류내용: 타입 입력 오류\n"
+                f" 2. 해결방법: 정수값을 입력할 것.\n"
+                f" 3. 현재설정: {type(cls.max_concurrent_positions.value)}\n"
             )
             error_messages.append(message)
 
         ### 마진모드 설정
-        mode_allowed_range = ['cross', 'isolated']
+        mode_allowed_range = ["cross", "isolated"]
 
         if not cls.margin_mode.value.lower() in mode_allowed_range:
             message = (
-                f'Error : {cls.__name__}.margin_mode\n'
-                f' 1. 오류내용: 입력오류\n'
+                f"Error : {cls.__name__}.margin_mode\n"
+                f" 1. 오류내용: 입력오류\n"
                 f' 2. 해결방법: {", ".join(mode_allowed_range)}" 중 1개 선택 입력\n'
-                f' 3. 현재설정: {cls.margin_mode.value}'
+                f" 3. 현재설정: {cls.margin_mode.value}"
             )
             error_messages.append(message)
         # 오류 메시지 출력 및 예외 처리
@@ -406,6 +429,7 @@ class TestConfig(Enum):
     """
     백테스트에 필요한 정보를 설정
     """
+
     test_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
     seed_funds: float = 15  # 초기 자본금 / None값일경우 계좌 전체 금액 반영됨.
     start_datetime: str = "2025-1-20 09:00:00"  # 백테스트 시작 날짜

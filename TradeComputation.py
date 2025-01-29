@@ -535,7 +535,7 @@ class PortfolioManager:
 
         # open_data_array.size 예) [0,0,0,0,0,0,0]경우
         # 필요한 기능인가??
-        if open_data_array.size == 0:
+        if np.all(open_data_array == 0):
             # 현재 포지션 수익금
             open_pnl = 0
             # 진행중인 비용

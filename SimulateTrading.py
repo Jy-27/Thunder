@@ -13,6 +13,9 @@ from typing import Optional, List, Union
 import numpy as np
 from multiprocessing import Pool, Manager
 
+## 신규 테스트
+import DataStoreage
+import Analysis_new
 
 class BackTesterManager:
     def __init__(
@@ -116,6 +119,10 @@ class BackTesterManager:
 
         # interval별 데이털르 저장하는 데이터셋
         self.interval_dataset = utils.DataContainer()
+
+        #####신규 테스트
+        self.kline_datsets = {}
+        self.new_analysis = Analysis_new.AnalysisManager(self.kline_datsets)
 
         # ticker 관련 instance
         self.ins_ticker = TickerDataFetcher.FuturesTickers()
@@ -484,6 +491,10 @@ class BackTesterManager:
         # Loop 시작
         for index in range(data_length):
             for symbol in self.symbols:
+                ## 초기화
+                self.kline_datsets = {}
+                self.kline_datsets[symbol] = DataStoreage.KlineData()
+                
                 timestamp_min = []
                 for interval in self.intervals:
                     select_indices_ = self.closing_indices_data.get_data(
@@ -516,16 +527,12 @@ class BackTesterManager:
                         # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
 
-                    if np.all(select_data == 0):
+                    if len(select_data) <= 0:
                         continue
-                    # # symbol의 조건에 맞는지 여부, 보유여부를 점검한다.
-                    # if not await self.validate_ticker_conditions(
-                    #     symbol=symbol, data=select_data
-                    # ) or self.ins_portfolio.validate_open_position(symbol):
-                    #     continue
-                    self.interval_dataset.set_data(
-                        data_name=f"{self.market}_{symbol}_{interval}", data=select_data
-                    )
+
+                    print(f'{len(select_data)}\n')
+                    print(select_data)
+                    self.kline_datsets[symbol].set_data(select_data)
 
             # if np.all(select_data == 0):
             #     continue
@@ -537,7 +544,12 @@ class BackTesterManager:
             # print('='*15)
 
             # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
-
+            
+            
+            self.new_analysis.run()
+            
+            
+            
             ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
             self.ins_signal_analyzer.data_container = self.interval_dataset
             # self.ins_signal_analyzer.dummy_d = dummy_data

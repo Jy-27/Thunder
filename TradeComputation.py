@@ -4,7 +4,7 @@ from dataclasses import dataclass, fields, field, asdict
 
 # from BinanceTradeClient import SpotTrade, FuturesTrade
 from MarketDataFetcher import FuturesMarket, SpotMarket
-from TradeClient import FuturesOrder, SpotOrder
+from TradeClient import FuturesClient, SpotClient
 import time
 import utils
 import numpy as np
@@ -944,136 +944,6 @@ class BacktestDataFactory:
                 pickle.dump(closing_sync_data, file)
         return closing_sync_data
 
-    ############################################################################################################
-    ############################################################################################################
-    ############################################################################################################
-    # def __process_interval(self, symbol, base_data, interval, shared_data):
-    #     """심볼과 간격 데이터를 처리하는 함수"""
-    #     interval_data = shared_data[symbol][interval]
-    #     temp_data = []
-    #     timestamp_range = utils._get_interval_ms_seconds(interval) - 1
-
-    #     for index, data in enumerate(base_data):
-    #         open_timestamp, close_timestamp = data[0], data[6]
-
-    #         # 조건에 맞는 interval 데이터 찾기
-    #         condition = np.where(
-    #             (interval_data[:, 0] <= open_timestamp)
-    #             & (interval_data[:, 6] >= close_timestamp)
-    #         )
-    #         target_data = interval_data[condition]
-
-    #         if target_data.size == 0:
-    #             continue
-
-    #         target_open_timestamp = target_data[0, 0]
-    #         target_close_timestamp = target_data[0, 6]
-
-    #         # 조건에 맞는 base 데이터 찾기
-    #         new_data_condition = np.where(
-    #             (base_data[:, 0] >= target_open_timestamp)
-    #             & (base_data[:, 6] <= close_timestamp)
-    #         )
-    #         new_base_data = base_data[new_data_condition]
-
-    #         timestamp_diff = new_base_data[-1, 6] - new_base_data[0, 0]
-    #         if timestamp_range == timestamp_diff:
-    #             new_data = target_data[0]
-    #         else:
-    #             new_data = [
-    #                 target_open_timestamp,
-    #                 new_base_data[0, 1],
-    #                 np.max(new_base_data[:, 2]),
-    #                 np.min(new_base_data[:, 3]),
-    #                 new_base_data[-1, 4],
-    #                 np.sum(new_base_data[:, 5]),
-    #                 target_close_timestamp,
-    #                 np.sum(new_base_data[:, 7]),
-    #                 np.sum(new_base_data[:, 8]),
-    #                 np.sum(new_base_data[:, 9]),
-    #                 np.sum(new_base_data[:, 10]),
-    #                 0,
-    #             ]
-    #         temp_data.append(new_data)
-
-    #     return interval, np.array(temp_data, float)
-
-    # def __process_symbol(self, args):
-    #     """심볼 데이터를 처리하는 함수"""
-    #     symbol, base_data, intervals, shared_data = args
-    #     symbol_closing_sync = {intervals[0]: base_data}
-
-    #     for interval in intervals[1:]:
-    #         interval, temp_data = self.__process_interval(
-    #             symbol, base_data, interval, shared_data
-    #         )
-    #         symbol_closing_sync[interval] = temp_data
-
-    #     return symbol, symbol_closing_sync
-
-    # def generate_kline_closing_sync(self, kline_data: dict, save: bool = False) -> dict:
-    #     """
-    #     kline_data를 정리하고 멀티프로세싱을 통해 데이터 동기화를 수행.
-    #     """
-    #     symbols_list = list(kline_data.keys())
-    #     intervals_list = list(kline_data[symbols_list[0]].keys())
-    #     closing_sync_data = {}
-
-    #     # 1분봉 데이터를 np.ndarray로 변환
-    #     kline_array = utils._convert_to_array(kline_data)
-
-    #     # 더미 데이터를 추가
-    #     data_length = len(kline_data[symbols_list[0]][intervals_list[0]][0])
-    #     dummy_data = [0 for _ in range(data_length)]
-    #     for symbol in symbols_list:
-    #         for interval in intervals_list:
-    #             # Convert the interval data to a list, add the dummy row, and convert back to np.ndarray
-    #             interval_data = kline_array[symbol][interval].tolist()
-    #             interval_data.insert(0, dummy_data)
-    #             kline_array[symbol][interval] = np.array(interval_data, dtype=float)
-
-    #     # Manager 객체 생성
-    #     manager = Manager()
-    #     shared_data = manager.dict(kline_array)
-
-    #     try:
-    #         # 멀티프로세싱 수행
-    #         with Pool(processes=cpu_count()) as pool:
-    #             args = [
-    #                 (
-    #                     symbol,
-    #                     shared_data[symbol][intervals_list[0]],
-    #                     intervals_list,
-    #                     shared_data,
-    #                 )
-    #                 for symbol in symbols_list
-    #             ]
-    #             results = pool.map(self.process_symbol_wrapper, args, chunksize=10)
-
-    #         for symbol, data in results:
-    #             closing_sync_data[symbol] = data
-
-    #     finally:
-    #         # Manager 객체 종료
-    #         manager.shutdown()
-
-    #     # 데이터 저장
-    #     if save:
-    #         path = os.path.join(
-    #             self.parent_directory, self.storeage, self.kline_closing_sync_data
-    #         )
-    #         with open(file=path, mode="wb") as file:
-    #             pickle.dump(closing_sync_data, file)
-
-    #     return closing_sync_data
-
-    # def process_symbol_wrapper(self, args):
-    #     """__process_symbol을 호출하는 래퍼 함수 (멀티프로세싱 호환)"""
-    #     return self.__process_symbol(args)
-
-    ############################################################################################################
-    ############################################################################################################
-    ############################################################################################################
     # generate_kline_closing_sync index 자료를 생성한다.
     def get_indices_data(
         self,
@@ -1123,30 +993,6 @@ class BacktestDataFactory:
 
         return container_data
 
-        # original code
-        # for interval in intervals:
-        #     indices_data = []
-        # # 데이터에서 각 인덱스 처리
-        #     for current_index, data_point in enumerate(data_container.get_data(data_name=f'interval_{interval}')[0]):
-        #         for series_index in range(len(data_container.get_data(data_name=f'interval_{interval}'))):
-        #             # 시작 인덱스 계산 (interval에 따른 간격으로 조정)
-        #             start_index = current_index - minutes_in_a_day * lookback_days
-        #             start_index = (start_index // interval_to_minutes) * interval_to_minutes
-        #             if start_index < 0:
-        #                 start_index = 0
-
-        #             # np.arange 생성
-        #             interval_range = np.arange(start_index, current_index, interval_to_minutes)
-
-        #             # current_index가 마지막 인덱스보다 크면 추가
-        #             if current_index not in interval_range:
-        #                 interval_range = np.append(interval_range, current_index)
-
-        #             # (series_index, interval_range) 추가
-        #             indices_data.append((series_index, interval_range))
-        #     data_container.set_data(data_name=f'map_{interval}', data=indices_data)
-        # return indices_data
-
     # Data Manager 함수를 일괄 실행 및 정리한다.
     async def data_manager_run(self, save: bool = False):
         kline_data = await self.generate_kline_interval_data(save=save)
@@ -1173,8 +1019,8 @@ class TradeCalculator:
         instance: PortfolioManager,
         safe_asset_ratio: float = 0.2,
     ):
-        self.ins_trade_futures_client = FuturesOrder()
-        self.ins_trade_spot_client = SpotOrder()
+        self.ins_trade_futures_client = FuturesClient()
+        self.ins_trade_spot_client = SpotClient()
         self.market_types = ["FUTURES", "SPOT"]
         self.requested_leverage = requested_leverage
         self.ins_portfolio: PortfolioManager = instance

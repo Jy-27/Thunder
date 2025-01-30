@@ -493,6 +493,8 @@ class BackTesterManager:
                         select_indices_
                     ]
 
+                    utils._save_to_json('dummy.json', select_data)
+                    raise ValueError(f'중간점검')
                     price = select_data[-1][4]
                     end_timestamp = select_data[-1][6]
                     timestamp_min.append(end_timestamp)

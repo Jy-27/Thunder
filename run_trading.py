@@ -7,9 +7,9 @@ import TradeComputation
 
 if __name__ == "__main__":
     symbols = [
-        "agldusdt",
+        # "agldusdt",
         "xrpusdt",
-        "dogeusdt",
+        # "dogeusdt",
         "trxusdt",
         "btcusdt",
         "ethusdt",
@@ -18,21 +18,21 @@ if __name__ == "__main__":
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
     ### 수신받을 데이터의 기간 ###
     kline_period = 2
-    start_date = "2025-1-20 09:00:00"  # 시작 시간
-    end_date = "2025-1-23 08:59:59"  # 종료 시간
+    start_date = "2024-12-1 09:00:00"  # 시작 시간
+    end_date = "2025-1-30 08:59:59"  # 종료 시간
     safety_balance_ratio = 0.4  # 잔고 안전금액 지정 비율
-    stop_loss_rate = 0.4  # 스톱 로스 비율
+    stop_loss_rate = 0.65  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     is_dynamic_adjustment = (
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     )
     # dynamic_adjustment_rate = 0.001  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
-    dynamic_adjustment_rate = 0.01  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
+    dynamic_adjustment_rate = 0.0007  # 시간 흐름에 따른 시작가 변동율 (토마호크 미사일)
     dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
     use_scale_stop = True  # final손절(False), Scale손절(True)
-    seed_money = 450  # 시작금액
-    leverage = 2 # 레버리지
-    init_stop_rate = 0.02  # 시작 손절가
+    seed_money = 69350.5  # 시작금액
+    leverage = 125 # 레버리지
+    init_stop_rate = 0.035  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 1  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위

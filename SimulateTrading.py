@@ -121,8 +121,8 @@ class BackTesterManager:
         self.interval_dataset = utils.DataContainer()
 
         #####신규 테스트
-        self.kline_datsets = {}
-        self.new_analysis = Analysis_new.AnalysisManager(self.kline_datsets)
+        self.kline_datsets = {}#DataStoreage.KlineData()
+        self.ins_new_analysis = Analysis_new.AnalysisManager(self.kline_datsets)
 
         # ticker 관련 instance
         self.ins_ticker = TickerDataFetcher.FuturesTickers()
@@ -490,24 +490,31 @@ class BackTesterManager:
 
         # Loop 시작
         for index in range(data_length):
+            # print(index)
+            price = {}
             for symbol in self.symbols:
-                ## 초기화
-                self.kline_datsets = {}
                 self.kline_datsets[symbol] = DataStoreage.KlineData()
-                
                 timestamp_min = []
                 for interval in self.intervals:
                     select_indices_ = self.closing_indices_data.get_data(
                         f"interval_{interval}"
                     )[index]
-                    select_data = self.closing_sync_data[symbol][interval][
-                        select_indices_
-                    ]
-
-                    price = select_data[-1][4]
-                    end_timestamp = select_data[-1][6]
-                    timestamp_min.append(end_timestamp)
-
+                    
+                    ### 가장 최대 interval값을 기준으로 index최대값도달 시 검토 필요하다.
+                    ### 최대값 도달 전에 검토시 데이터 외곡 발생한다.
+                    if len(select_indices_) <=960:
+                        flag = False
+                        continue
+                    
+                    select_data = self.closing_sync_data[symbol][interval][select_indices_]                 
+                    # if interval == "3m":
+                    #     import pickle
+                    #     print(select_data)
+                    #     with open('data.pickle', 'wb') as file:
+                    #         pickle.dump(select_data, file)
+                    self.kline_datsets[symbol].set_data(list(select_data))
+                    #     raise ValueError(f'중간점검')
+                        # print(select_data)
                     if interval == self.intervals[0]:
                         update_and_stop_signal = self.update_trade_info(
                             symbol=symbol, data=select_data
@@ -515,6 +522,8 @@ class BackTesterManager:
 
                         if update_and_stop_signal:
                             self.active_close_position(symbol=symbol)
+                        end_timestamp = int(select_data[-1, 6])
+                        price[symbol] = select_data[-1, 4]
                         ### trane 출력 ###
                         date = utils._convert_to_datetime(end_timestamp)
                         utils._std_print(
@@ -526,54 +535,42 @@ class BackTesterManager:
                             raise ValueError(f"원금 청산")
                         # if self.ins_portfolio.trade_count > 5:
                         #     raise ValueError(f'중간점검')
+                    # kline_data[symbol][interval] = select_data
+                    flag = True
+                    
+            if flag:
+                self.ins_new_analysis.run()
 
-                    if len(select_data) <= 0:
-                        continue
+                for position in ['buy', 'sell']:
+                    signal = getattr(self.ins_new_analysis, f'success_{position}_signal')
+                    if signal:
+                        for symbol, data in signal.items():
+                            await self.active_open_position(
+                                symbol=symbol,
+                                price=price[symbol],
+                                position=data[1],
+                                scenario_leverage=20,
+                                start_timestamp=end_timestamp,
+                                scenario_type=data[2],
+                            )
+                            # ...
+                            # print(f'{signal} - {data}')
 
-                    print(f'{len(select_data)}\n')
-                    print(select_data)
-                    self.kline_datsets[symbol].set_data(select_data)
+            self.ins_new_analysis.reset_signal()
 
-            # if np.all(select_data == 0):
-            #     continue
-            # print(select_data)
-            # print('\n')
-            # print('='*15)
-            # print(select_data)
-            # print(type(select_data))
-            # print('='*15)
+            # await self.active_open_position(
+            #     symbol=trade_signal[1],
+            #     price=price,
+            #     position=trade_signal[2],
+            #     scenario_leverage=trade_signal[4],
+            #     start_timestamp=current_timestamp,
+            #     scenario_type=trade_signal[3],
+            # )
 
-            # ticker 거래량, 상승/하락 등 조건, 현재 포지션 보유여부 등을 고려하여 연산을 pass여부를 검토한다.
-            
-            
-            self.new_analysis.run()
-            
-            
-            
-            ### 분석 진행을 위해 데이터셋을 Analysis로 이동###
-            self.ins_signal_analyzer.data_container = self.interval_dataset
-            # self.ins_signal_analyzer.dummy_d = dummy_data
+        # self.ins_portfolio.export_trading_logs()
+        # print("\n\nEND")
 
-            trade_signal = self.ins_signal_analyzer.scenario_run()
-            self.interval_dataset.clear_all_data()
-            if not trade_signal[0]:
-                continue
-
-            current_timestamp = min(timestamp_min)
-
-            await self.active_open_position(
-                symbol=trade_signal[1],
-                price=price,
-                position=trade_signal[2],
-                scenario_leverage=trade_signal[4],
-                start_timestamp=current_timestamp,
-                scenario_type=trade_signal[3],
-            )
-
-        self.ins_portfolio.export_trading_logs()
-        print("\n\nEND")
-
-        # # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
+        # end_step = len(self.closing_indices_data.get_data(f'map_{self.intervals[-1]}'))
 
         # ### 데이터 타임루프 시작 ###
         # for idx, data in enumerate(
@@ -670,7 +667,7 @@ class BackTesterManager:
         #         scenario_type=trade_signal[2],
         #     )
 
-        # print("\n\nEND")
+        print("\n\nEND")
 
 
 if __name__ == "__main__":

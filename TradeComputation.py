@@ -418,7 +418,6 @@ class PortfolioManager:
         # log data를 LIST형태로 반환한다.
         trade_data = self.__extract_valid_data(data=log_data)
         # 총 거래 횟수를 계산한다.
-        self.trade_count += 1
         # list형태로 반환된 데이터를 open_position에 저장한다.
         self.open_positions[symbol] = trade_data
         self.update_data()
@@ -557,6 +556,7 @@ class PortfolioManager:
 
         # 현재 거래중인 포지션 수
         self.number_of_stocks = len(self.open_positions.keys())
+        self.trade_count = self.number_of_stocks + len(self.closed_positions.keys())
         # 거래중인 금액
         self.active_value = active_value
 

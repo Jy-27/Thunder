@@ -192,210 +192,210 @@ class AnalysisManager:
         
     # def check_trend(self)
 
-    def scenario_1(self):
-        scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_number)
-        """
-        시나리오.
-        4개식 3개의 그룹으로 나눈다.
+    # def scenario_1(self):
+    #     scenario_name, scenario_number = self.__get_scenario_number()
+    #     fail_signal = self.__fail_signal(scenario_number)
+    #     """
+    #     시나리오.
+    #     4개식 3개의 그룹으로 나눈다.
         
-        마지막 그룹의 거래대금이 가장 클 것.
-        마지막 그룹의 거래횟수가 가장 높을 것.
-        마지막 그룹이 전부 상승일 것.
-        24시간중 마지막 그룹이 max일 것.
-        마지막 그룹이 앞의 2그룹보다 상승폭이 클 것.
+    #     마지막 그룹의 거래대금이 가장 클 것.
+    #     마지막 그룹의 거래횟수가 가장 높을 것.
+    #     마지막 그룹이 전부 상승일 것.
+    #     24시간중 마지막 그룹이 max일 것.
+    #     마지막 그룹이 앞의 2그룹보다 상승폭이 클 것.
         
-        최종 집계 후 가장 거래대금이 낮은것을 반환할 것.
-        """
+    #     최종 집계 후 가장 거래대금이 낮은것을 반환할 것.
+    #     """
 
-        # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
-        fail_signal = (False, None, 0, 0, 0)
+    #     # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
+    #     fail_signal = (False, None, 0, 0, 0)
 
-        target_interval = "3m"
+    #     target_interval = "3m"
 
-        temp_data = {}
+    #     temp_data = {}
 
-        data_names = self.data_container.get_all_data_names()
-        for name in data_names:
-            if target_interval in name:
-                base_data = self.data_container.get_data(name)
+    #     data_names = self.data_container.get_all_data_names()
+    #     for name in data_names:
+    #         if target_interval in name:
+    #             base_data = self.data_container.get_data(name)
 
-                if len(base_data) < 13:
-                    continue
+    #             if len(base_data) < 13:
+    #                 continue
 
-                symbol = name.split("_")[1]
+    #             symbol = name.split("_")[1]
 
-                REFERENCE_RATIO = 1.15
-                TAKER_RATIO = 0.65
-                CANDLE_RATIO = 0.6
+    #             REFERENCE_RATIO = 1.15
+    #             TAKER_RATIO = 0.65
+    #             CANDLE_RATIO = 0.6
 
-                # 데이터 슬라이싱
-                slice_1 = base_data[-11:-7]
-                slice_2 = base_data[-7:-4]
-                slice_3 = base_data[-4:]
+    #             # 데이터 슬라이싱
+    #             slice_1 = base_data[-11:-7]
+    #             slice_2 = base_data[-7:-4]
+    #             slice_3 = base_data[-4:]
 
-                # taker 구매비율
-                total_volume = np.sum(slice_3[:, 10])
-                taker_volume = np.sum(slice_3[:, 7])
-                if total_volume == 0 or taker_volume == 0:
-                    # print(f'1차 {scenario_number} fail - {symbol}')
-                    continue
+    #             # taker 구매비율
+    #             total_volume = np.sum(slice_3[:, 10])
+    #             taker_volume = np.sum(slice_3[:, 7])
+    #             if total_volume == 0 or taker_volume == 0:
+    #                 # print(f'1차 {scenario_number} fail - {symbol}')
+    #                 continue
 
-                # debug
-                # print(f'1차 통과 - {symbol}')
+    #             # debug
+    #             # print(f'1차 통과 - {symbol}')
 
-                taker_volume_ratio = taker_volume / total_volume
-                if taker_volume_ratio < TAKER_RATIO:
-                    # print(f'2차 {scenario_number} fail - {symbol}')
-                    continue
+    #             taker_volume_ratio = taker_volume / total_volume
+    #             if taker_volume_ratio < TAKER_RATIO:
+    #                 # print(f'2차 {scenario_number} fail - {symbol}')
+    #                 continue
 
-                # print(f'2차 통과 - {symbol}')
-                # 거래대금 검토
-                value_1 = np.sum(slice_1[:, 7]) * REFERENCE_RATIO
-                value_2 = np.sum(slice_2[:, 7]) * REFERENCE_RATIO
-                value_3 = np.sum(slice_3[:, 7])
+    #             # print(f'2차 통과 - {symbol}')
+    #             # 거래대금 검토
+    #             value_1 = np.sum(slice_1[:, 7]) * REFERENCE_RATIO
+    #             value_2 = np.sum(slice_2[:, 7]) * REFERENCE_RATIO
+    #             value_3 = np.sum(slice_3[:, 7])
 
-                # 마지막 거래 대금의 합이 제일 커야함.
-                is_value = (value_1 < value_3) and (value_2 < value_3)
-                # 조건 안맞으면 pass
-                if not is_value:
-                    # print(f'3차 {scenario_number} fail - {symbol}')
-                    # 종료
-                    continue
+    #             # 마지막 거래 대금의 합이 제일 커야함.
+    #             is_value = (value_1 < value_3) and (value_2 < value_3)
+    #             # 조건 안맞으면 pass
+    #             if not is_value:
+    #                 # print(f'3차 {scenario_number} fail - {symbol}')
+    #                 # 종료
+    #                 continue
 
-                # print(f'3차 통과 - {symbol}')
-                # debug
-                count_1 = np.sum(slice_1[:, 8]) * REFERENCE_RATIO
-                count_2 = np.sum(slice_2[:, 8]) * REFERENCE_RATIO
-                count_3 = np.sum(slice_3[:, 8])
+    #             # print(f'3차 통과 - {symbol}')
+    #             # debug
+    #             count_1 = np.sum(slice_1[:, 8]) * REFERENCE_RATIO
+    #             count_2 = np.sum(slice_2[:, 8]) * REFERENCE_RATIO
+    #             count_3 = np.sum(slice_3[:, 8])
 
-                is_count = (count_1 < count_3) and (count_2 < count_3)
-                # 거래횟수가 마지막 그룹이 max가 아니면
-                if not is_count:
-                    # print(f'4차 {scenario_number} fail - {symbol}')
-                    # 종료
-                    continue
-                # print(f'4차 통과 - {symbol}')
+    #             is_count = (count_1 < count_3) and (count_2 < count_3)
+    #             # 거래횟수가 마지막 그룹이 max가 아니면
+    #             if not is_count:
+    #                 # print(f'4차 {scenario_number} fail - {symbol}')
+    #                 # 종료
+    #                 continue
+    #             # print(f'4차 통과 - {symbol}')
 
-                # 마지막 그룹이 종가기준 전부 상승일 것.
-                diff_close_1 = slice_1[:, 4] - slice_1[:, 1]
-                diff_close_2 = slice_2[:, 4] - slice_2[:, 1]
-                diff_close_3 = slice_3[:, 4] - slice_3[:, 1]
-                # print(f'AAAAA - {diff_close_3}')
-                if not np.all(diff_close_3 > 0):
-                    # print(f'5차 {scenario_number} fail - {symbol}')
-                    continue
+    #             # 마지막 그룹이 종가기준 전부 상승일 것.
+    #             diff_close_1 = slice_1[:, 4] - slice_1[:, 1]
+    #             diff_close_2 = slice_2[:, 4] - slice_2[:, 1]
+    #             diff_close_3 = slice_3[:, 4] - slice_3[:, 1]
+    #             # print(f'AAAAA - {diff_close_3}')
+    #             if not np.all(diff_close_3 > 0):
+    #                 # print(f'5차 {scenario_number} fail - {symbol}')
+    #                 continue
 
-                # print(f'5차 통과 - {symbol}')
-                wick_close_3 = slice_3[:, 2] - slice_3[:, 3]
-                body_close_3 = np.abs(diff_close_3)
-                candle_body_mean = np.mean(body_close_3 / wick_close_3)
-                # print("=============")
-                # print(candle_body_mean)
-                # print("=============")
-                # # candle 몸통의 비율이 목표 비율보다 낮으면,
-                if not candle_body_mean > CANDLE_RATIO:
-                    # print(f'6차 {scenario_number} fail - {symbol}')
-                    #     # 종료
-                    continue
-                # print(f'6차 통과 - {symbol}')
-                # 마지막 가격이 24시간 max가격이 아니면
-                max_close_price = np.max(base_data[:, 4])
+    #             # print(f'5차 통과 - {symbol}')
+    #             wick_close_3 = slice_3[:, 2] - slice_3[:, 3]
+    #             body_close_3 = np.abs(diff_close_3)
+    #             candle_body_mean = np.mean(body_close_3 / wick_close_3)
+    #             # print("=============")
+    #             # print(candle_body_mean)
+    #             # print("=============")
+    #             # # candle 몸통의 비율이 목표 비율보다 낮으면,
+    #             if not candle_body_mean > CANDLE_RATIO:
+    #                 # print(f'6차 {scenario_number} fail - {symbol}')
+    #                 #     # 종료
+    #                 continue
+    #             # print(f'6차 통과 - {symbol}')
+    #             # 마지막 가격이 24시간 max가격이 아니면
+    #             max_close_price = np.max(base_data[:, 4])
 
-                if not max_close_price == slice_3[-1][4]:
-                    # print(f'7차 {scenario_number} fail - {symbol}')
-                    # 종료
-                    continue
-                # print(f'7차 통과 - {symbol}')
-                time_ = utils._convert_to_datetime(time.time() * 1_000)
-                # print(f"검토 승인 : {scenario_name} - {symbol} -{time_}")
-                # continue
-                # debug
-                temp_data[symbol] = value_3
+    #             if not max_close_price == slice_3[-1][4]:
+    #                 # print(f'7차 {scenario_number} fail - {symbol}')
+    #                 # 종료
+    #                 continue
+    #             # print(f'7차 통과 - {symbol}')
+    #             time_ = utils._convert_to_datetime(time.time() * 1_000)
+    #             # print(f"검토 승인 : {scenario_name} - {symbol} -{time_}")
+    #             # continue
+    #             # debug
+    #             temp_data[symbol] = value_3
 
-        if not temp_data:
-            return fail_signal
-        # print('종점.')
-        leverage = len(temp_data)
-        symbol = max(temp_data, key=temp_data.get)
-        success_signal = (True, symbol, 1, leverage, scenario_number)
-        return self.scenario_data.set_data(scenario_name, success_signal)
+    #     if not temp_data:
+    #         return fail_signal
+    #     # print('종점.')
+    #     leverage = len(temp_data)
+    #     symbol = max(temp_data, key=temp_data.get)
+    #     success_signal = (True, symbol, 1, leverage, scenario_number)
+    #     return self.scenario_data.set_data(scenario_name, success_signal)
          
-    def scenario_2(self):
-        scenario_name, scenario_number = self.__get_scenario_number()
-        fail_signal = self.__fail_signal(scenario_number)
-        """
-        시나리오.
-        4개식 3개의 그룹으로 나눈다.
+    # def scenario_2(self):
+    #     scenario_name, scenario_number = self.__get_scenario_number()
+    #     fail_signal = self.__fail_signal(scenario_number)
+    #     """
+    #     시나리오.
+    #     4개식 3개의 그룹으로 나눈다.
         
-        마지막 그룹의 거래대금이 가장 클 것.
-        마지막 그룹의 거래횟수가 가장 높을 것.
-        마지막 그룹이 전부 상승일 것.
-        24시간중 마지막 그룹이 max일 것.
-        마지막 그룹이 앞의 2그룹보다 상승폭이 클 것.
+    #     마지막 그룹의 거래대금이 가장 클 것.
+    #     마지막 그룹의 거래횟수가 가장 높을 것.
+    #     마지막 그룹이 전부 상승일 것.
+    #     24시간중 마지막 그룹이 max일 것.
+    #     마지막 그룹이 앞의 2그룹보다 상승폭이 클 것.
         
-        최종 집계 후 가장 거래대금이 낮은것을 반환할 것.
-        """
+    #     최종 집계 후 가장 거래대금이 낮은것을 반환할 것.
+    #     """
 
-        # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
-        fail_signal = (False, None, 0, 0, 0)
+    #     # 진입여부, symbol, 포지션, 시나리오 번호, 레버리지.
+    #     fail_signal = (False, None, 0, 0, 0)
 
-        target_interval = "3m"
-
-
-        def calculate_sma(prices, window):
-            """
-            단순 이동평균(SMA) 계산
-            :param prices: 가격 데이터 리스트 또는 NumPy 배열
-            :param window: 이동평균 기간
-            :return: SMA 값 리스트 (길이: len(prices) - window + 1)
-            """
-            prices = np.array(prices)
-            sma = np.convolve(prices, np.ones(window) / window, mode='valid')
-            return sma
+    #     target_interval = "3m"
 
 
+    #     def calculate_sma(prices, window):
+    #         """
+    #         단순 이동평균(SMA) 계산
+    #         :param prices: 가격 데이터 리스트 또는 NumPy 배열
+    #         :param window: 이동평균 기간
+    #         :return: SMA 값 리스트 (길이: len(prices) - window + 1)
+    #         """
+    #         prices = np.array(prices)
+    #         sma = np.convolve(prices, np.ones(window) / window, mode='valid')
+    #         return sma
 
-        temp_data = {}
-        data_names = self.data_container.get_all_data_names()
-        for name in data_names:
-            if target_interval in name:
+
+
+    #     temp_data = {}
+    #     data_names = self.data_container.get_all_data_names()
+    #     for name in data_names:
+    #         if target_interval in name:
                 
-            symbol = name.split("_")[1]
+    #         symbol = name.split("_")[1]
 
-            ma_7 = calculate_sma()
-    def scenario_run(self):
-        # 진입여부, 포지션, 시나리오 번호, 레버리지.
-        fail_signal = (False, None, 0, 0, 0)
-        # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
-        self.__get_symbols()
-        ### scenario 함수 실행 공간
-        self.scenario_1()
-        # self.scenario_2()
-        # self.scenario_3()
-        # self.scenario_6()
-        # self.scenario_7()
-        # self.scenario_8()
-        # self.scenario_9()
-        # self.scenario_10()
+    #         ma_7 = calculate_sma()
+    # def scenario_run(self):
+    #     # 진입여부, 포지션, 시나리오 번호, 레버리지.
+    #     fail_signal = (False, None, 0, 0, 0)
+    #     # 수신 데이터에서 심볼 정보를 추출하여 속성에 저장한다.
+    #     self.__get_symbols()
+    #     ### scenario 함수 실행 공간
+    #     self.scenario_1()
+    #     # self.scenario_2()
+    #     # self.scenario_3()
+    #     # self.scenario_6()
+    #     # self.scenario_7()
+    #     # self.scenario_8()
+    #     # self.scenario_9()
+    #     # self.scenario_10()
 
-        ###
-        scenario_list = self.scenario_data.get_all_data_names()
-        for name in scenario_list:
-            signal = self.scenario_data.get_data(data_name=name)
-            time_ = utils._convert_to_datetime(time.time() * 1_000)
-            # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
-            if signal[0] and signal[3]>=2:
-                # print("====== 최종 승인 ======")
-                # print(f"1. Symbol      : {signal[1]}")
-                # print(f"2. Position    : {signal[2]}")
-                # print(f"3. Scenario_no : {signal[4]}")
-                # print(f"4. Leverage    : {signal[3]}")
-                # print(f"5. time        : {time_}")
-                self.clear_dataset()
-                return signal
-        self.clear_dataset()
-        return fail_signal
+    #     ###
+    #     scenario_list = self.scenario_data.get_all_data_names()
+    #     for name in scenario_list:
+    #         signal = self.scenario_data.get_data(data_name=name)
+    #         time_ = utils._convert_to_datetime(time.time() * 1_000)
+    #         # 조건을 추가할 수 있다. 레버리지값이 2이상일때?라는 조건.
+    #         if signal[0] and signal[3]>=2:
+    #             # print("====== 최종 승인 ======")
+    #             # print(f"1. Symbol      : {signal[1]}")
+    #             # print(f"2. Position    : {signal[2]}")
+    #             # print(f"3. Scenario_no : {signal[4]}")
+    #             # print(f"4. Leverage    : {signal[3]}")
+    #             # print(f"5. time        : {time_}")
+    #             self.clear_dataset()
+    #             return signal
+    #     self.clear_dataset()
+    #     return fail_signal
 
 
 # def scenario_1(self):

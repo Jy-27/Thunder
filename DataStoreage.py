@@ -2,6 +2,7 @@ import utils
 from typing import List, Union, Final, Optional
 from dataclasses import dataclass, fields, field, asdict
 import time
+import ConfigSetting
 class KlineData:
     """
     Binance에서 수신한 KlineData를 interval별 저장하기 위한 class __slots__형태의 데이터 타입
@@ -143,9 +144,13 @@ class TradingLog:
     low_price: float  # 최저 가격
     close_price: float  # 현재 가격 (Close Price)
     
+    ### 거래정보
+    strategy_no:int # 전략정보를 넣는다.
+
     ### 시간 정보
     start_timestamp: int  # 시작 타임스탬프
     end_timestamp: Optional[int]=None  # 현재 시간 타임스탬프(포지션 종료 시점)
+    
     
     ### 손절 및 종료 설정
     scale_stop_enable: bool = True  # final 손절율 or scale 손절율 적용 여부
@@ -155,20 +160,16 @@ class TradingLog:
     time_based_adjustment_rate: float = 0.0007  # 시간 흐름에 따른 비율 조정 값
     adjusted_interval:str = '3m'    # 조종 변동 step
     adjusted_entry_price: Optional[float]=None  # 조정된 진입 가격 (StopLoss 기준)
-    stop_trigger_enable: bool=False      # 종료 신호 활성화 여부
     stop_loss_price: Optional[float]=None  # 손절 가격 또는 종료 가격
 
     ### 포지션 평가
     initial_value: Optional[float]=None  # 진입 시점의 평가 가치 (수수료 제외)
     current_value: Optional[float]=None  # 현재(종료) 시점의 평가 가치 (수수료 제외)
-    net_pnl: Optional[float]=None  # 순 손익 금액 (Net Profit or Loss, 수수료 제외)
-    net_pnl_rate: Optional[float]=None  # 순 손익 비율 (Net Profit or Loss Rate, 수수료 제외)
-    gross_pnl: Optional[float]=None  # 총 손익 금액 (Gross Profit or Loss, 수수료 포함)
-    gross_pnl_rate: Optional[float]=None  # 총 손익 비율 (Gross Profit or Loss Rate, 수수료 포함)
-    
-    ### 시스템 세팅
-    test_mode: bool = False
-    trade_close: bool = False
+    net_pnl: float=0  # 순 손익 금액 (Net Profit or Loss, 수수료 제외)
+    net_pnl_rate: float=0  # 순 손익 비율 (Net Profit or Loss Rate, 수수료 제외)
+    gross_pnl: float=0  # 총 손익 금액 (Gross Profit or Loss, 수수료 포함)
+    gross_pnl_rate: float=0  # 총 손익 비율 (Gross Profit or Loss Rate, 수수료 포함)
+
     
     ### 수수료 관련
     entry_fee: float=0  # 진입 수수료
@@ -185,38 +186,26 @@ class TradingLog:
         if self.current_value is None:
             self.current_value = (self.close_price * self.quantity) / self.leverage
     
-    def update_trade_data(self, timestamp:int, price:Optional[Union[float, int]]=None):
+    def update_trade_data(self, timestamp:int, price:Optional[Union[float, int]]=None, reverse_position_ratio:float=0, exit_fee:float=0):
         """
         신규 데이터를 TradingLog데이터에 반영 및 연산한다.
         """
         # 현재시간을 업데이트한다.
         self.end_timestamp = timestamp
+        self.reverse_position_ratio = reverse_position_ratio
+        self.exit_fee = exit_fee
         # price 데이터 입력시 포지션에 맞게 high_price or low_price를 업데이트 한다.
         if price is not None:
             if self.position == 1:
                 self.high_price = max(self.high_price, price)
             elif self.position == 2:
                 self.low_price = min(self.low_price, price)
+            self.close_price = price
         
         # 현재 평가금액을 계산한다.
         self.__cals_value()
         # 손절 또는 종료연산에 필요한 값을 계산하고 포지션 종료여부를 결정한다.
         self.__cals_stop_loss()
-        # self.test_mode가 True일 경우에만 동작하며 수수료(진입/종료)를 계산한다.
-        self.__cals_fees()
-    
-    def __cals_fees(self):
-        """
-        self.test_mode가 True일 경우에만 수수료를 계산한다. 백테스트 전용 함수다.
-        """
-        # 수수료는 시장가 기준으로 0.05%를 적용했으며, 정확한 공식 적용이 어려우므로 슬리피지는 별도 적용하지 않는다.
-        FEE_RATE:Final[float] = 0.0005
-        # 테스트 모드 여부를 확인한다.
-        if self.test_mode:
-            # 진입 수수료를 계산한다.
-            self.entry_fee = (self.open_price * self.quantity * FEE_RATE)
-            # 종료 수수료를 계산한다.
-            self.exit_fee = (self.close_price * self.quantity * FEE_RATE)
     
     def __cals_value(self):
         """
@@ -233,6 +222,19 @@ class TradingLog:
             self.net_pnl = self.initial_value - self.current_value
         # 수수료 제외한 pnl의 비율을 계산한다.
         self.net_pnl_rate = self.net_pnl / self.initial_value
+        
+        
+        # 수수료는 시장가 기준으로 0.05%를 적용했으며, 정확한 공식 적용이 어려우므로 슬리피지는 별도 적용하지 않는다.
+        FEE_RATE:Final[float] = 0.0005
+        # 테스트 모드 여부를 확인한다.
+        if ConfigSetting.InitialSetup.mode:
+            # 진입 수수료를 계산한다.
+            self.entry_fee = (self.open_price * self.quantity * FEE_RATE)
+            # 종료 수수료를 계산한다.
+            self.exit_fee = (self.close_price * self.quantity * FEE_RATE)
+        
+        
+        
         # 수수료 총 합계를 계산한다.
         total_fee = self.entry_fee + self.exit_fee
         # 수수료 비용을 포함한 pnl을 계산한다.

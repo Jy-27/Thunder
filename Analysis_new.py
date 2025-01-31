@@ -231,7 +231,7 @@ class SellStrategy1:
                     continue
                 down_count += 1
 
-            if not down_count >= 2:
+            if down_count < 2:
                 result[symbol] = self.fail_message
                 continue
             self.success_message.append(down_count)
@@ -348,7 +348,7 @@ class BuyStrategy1:
                     continue
                 # print(positive_ratio)
                 down_count += 1
-            if not down_count >= 2:
+            if down_count < 2:
                 result[symbol] = self.fail_message
                 continue
 

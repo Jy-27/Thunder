@@ -423,7 +423,7 @@ class PortfolioManager:
         self.update_data()
 
     # 데이터를 업데이트하는 동시에 stop 신호를 반환받는다.
-    def update_log_data(self, symbol: str, price: float, timestamp: int) -> bool:
+    def update_log_data(self, symbol: str, price: float, timestamp: int, reverse_position_ratio:float=0) -> bool:
         convert_to_symbol = f"{self.market}_{symbol}"
 
         # container 데이터에 해당 symbol값이 없으면

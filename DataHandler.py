@@ -83,7 +83,7 @@ class BinanceHandler:
             if message.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(message.data)
                 # DEBUG
-                # print(data)
+                print(data)
                 await self.asyncio_queue.put(data)
             elif message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
                 break

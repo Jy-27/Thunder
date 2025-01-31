@@ -8,11 +8,11 @@ import TradeComputation
 if __name__ == "__main__":
     symbols = [
         # "agldusdt",
-        "xrpusdt",
+        # "xrpusdt",
         # "dogeusdt",
         "trxusdt",
-        "btcusdt",
-        "ethusdt",
+        # "btcusdt",
+        # "ethusdt",
     ]  # 확인하고자 하는 심볼 정보
     market = "futures"
     # intervals = ["1m", "5m", "15m"]  # 백테스트 적용 interval값(다운로드 항목)
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     kline_period = 2
     start_date = "2024-12-1 09:00:00"  # 시작 시간
     end_date = "2025-1-30 08:59:59"  # 종료 시간
-    safety_balance_ratio = 0.4  # 잔고 안전금액 지정 비율
+    safety_balance_ratio = 0.2  # 잔고 안전금액 지정 비율
     stop_loss_rate = 0.65  # 스톱 로스 비율
     is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
     is_dynamic_adjustment = (
@@ -31,12 +31,12 @@ if __name__ == "__main__":
     dynamic_adjustment_interval = "3m"  # 변동율 반영 스텝
     use_scale_stop = True  # final손절(False), Scale손절(True)
     seed_money = 69350.5  # 시작금액
-    leverage = 125 # 레버리지
+    leverage = 2 # 레버리지
     init_stop_rate = 0.035  # 시작 손절가
     is_order_break = True  # 반복 손실 발생시 주문 거절여부
     allowed_loss_streak = 1  # 반복 손실 발생 유예횟수
     loss_recovery_interval = "4h"  # 반복 손실 시간 범위
-    max_held_symbols = 2  # 동시 거래 가능 수량
+    max_held_symbols = 1  # 동시 거래 가능 수량
     is_profit_preservation = True  # 수익보존여부
     ### Ticker Setting Option ###
     comparison = "above"  # above : 이상, below : 이하

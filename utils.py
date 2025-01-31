@@ -14,9 +14,36 @@ from pprint import pformat
 T = TypeVar("T")
 
 
+def _info_order_message():
+    return {
+        "orderId": 13916052419,
+        "symbol": "TRXUSDT",
+        "status": "NEW",
+        "clientOrderId": "KGbhxmx2dijD1YQlIFOb1u",
+        "price": "0.00000",
+        "avgPrice": "0.00",
+        "origQty": "21",
+        "executedQty": "0",
+        "cumQty": "0",
+        "cumQuote": "0.00000",
+        "timeInForce": "GTC",
+        "type": "MARKET",
+        "reduceOnly": False,
+        "closePosition": False,
+        "side": "BUY",
+        "positionSide": "BOTH",
+        "stopPrice": "0.00000",
+        "workingType": "CONTRACT_PRICE",
+        "priceProtect": False,
+        "origType": "MARKET",
+        "priceMatch": "NONE",
+        "selfTradePreventionMode": "EXPIRE_MAKER",
+        "goodTillDate": 0,
+        "updateTime": 1738309580980,
+    }
+
+
 def _info_kline_columns():
-    
-    
     columns = [
         "Open Time",  # 0
         "Open",  # 1
@@ -33,9 +60,36 @@ def _info_kline_columns():
     ]
     result = []
     for idx, name in enumerate(columns):
-        name = f'{idx}: {name}'
+        name = f"{idx}: {name}"
         result.append(name)
     return result
+
+
+def _info_websocket_message():
+    return {
+        "e": "kline",
+        "E": 1738296892360,
+        "s": "XRPUSDT",
+        "k": {
+            "t": 1738296720000,
+            "T": 1738296899999,
+            "s": "XRPUSDT",
+            "i": "3m",
+            "f": 939359504,
+            "L": 939360627,
+            "o": "3.08200000",
+            "c": "3.08050000",
+            "h": "3.08250000",
+            "l": "3.08050000",
+            "v": "134976.00000000",
+            "n": 1124,
+            "x": False,
+            "q": "415956.90630000",
+            "V": "70867.00000000",
+            "Q": "218391.90910000",
+            "B": "0",
+        },
+    }
 
 
 def _info_kline_intervals():
@@ -58,7 +112,7 @@ def _info_kline_intervals():
     ]
 
 
-def _info_ticker_prices_dummy():
+def _info_ticker_prices_messagey():
     return [
         {
             "symbol": "VIDTUSDT",
@@ -117,7 +171,7 @@ def _info_ticker_prices_dummy():
     ]
 
 
-def _info_24hr_ticker_dummy():
+def _info_24hr_ticker_message():
     return [
         {"symbol": "1000000MOGUSDT", "price": "2.2652000", "time": 1735312497433},
         {"symbol": "VANAUSDT", "price": "18.682000", "time": 1735312504022},
@@ -775,25 +829,32 @@ def _calculate_percentage_change(
         return 0
     return (end_value - start_value) / start_value
 
-def _get_import(module_name:str, class_name:str):
+
+def _get_import(module_name: str, class_name: str):
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
 
+
 def _text_to_decimal(text: str) -> int:
-    """ 문자열을 10진수(int)로 변환 (맨 앞자리가 0이 되지 않도록 처리) """
+    """문자열을 10진수(int)로 변환 (맨 앞자리가 0이 되지 않도록 처리)"""
     if not text:
         raise ValueError("입력 문자열이 비어 있습니다.")
 
     decimal_str = f"{ord(text[0])}"  # 첫 번째 문자는 그대로 사용
-    decimal_str += ''.join(f"{ord(char) + 1000}" for char in text[1:])  # 이후 문자는 +1000 처리
+    decimal_str += "".join(
+        f"{ord(char) + 1000}" for char in text[1:]
+    )  # 이후 문자는 +1000 처리
 
     return int(decimal_str)  # 정수(int)로 변환
 
+
 def _decimal_to_text(decimal: int) -> str:
-    """ 10진수를 문자열(str)로 복원 """
+    """10진수를 문자열(str)로 복원"""
     decimal_str = str(decimal)  # 정수를 문자열로 변환
 
     first_char = chr(int(decimal_str[:2]))  # 첫 번째 문자 (ASCII 변환)
-    rest_chars = ''.join(chr(int(decimal_str[i:i+4]) - 1000) for i in range(2, len(decimal_str), 4))  # 이후 문자들
+    rest_chars = "".join(
+        chr(int(decimal_str[i : i + 4]) - 1000) for i in range(2, len(decimal_str), 4)
+    )  # 이후 문자들
 
     return first_char + rest_chars

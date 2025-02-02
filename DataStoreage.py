@@ -68,7 +68,8 @@ class KlineData:
 
     def set_data(self, kline_data: List[List[Union[int, str]]]):
         """
-        kline_data초기 자료를 저장한다.
+        kline_data초기 자료를 저장한다. 라이브 트레이드는 list형태로 정보 접수되므로
+        힌트는 리스트로 지정한다.
         """
         if not isinstance(kline_data, list) or not kline_data:
             raise ValueError("Invalid kline_data: Must be a non-empty list")
@@ -161,6 +162,7 @@ class TradingLog:
     adjusted_interval:str = '3m'    # 조종 변동 step
     adjusted_entry_price: Optional[float]=None  # 조정된 진입 가격 (StopLoss 기준)
     stop_loss_price: Optional[float]=None  # 손절 가격 또는 종료 가격
+    
 
     ### 포지션 평가
     initial_value: Optional[float]=None  # 진입 시점의 평가 가치 (수수료 제외)
@@ -169,7 +171,7 @@ class TradingLog:
     net_pnl_rate: float=0  # 순 손익 비율 (Net Profit or Loss Rate, 수수료 제외)
     gross_pnl: float=0  # 총 손익 금액 (Gross Profit or Loss, 수수료 포함)
     gross_pnl_rate: float=0  # 총 손익 비율 (Gross Profit or Loss Rate, 수수료 포함)
-
+    stop_trigger_enable:bool = False    #포지션 종료여부 flag
     
     ### 수수료 관련
     entry_fee: float=0  # 진입 수수료
@@ -186,14 +188,16 @@ class TradingLog:
         if self.current_value is None:
             self.current_value = (self.close_price * self.quantity) / self.leverage
     
-    def update_trade_data(self, timestamp:int, price:Optional[Union[float, int]]=None, reverse_position_ratio:float=0, exit_fee:float=0):
+        self.__cals_value()
+        self.__cals_stop_loss()
+    
+    def update_open_trading_log(self, timestamp:int, price:Optional[Union[float, int]]=None, reverse_position_ratio:float=0):#, exit_fee:float=0):
         """
         신규 데이터를 TradingLog데이터에 반영 및 연산한다.
         """
         # 현재시간을 업데이트한다.
         self.end_timestamp = timestamp
         self.reverse_position_ratio = reverse_position_ratio
-        self.exit_fee = exit_fee
         # price 데이터 입력시 포지션에 맞게 high_price or low_price를 업데이트 한다.
         if price is not None:
             if self.position == 1:
@@ -206,6 +210,13 @@ class TradingLog:
         self.__cals_value()
         # 손절 또는 종료연산에 필요한 값을 계산하고 포지션 종료여부를 결정한다.
         self.__cals_stop_loss()
+        return self.stop_trigger_enable
+    
+    def update_closed_trading_log(self, timestamp:int, price:float, exit_fee:float):
+        self.end_timestamp = timestamp
+        self.close_price = price
+        self.exit_fee = exit_fee
+        self.__cals_value()
     
     def __cals_value(self):
         """
@@ -217,21 +228,21 @@ class TradingLog:
         
         # 포지션에 따라서 수수료 제외한 pnl을 계산한다.
         if self.position == 1:
-            self.net_pnl = self.current_value - self.initial_value
+            self.net_pnl = (self.close_price - self.open_price) * self.quantity
         elif self.position == 2:
-            self.net_pnl = self.initial_value - self.current_value
+            self.net_pnl = (self.open_price - self.close_price) * self.quantity
         # 수수료 제외한 pnl의 비율을 계산한다.
         self.net_pnl_rate = self.net_pnl / self.initial_value
         
         
-        # 수수료는 시장가 기준으로 0.05%를 적용했으며, 정확한 공식 적용이 어려우므로 슬리피지는 별도 적용하지 않는다.
-        FEE_RATE:Final[float] = 0.0005
+        # 수수료는 시장가 기준으로 0.05%이나 슬리피지 및 기 비용은 계산기 어우로 0.07%로 잡았다.
+        FEE_RATE:Final[float] = 0.0007
         # 테스트 모드 여부를 확인한다.
         if ConfigSetting.InitialSetup.mode:
             # 진입 수수료를 계산한다.
-            self.entry_fee = (self.open_price * self.quantity * FEE_RATE)
+            self.entry_fee = (self.open_price * self.quantity * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
             # 종료 수수료를 계산한다.
-            self.exit_fee = (self.close_price * self.quantity * FEE_RATE)
+            self.exit_fee = (self.close_price * self.quantity * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
         
         
         
@@ -258,16 +269,22 @@ class TradingLog:
         # 거래발생부터 현재시간을 interval값으로 나누어 횟수를 구하고 지정된 비율을 곱하여 추가적용할 비율을 계산한다.
         dynamic_time_rate = int(time_diff / target_ms_seconds) * self.time_based_adjustment_rate
         
+        
+        
         # 포지션이 롱일경우 스탑로스를 계산한다.
         if self.position == 1:
             # 설정상 scale_stop_enable이 참 일경우
             if self.scale_stop_enable:
                 # 스탑로스 비율을 계산한다.
                 stop_loss_rate = self.initial_stop_rate - (self.reverse_position_ratio + dynamic_time_rate)
-                # 유동적 시작가를 계산한다.
-                self.adjusted_entry_price = self.open_price * (1-stop_loss_rate)
+                if stop_loss_rate > 0:
+                    # 유동적 시작가를 계산한다.
+                    self.adjusted_entry_price = self.open_price * (1-stop_loss_rate)
+                else:
+                    self.adjusted_entry_price = self.open_price * (1+abs(stop_loss_rate))
+                    
                 # 포지션을 종료 금액을 계산한다.
-                self.stop_loss_price = self.adjusted_entry_price + ((self.high_price - self.adjusted_entry_price) * (1-stop_loss_rate))
+                self.stop_loss_price = self.adjusted_entry_price + ((self.high_price - self.adjusted_entry_price) * (1-self.trailing_stop_rate))
             # 설정상 scale_stop_enable이 거짓일 경우
             else:
                 # 포지션 종료 금액을 계산한다.
@@ -281,10 +298,26 @@ class TradingLog:
             if self.scale_stop_enable:
                 # 스탑로스 비율을 계산한다.
                 stop_loss_rate = self.initial_stop_rate - (self.reverse_position_ratio + dynamic_time_rate)
-                # 유동적 시작가를 계산한다.
-                self.adjusted_entry_price = self.open_price * (1+stop_loss_rate)
+                # DEBUG
+                # print(f'DataStoreage // 301')
+                # print(f'reverse: {self.reverse_position_ratio}')
+                # print(f'dynamic: {dynamic_time_rate}')
+                # print(f'time_diff: {time_diff}')
+                # print(f'target_ms_sec: {target_ms_seconds}')
+                # print(f'start: {utils._convert_to_datetime(self.start_timestamp)}')
+                # print(f'end: {utils._convert_to_datetime(self.end_timestamp)}')
+                # print(f'stop_loss: {stop_loss_rate}')
+                # raise ValueError('중간점검')
+                if stop_loss_rate > 0:
+                    # 유동적 시작가를 계산한다.
+                    self.adjusted_entry_price = self.open_price * (1+stop_loss_rate)
+                else:
+                    self.adjusted_entry_price = self.open_price * (1-abs(stop_loss_rate))
+                
+                # # 유동적 시작가를 계산한다.
+                # self.adjusted_entry_price = self.open_price * (1+stop_loss_rate)
                 # 포지션을 종료 금액을 계산한다.
-                self.stop_loss_price = self.adjusted_entry_price - ((self.adjusted_entry_price - self.low_price) * (1-stop_loss_rate))
+                self.stop_loss_price = self.adjusted_entry_price - ((self.adjusted_entry_price - self.low_price) * (1-self.trailing_stop_rate))
             
             else:
                 # 포지션 종료 금액을 계산한다.

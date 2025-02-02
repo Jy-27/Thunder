@@ -9,6 +9,7 @@ from pprint import pprint
 from typing import Dict, List, Final, Optional
 from copy import copy
 
+
 class IndicatorMA:
     """
     이동평균값을 계산한다.
@@ -76,22 +77,26 @@ class IndicatorMA:
                 result = ma_func[self.type_str](data=array_data, period=preiod)
                 setattr(self, f"{symbol}_{self.type_str}_{preiod}", result)
 
+
 class IndicatorMACD:
-    def __init__(self, kline_datasets: Dict[str, DataStoreage.KlineData],
-                 interval:str = "3m",
-                 data_type:str = 'macd',
-                 col_index:int = 4,
-                 short_window: int=12,
-                 long_window: int=26,
-                 signal_window:int=9):
-        self.kline_datasets = kline_datasets = kline_datasets
+    def __init__(
+        self,
+        kline_datasets: Dict[str, DataStoreage.KlineData],
+        interval: str = "3m",
+        data_type: str = "macd",
+        col_index: int = 4,
+        short_window: int = 12,
+        long_window: int = 26,
+        signal_window: int = 9,
+    ):
+        self.kline_datasets = kline_datasets
         self.interval = interval
         self.type_str = data_type
         self.col_index = col_index
         self.short_window = short_window
         self.long_window = long_window
         self.signal_window = signal_window
-    
+
     def __ema(self, data: np.ndarray, window: int) -> np.ndarray:
         """EMA 계산 (데이터 길이 유지)"""
         alpha = 2 / (window + 1)
@@ -103,33 +108,51 @@ class IndicatorMACD:
 
         return ema_values
 
-    def macd(self, data: np.ndarray, col_index:int=4,  short_window: int = 12, long_window: int = 26, signal_window: int = 9):
-        value = data[:,col_index]
+    def macd(
+        self,
+        data: np.ndarray,
+        col_index: int = 4,
+        short_window: int = 12,
+        long_window: int = 26,
+        signal_window: int = 9,
+    ):
+        value = data[:, col_index]
         macd_line = self.__ema(value, short_window) - self.__ema(value, long_window)
         signal_line = self.__ema(macd_line, signal_window)
         histogram = macd_line - signal_line
-        return macd_line, signal_line, histogram 
-    
+        return macd_line, signal_line, histogram
+
     def run(self):
         for symbol, data in self.kline_datasets.items():
             base_data = data.get_data(interval=self.interval)
             array_data = np.array(base_data, float)
-            
-            result = self.macd(data=array_data, col_index=self.col_index, short_window=self.short_window, long_window=self.long_window, signal_window=self.signal_window)
-            setattr(self, f'{symbol}_{self.type_str}_{self.short_window}_{self.long_window}_{self.signal_window}', result)
-    
-class IndicatorRSI:
-    ...
-    
-class IndicatorOscillator:
-    ...
+
+            result = self.macd(
+                data=array_data,
+                col_index=self.col_index,
+                short_window=self.short_window,
+                long_window=self.long_window,
+                signal_window=self.signal_window,
+            )
+            setattr(
+                self,
+                f"{symbol}_{self.type_str}_{self.short_window}_{self.long_window}_{self.signal_window}",
+                result,
+            )
+
+
+class IndicatorRSI: ...
+
+
+class IndicatorOscillator: ...
+
 
 class SellStrategy1:
     """
     Short 포지션 관련 분석
     """
 
-    def __init__(self, ma_data: IndicatorMA, macd_data:IndicatorMACD):
+    def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
         self.ins_ma = ma_data
         self.ins_macd = macd_data
 
@@ -164,13 +187,13 @@ class SellStrategy1:
             )  # 99
 
             macd = getattr(
-                self.ins_macd, f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}"
+                self.ins_macd,
+                f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}",
             )
             macd_line = macd[0]
             signal_line = macd[1]
             histogram = macd[2]
-            
-            
+
             base_data = getattr(
                 self.kline_datasets[symbol], f"interval_{self.interval}"
             )
@@ -190,13 +213,13 @@ class SellStrategy1:
                 continue
 
             # 조건 3 : 볼륨 강도
-            volume_ratio = np.mean(convert_to_array[-3:,10] / convert_to_array[-3:,7])
+            volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
             volume_target_ratio = 0.45
             if not volume_ratio <= volume_target_ratio:
                 result[symbol] = self.fail_message
                 continue
-                
-            ### DEBUG CODE                
+
+            ### DEBUG CODE
             if not macd_line[-1] > signal_line[-1]:
                 result[symbol] = self.fail_message
                 continue
@@ -245,7 +268,7 @@ class BuyStrategy1:
     Short 포지션 관련 분석
     """
 
-    def __init__(self, ma_data: IndicatorMA, macd_data:IndicatorMACD):
+    def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
         self.ins_ma = ma_data
         self.ins_macd = macd_data
 
@@ -280,13 +303,13 @@ class BuyStrategy1:
             )  # 99
 
             macd = getattr(
-                self.ins_macd, f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}"
+                self.ins_macd,
+                f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}",
             )
             macd_line = macd[0]
             # print(f'MACD:{macd_line}')
             signal_line = macd[1]
             histogram = macd[2]
-
 
             base_data = getattr(
                 self.kline_datasets[symbol], f"interval_{self.interval}"
@@ -309,13 +332,13 @@ class BuyStrategy1:
                 continue
 
             # 조건 3 : 볼륨 강도
-            volume_ratio = np.mean(convert_to_array[-3:,10] / convert_to_array[-3:,7])
+            volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
             volume_target_ratio = 0.55
             if not volume_ratio >= volume_target_ratio:
                 result[symbol] = self.fail_message
                 continue
 
-            ### DEBUG CODE                
+            ### DEBUG CODE
             if not macd_line[-1] < signal_line[-1]:
                 result[symbol] = self.fail_message
                 continue
@@ -359,12 +382,17 @@ class BuyStrategy1:
         # print(self.result)
 
 
+class Intervals:
+    intervals = ["3m", "5m"]
+
+
 class AnalysisManager:
     def __init__(self, kline_datasets: Dict[str, DataStoreage.KlineData]):
         self.data_sets = kline_datasets
-        
+
         ### 공통 설정
         self.interval_3m: str = "3m"
+        self.interval_5m: str = "5m"
 
         ### MA 분석
         self.data_type_sma: str = "sma"
@@ -385,24 +413,26 @@ class AnalysisManager:
         self.short_window = 12
         self.long_window = 26
         self.signal_window = 9
-        self.ins_macd_12_26_9 = IndicatorMACD(kline_datasets=self.data_sets,
-                                              col_index=self.col_index,
-                                              short_window=self.short_window,
-                                              long_window=self.long_window,
-                                              signal_window=self.signal_window)
+        self.ins_macd_12_26_9 = IndicatorMACD(
+            kline_datasets=self.data_sets,
+            col_index=self.col_index,
+            short_window=self.short_window,
+            long_window=self.long_window,
+            signal_window=self.signal_window,
+        )
 
-        self.ins_sell_strategy_1: BuyStrategy1 = SellStrategy1(self.ins_ma_sma_3m,
-                                                               self.ins_macd_12_26_9)
-        self.ins_buy_strategy_1: BuyStrategy1 = BuyStrategy1(self.ins_ma_sma_3m,
-                                                             self.ins_macd_12_26_9)
+        self.ins_sell_strategy_1: BuyStrategy1 = SellStrategy1(
+            self.ins_ma_sma_3m, self.ins_macd_12_26_9
+        )
+        self.ins_buy_strategy_1: BuyStrategy1 = BuyStrategy1(
+            self.ins_ma_sma_3m, self.ins_macd_12_26_9
+        )
 
-        self.success_buy_signal:Dict[str, List[int]] = {}
-        self.success_sell_signal:Dict[str, List[int]] = {}
-    
+        self.success_signals: List[Any] = []
+
     def reset_signal(self):
-        self.success_buy_signal:Dict[str, List[int]] = {}
-        self.success_sell_signal:Dict[str, List[int]] = {}
-        
+        self.success_signals: List[Any] = []
+
     def __run_func(self):
         self.ins_ma_sma_3m.run()
         self.ins_macd_12_26_9.run()
@@ -417,12 +447,12 @@ class AnalysisManager:
                 # getattr을 올바르게 사용
                 strategy_instance = getattr(self, attr_name, None)
                 for symbol, signal in strategy_instance.result.items():
-                    if signal[0] and signal[1]==1:
-                        self.success_buy_signal[symbol] = signal
-                    elif signal[0] and signal[1]==2:
-                        self.success_sell_signal[symbol] = signal
-
+                    if signal[0]:
+                        signal.insert(0, symbol)
+                        self.success_signals.append(signal)                
+        return self.success_signals
+        
     def run(self):
         self.__run_func()
-        self.get_success_signal()
+        return self.get_success_signal()
         # self.reset_signal()

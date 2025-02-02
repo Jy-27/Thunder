@@ -5,6 +5,7 @@ import os
 import sys
 import numpy as np
 import importlib
+import requests
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -13,7 +14,9 @@ from pprint import pformat
 
 T = TypeVar("T")
 
-
+def _debug_message(instance):
+    print(f'Class Name: {instance.__class__.__name__}\n')
+    
 def _info_order_message():
     return {
         "orderId": 13916052419,
@@ -198,6 +201,28 @@ def _info_24hr_ticker_message():
         {"symbol": "INJUSDT", "price": "21.050000", "time": 1735312499980},
     ]
 
+
+class TelegramMessage:
+    def __init__(self, path:str):
+        self.path = path
+        self.chat_id:Optional[str] = None
+        self.token: Optional[str] = None
+        self.set_config()
+    
+    def set_config(self):
+        api_key = _load_json(self.path)
+        
+        self.chat_id = api_key['chat_id']
+        self.token = api_key['token']
+
+    def send_to_message(self, message:str):
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        payload = {
+            "chat_id": self.chat_id,
+            "text": message,
+        }
+        response = requests.post(url, data=payload)
+        return response.json()
 
 class DataContainer:
     """

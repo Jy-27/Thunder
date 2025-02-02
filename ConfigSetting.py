@@ -2,10 +2,6 @@ from enum import Enum
 from typing import List, Union, Optional
 import os
 import utils
-import TradeClient
-
-###검증에 필요함###
-import MarketDataFetcher
 import asyncio
 
 
@@ -33,22 +29,35 @@ class InitialSetup:
 
 
 class SystemConfig(Enum):
-    ### 데이터 수신
+    ### 데이터 수신 (LIVE MODE)
     websocket_reconnect_interval_hours: int = 2  # 웹소켓 재연결 주기 (시간 단위)
     ### 분석 설정
-    data_analysis_window_days: int = 1  # 데이터 분석 창(일 단위)
+    data_analysis_window_days: int = 2  # 데이터 분석 창(일 단위)
 
-    ### 폴더이름
+    ### 트레이드 히스토리 적용 범위(hr)
+    trade_history_range:int = 24
+
+    ### 폴더이름 (전체)
     parent_folder_path = os.path.dirname(os.getcwd())
     api_folder_name = "API"
     data_folder_name = "DataStore"
 
-    ### 파일이름
+    ### 파일이름 (전체))
     api_binance = "binance.json"
     api_telegram = "telegram.json"
     test_trade_history = "test_trade_history.json"
     live_trade_history = "live_trade_history.json"
+    
+    kline_data = 'kline_data.json'
+    closing_sync_data = "closing_sync_data.pkl"
 
+    path_binance_api = os.path.join(parent_folder_path, api_folder_name, api_binance)
+    path_telegram_api = os.path.join(parent_folder_path, api_folder_name, api_telegram)
+    path_test_trade_history = os.path.join(parent_folder_path, data_folder_name, test_trade_history)
+    path_live_trade_history = os.path.join(parent_folder_path, data_folder_name, test_trade_history)
+
+    path_kline_data = os.path.join(parent_folder_path, data_folder_name, kline_data)
+    path_closing_sync_data = os.path.join(parent_folder_path, data_folder_name, closing_sync_data)
 
 class SymbolConfig(Enum):
     """
@@ -56,13 +65,15 @@ class SymbolConfig(Enum):
     """
 
     core_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
-    update_hour: Optional[int] = None  # 업데이트 주기 시간
-    market_type: str = "Futures"  # 시장 유형
+    update_hour: Optional[int] = None  # 업데이트 주기 시간 (라이브 트레이딩 전용)
+    market_type: str = "Futures"  # 시장 유형 (라이브 트레이딩 전용)
 
     @classmethod
     async def validate_config(cls):
         error_messages = []
 
+        # 순환참조 방지 지연임포트
+        import MarketDataFetcher
         # 시장 유형에 따른 MarketDataFetcher 인스턴스 생성
         if cls.market_type.value == "Futures":
             ins_market = MarketDataFetcher.FuturesMarket()
@@ -192,11 +203,11 @@ class OrderConfig(Enum):
 
     hedge_trading_enabled: bool = True  # 헤지 거래 활성화 여부
     max_leverage: int = 125  # 최대 레버리지
-    min_leverage: int = 1  # 최소 레버리지
+    min_leverage: int = 5  # 최소 레버리지
     reference_leverage: Union[int, float] = 1  # 참고용 레버리지
     order_allocation_ratio: Optional[float] = None  # 회당 주문 가능 금액 비율
     order_allocation_amount: Optional[float] = (
-        100  # 회당 주문 가능 금액 (자산이 해당금액보다 낮아질경우 셧다운 처리할 것.)
+        342.86  # 회당 주문 가능 금액 (자산이 해당금액보다 낮아질경우 셧다운 처리할 것.)
     )
     max_concurrent_positions: int = 2  # 최대 동시 거래 포지션 수
     margin_mode: str = "cross"
@@ -308,6 +319,8 @@ class OrderConfig(Enum):
             )
             error_messages.append(message)
 
+        # 순환참조 방지 지연임포트
+        import TradeClient
         if SymbolConfig.market_type.value == "Futures":
             ins_client = TradeClient.FuturesClient()
         elif SymbolConfig.market_type.value == "Spot":
@@ -316,8 +329,7 @@ class OrderConfig(Enum):
         total_balance = await ins_client.get_total_wallet_balance()
         available_ratio = 1 - SafetyConfig.account_safety_ratio.value
         live_available_funds = total_balance * available_ratio
-        print(live_available_funds)
-
+                
         # live trading 조건을 변수로 분리
         is_live_mode = not InitialSetup.mode
         is_live_valid_allocation = (
@@ -410,9 +422,9 @@ class StopLossConfig(Enum):
         > interval을 timestamp로 변환 후 해당 step마다 0.005비율을 적용하여
           시작가에 반영하여 수정한다. 수정된 시작가는 현재가와의 관계를 연산하여 설정된 값 도달시
           거래종료신호를 발생시킨다.
-
     """
-    negative_candle_effect_enabled: bool = True  # 포지션 반대 캔들의 영향을 활성화 여부
+    negative_candle_effect_enabled: bool = False  # 포지션 반대 캔들의 영향을 활성화 여부
+    negative_reference_rate: float = 0.2 #반대 캔들 비율의 조정율
     dynamic_stop_loss_enabled: bool = True  # 동적 손절 비율 사용 여부
     adjustment_rate: float = 0.005  # 동적 조정 비율
     adjustment_interval: str = "3m"  # 동적 조정 주기
@@ -430,10 +442,11 @@ class TestConfig(Enum):
     백테스트에 필요한 정보를 설정
     """
 
-    test_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
-    seed_funds: float = 15  # 초기 자본금 / None값일경우 계좌 전체 금액 반영됨.
-    start_datetime: str = "2025-1-20 09:00:00"  # 백테스트 시작 날짜
-    end_datetime: str = "2025-1-21 08:59:59"  # 백테스트 종료 날짜
+    # test_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
+    test_symbols: Union[List[str], str] = ["TRXUSDT"]
+    seed_funds: Union[float, int] = 6857.3  # 초기 자본금 / None값일경우 계좌 전체 금액 반영됨.
+    start_datetime: str = "2024-12-1 09:00:00"  # 백테스트 시작 날짜
+    end_datetime: str = "2025-1-1 08:59:59"  # 백테스트 종료 날짜
     download_new_data: bool = True  # 새로운 데이터 다운로드 여부
 
     @classmethod
@@ -546,6 +559,12 @@ class TestConfig(Enum):
         print(f"{cls.__name__} 검증 성공")
 
 
+async def run():
+    await SymbolConfig.validate_config()
+    await OrderConfig.validate_config()
+    TelegramConfig.validate_config()
+    TestConfig.validate_config()
+
 if __name__ == "__main__":
     InitialSetup.initialize()
-    asyncio.run(OrderConfig.validate_config())
+    asyncio.run(run())

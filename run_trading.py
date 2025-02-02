@@ -22,7 +22,7 @@ if __name__ == "__main__":
     end_date = "2025-1-30 08:59:59"  # 종료 시간
     safety_balance_ratio = 0.2  # 잔고 안전금액 지정 비율
     stop_loss_rate = 0.65  # 스톱 로스 비율
-    is_download = False  # 기존 데이터로 할경우 False, 신규 다운로드 True
+    is_download = True  # 기존 데이터로 할경우 False, 신규 다운로드 True
     is_dynamic_adjustment = (
         True  # 시간 흐름에 따른 시작가 변동률 반영(stoploss에 영향미침.)
     )

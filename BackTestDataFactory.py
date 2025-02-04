@@ -11,8 +11,6 @@ class FactoryManager:
     """
     백테스트에 사용될 데이터를 수집 및 가공 편집한다. kline_data를 수집 후 np.array처리하며, index를 위한 데이터도 생성한다.
     """
-
-
     def __init__(self):
         # str타입을 list타입으로 변형한다.
         self.symbols = ConfigSetting.TestConfig.test_symbols.value
@@ -304,7 +302,7 @@ class FactoryManager:
         self,
         closing_sync_data: Dict[str, Dict[str, np.ndarray]],
         lookback_days: int = 2,
-    ) -> utils.DataContainer:
+    ) -> DataStoreage.DataContainer:
         """
         1. 기능 : generate_kline_clsing_sync 데이터의 index를 생성한다.
         2. 매개변수
@@ -325,7 +323,7 @@ class FactoryManager:
         indices_data = self.__generate_full_indices(closing_sync_data)
         base_indices = indices_data[intervals[0]]
 
-        container_data = utils.DataContainer()
+        container_data = DataStoreage.DataContainer()
 
         for interval in intervals:
             select_indices = []

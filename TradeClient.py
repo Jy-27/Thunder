@@ -52,7 +52,7 @@ class BinanceClientManager:
         return None
 
     # API필요한 headers생성
-    async def __get_headers(self) -> Dict[str, str]:
+    async def get_headers(self) -> Dict[str, str]:
         """
         1. 기능 : API에 필요한 headers생성
         2. 매개변수 : 해당없음.
@@ -60,7 +60,7 @@ class BinanceClientManager:
         return {"X-MBX-APIKEY": self._api_key}
 
     # API 요청의 매개변수 서명 추가
-    async def __sign_params(self, params: Dict) -> Dict:
+    async def sign_params(self, params: Dict) -> Dict:
         """
         1. 기능 : Binance API 요청의 매개변수에 서명을 추가
         2. 매개변수
@@ -76,7 +76,7 @@ class BinanceClientManager:
         return params
 
     # API 요청 생성 및 서버 전송, 응답처리
-    async def __send_request(self, method: str, endpoint: str, params: dict) -> dict:
+    async def send_request(self, method: str, endpoint: str, params: dict) -> dict:
         """
         1. 기능 : API 요청을 생성 및 서버로 전송, 응답처리
         2. 매개변수
@@ -85,8 +85,8 @@ class BinanceClientManager:
             3) params : 각 함수별 수집된 params
         """
         url = f"{self.BASE_URL}{endpoint}"
-        headers = await self.__get_headers()
-        params = await self.__sign_params(params)
+        headers = await self.get_headers()
+        params = await self.sign_params(params)
 
         # TEST ZONE - 요청 정보와 시그니처 출력
         # print("Request URL:", url)
@@ -102,7 +102,7 @@ class BinanceClientManager:
         response.raise_for_status()
         return response.json()
 
-    async def submit_fund_transfer(
+    async def send_fund_transfer(
         self, amount: float, transfer_type: int, asset: str = "USDT"
     ) -> Dict:
         """
@@ -122,8 +122,8 @@ class BinanceClientManager:
         }
         method = "POST"
 
-        headers = await self.__get_headers()
-        params = await self.__sign_params(params)
+        headers = await self.get_headers()
+        params = await self.sign_params(params)
 
         response = requests.request(method, url, headers=headers, params=params)
         response.raise_for_status()
@@ -141,7 +141,7 @@ class BinanceClientManager:
             else "/fapi/v2/account"
         )
         params: dict = {"timestamp": int(time.time() * 1000)}
-        return await self.__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # Ticker의 미체결 주문상태 조회 및 반환
     async def fetch_order_status(self, symbol: Optional[str] = None) -> Dict:
@@ -159,7 +159,7 @@ class BinanceClientManager:
         params: dict = {"timestamp": int(time.time() * 1000)}
         if symbol:
             params["symbol"] = symbol
-        return await self.__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # Ticker의 전체 주문내역 조회 및 반환
     async def fetch_order_history(self, symbol: str, limit: int = 500) -> Dict:
@@ -180,7 +180,7 @@ class BinanceClientManager:
             "limit": limit,
             "timestamp": int(time.time() * 1000),
         }
-        return await self.__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # Ticker의 거래내역 조회 및 반환
     async def fetch_trade_history(self, symbol: str, limit: int = 500) -> Dict:
@@ -202,7 +202,7 @@ class BinanceClientManager:
             "timestamp": int(time.time() * 1000),
             "recvWindow": 5000,
         }
-        return await self.__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # 현재 주문상태를 상세 조회(체결, 미체결 등등...)
     async def fetch_order_details(self, symbol: str, order_id: int) -> Dict:
@@ -222,10 +222,10 @@ class BinanceClientManager:
             "orderId": order_id,
             "timestamp": int(time.time() * 1000),
         }
-        return await self.__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # 미체결 취소 주문 생성 및 제출
-    async def submit_cancel_order(self, symbol: str, order_id: int) -> Dict:
+    async def send_cancel_order(self, symbol: str, order_id: int) -> Dict:
         """
         1. 기능 : 현재 미체결된 주문을 취소한다.
         2. 매개변수
@@ -241,7 +241,7 @@ class BinanceClientManager:
             "orderId": order_id,
             "timestamp": int(time.time() * 1000),
         }
-        return await self.__send_request("DELETE", endpoint, params)
+        return await self.send_request("DELETE", endpoint, params)
 
 
 class SpotClient(BinanceClientManager):
@@ -293,7 +293,7 @@ class SpotClient(BinanceClientManager):
         return balance_result if balance_result else None
 
     # Spot 시장의 주문(매수/매도)신호를 보낸다.
-    async def submit_order(
+    async def send_order(
         self,
         symbol: str,
         side: str,
@@ -334,7 +334,7 @@ class SpotClient(BinanceClientManager):
         if price:
             params["price"] = price
 
-        return await self.__send_request("POST", endpoint, params)
+        return await self.send_request("POST", endpoint, params)
 
     async def get_available_balance(self) -> Optional[float]:
         """
@@ -384,7 +384,7 @@ class FuturesClient(BinanceClientManager):
         self.futures_api = FuturesMarket()
 
     # Ticker의 leverage 정보 수신 및 반환
-    async def __get_leverage_brackets(self, symbol: str) -> Dict:
+    async def fetch_leverage_brackets(self, symbol: str) -> Dict:
         """
         1. 기능 : 선물거래 레버리지 설정값 정보 수신
         2. 매개변수
@@ -394,7 +394,7 @@ class FuturesClient(BinanceClientManager):
         """
         endpoint = "/fapi/v1/leverageBracket"
         params = {"symbol": symbol.upper(), "timestamp": int(time.time() * 1000)}
-        return await self._BinanceClientManager__send_request("GET", endpoint, params)
+        return await self.send_request("GET", endpoint, params)
 
     # minQty, stepSize, notional 값을 수신 및 반환한다.
     async def __get_symbol_filters(self, symbol: str) -> Dict[str, Union[str, float]]:
@@ -431,7 +431,7 @@ class FuturesClient(BinanceClientManager):
         }
 
     # Ticker의 leverage값 설정
-    async def set_leverage(self, symbol: str, leverage: int) -> dict:
+    async def send_leverage(self, symbol: str, leverage: int) -> dict:
         """
         1. 기능 : 선물거래 레버리지값 설정
         2. 매개변수
@@ -452,10 +452,10 @@ class FuturesClient(BinanceClientManager):
             "leverage": leverage,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._BinanceClientManager__send_request("POST", endpoint, params)
+        return await self.send_request("POST", endpoint, params)
 
     # Ticker의 margin type 설정
-    async def set_margin_type(self, symbol: str, margin_type: str) -> Union[str, Any]:
+    async def send_margin_type(self, symbol: str, margin_type: str) -> Union[str, Any]:
         """
         1. 기능 : 마진 타입 설정
         2. 매개변수
@@ -497,10 +497,10 @@ class FuturesClient(BinanceClientManager):
             "marginType": margin_type,
             "timestamp": int(time.time() * 1000),
         }
-        return await self._BinanceClientManager__send_request("POST", endpoint, params)
+        return await self.send_request("POST", endpoint, params)
 
     # Futures 시장의 주문(long/short)신호를 보낸다.
-    async def submit_order(
+    async def send_order(
         self,
         symbol: str,
         side: str,
@@ -565,7 +565,7 @@ class FuturesClient(BinanceClientManager):
         params["positionSide"] = position_side
         params["reduceOnly"] = "true" if reduce_only else "false"
 
-        return await self._BinanceClientManager__send_request("POST", endpoint, params)
+        return await self.send_request("POST", endpoint, params)
 
     # Futures 전체 잔고 수신 후 보유 내역값만 반환
     async def get_account_balance(self) -> Union[str, Dict[str, Dict[str, float]]]:
@@ -731,11 +731,11 @@ if __name__ == "__main__":
     futures_obj = FuturesClient()
 
     target_symbol = "xrpusdt"
-    spot_data = asyncio.run(
+    spot_order_status = asyncio.run(
         spot_obj.fetch_order_status(target_symbol)
     )  # symbol=target_symbol)
-    futures_data = asyncio.run(
+    futures_order_status = asyncio.run(
         futures_obj.fetch_order_status(target_symbol)
     )  # symbol=target_symbol)
 
-    max_lever = asyncio.run(futures_obj.get_max_leverage(symbol="adausdt"))
+

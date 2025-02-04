@@ -17,8 +17,8 @@ T = TypeVar("T")
 
 class MarketDataManager:
     BASE_URL: str
-    OHLCV_INTERVALS: Final[list] = utils._info_kline_intervals()
-    OHLCV_COLUMNS: Final[list[str]] = utils._info_kline_columns()
+    INFO_KLINE_INTERVALS: Final[list] = utils._info_kline_intervals()
+    INFO_KLINE_COLUMNS: Final[list[str]] = utils._info_kline_columns()
 
     def __init__(self, base_url: str):
         BASE_URL: str = base_url
@@ -72,7 +72,7 @@ class MarketDataManager:
         """
         1. 기능 : fetch_klines_limit 또는 fetch_klines_date함수의 parameter 유효성 검사
         2. 매개변수
-            1) interval : self.OHLCV_INTERVALS 리스트 참조
+            1) interval : self.INFO_KLINE_INTERVALS 리스트 참조
             2) limit : Data 수신 개수
             3) start_date : 시작 날짜 예) '2024-01-01'
             4) end_date : 종료 날짜 예) '2024-01-05'
@@ -80,7 +80,7 @@ class MarketDataManager:
 
         MAX_ALLOWED_LIMIT = 1_000
 
-        if interval not in self.OHLCV_INTERVALS:
+        if interval not in self.INFO_KLINE_INTERVALS:
             raise ValueError(f"interval값 입력 오류 >> {interval}")
 
         if start_date and end_date:
@@ -160,7 +160,7 @@ class MarketDataManager:
         1. 기능 : 지정 Ticker의 OHLCV값을 수신 및 반환한다.
         2. 매개변수
             1) symbol : BTCUSDT (symbols 타입 입력안됨.)
-            2) interval : BinanceAPIBase Class의 OHLCV_INTERVALS 속성값 참조
+            2) interval : BinanceAPIBase Class의 INFO_KLINE_INTERVALS 속성값 참조
             3) limit : 수신하고자 하는 데이터의 양
         """
         # parameter 유효성 확인
@@ -183,7 +183,7 @@ class MarketDataManager:
         1. 기능 : 지정 Ticker의 OHLCV값을 수신 및 반환한다.
         2. 매개변수
             1) symbol : BTCUSDT (symbols 타입 입력안됨.)
-            2) interval : BinanceAPIBase Class의 OHLCV_INTERVALS 속성값 참조
+            2) interval : BinanceAPIBase Class의 INFO_KLINE_INTERVALS 속성값 참조
             3) limit : 수신하고자 하는 데이터의 양
         """
         limit = 1_000  # 최대 수신 길이 1000

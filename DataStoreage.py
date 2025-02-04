@@ -3,6 +3,69 @@ from typing import List, Union, Final, Optional
 from dataclasses import dataclass, fields, field, asdict
 import time
 import ConfigSetting
+
+INDEX_CLOSE_TIMESTAMP:int = 6
+INDEX_OPEN_TIMESTAMP:int = 0
+MS_MINUTE:int = 60_000
+
+class DataContainer:
+    """
+    동적 데이터를 저장하고 관리한다. (변수명을 직접 등록하는게 아니라 함수로 생성함.)
+    """
+
+    def __init__(self):
+        """동적 데이터를 저장하고 관리하는 컨테이너."""
+        pass  # 딕셔너리 없이 속성만을 동적으로 관리
+
+    def set_data(self, data_name, data):
+        """
+        1. 기능 : 속성명을 지정하고 데이터를 저장한다.
+        2. 매개변수
+            1) data_name : 등록할 속성명
+            2) data : 저장할 data
+        """
+        # data_name이 숫자로 시작하는지 확인
+        if data_name[0].isdigit():
+            raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
+
+        setattr(self, data_name, data)
+
+    def remove_data(self, data_name):
+        """
+        1. 기능 : 저장된 속성을 삭제한다.
+        2. 매개변수
+            1) data_name : 삭제할 속성명
+        """
+        if hasattr(self, data_name):
+            delattr(self, data_name)
+        else:
+            raise AttributeError(f"No attribute named '{data_name}' to delete")
+
+    def get_data(self, data_name):
+        """
+        1. 기능 : 저장된 속성에 대하여 데이터를 불러온다.
+        2. 매개변수
+            1) data_name : 불러올 속성명
+        """
+        if hasattr(self, data_name):
+            return getattr(self, data_name)
+        else:
+            raise AttributeError(f"No attribute named '{data_name}'")
+
+    def get_all_data_names(self):
+        """
+        1. 기능 : 현재 저장된 모든 속성명(변수명)을 반환한다.
+        2. 반환값: 속성명 리스트
+        """
+        return list(self.__dict__.keys())
+
+    def clear_all_data(self):
+        """
+        1. 기능 : 저장된 모든 속성을 초기화한다.
+        """
+        for attr in list(self.__dict__.keys()):
+            delattr(self, attr)
+
 class KlineData:
     """
     Binance에서 수신한 KlineData를 interval별 저장하기 위한 class __slots__형태의 데이터 타입
@@ -35,19 +98,19 @@ class KlineData:
         """
         주어진 Kline 엔트리에 적합한 interval 이름 반환.
         """
-        close_time_index: int = 6
-        open_time_index: int = 0
+        INDEX_CLOSE_TIMESTAMP: int = 6
+        INDEX_OPEN_TIMESTAMP: int = 0
         ms_adjustment: int = 1
-        ms_minute: int = 60_000
+        MS_MINITE: int = 60_000
         
-        start_timestamp: int = int(latest_entry[open_time_index])
-        end_timestamp: int = int(latest_entry[close_time_index])
+        start_timestamp: int = int(latest_entry[INDEX_OPEN_TIMESTAMP])
+        end_timestamp: int = int(latest_entry[INDEX_CLOSE_TIMESTAMP])
         if not (isinstance(start_timestamp, int) and isinstance(end_timestamp, int)):
             raise ValueError(f"kline_data 데이터 형태 불일치")
 
         timestamp_diff_minutes: int = (
             end_timestamp - start_timestamp + ms_adjustment
-        ) // ms_minute
+        ) // MS_MINITE
 
         return {
             1: "interval_1m",
@@ -135,15 +198,15 @@ class TradingLog:
     ### 주문 관련 정보
     symbol: str  # 심볼 (예: BTCUSDT)
     position: int  # 포지션 유형 (1: Long, 2: Short)
-    quantity: float  # 주문 수량
-    hedge_enable: bool  # 헤지 여부 (진행 중인 포지션과 반대 방향의 주문 여부)
+    position_size: float  # 주문 수량
+    hedge_enable: bool  # 헤지 여부 (진행 중인 포지션과 반대 방향의 주문 발생시)
     leverage: int  # 레버리지 배율
     
     ### 가격 정보
     open_price: float  # 진입 가격 (Open Price)
     high_price: float  # 최고 가격
     low_price: float  # 최저 가격
-    close_price: float  # 현재 가격 (Close Price)
+    close_price: float  # 현재 가격 (market price와 동일)
     
     ### 거래정보
     strategy_no:int # 전략정보를 넣는다.
@@ -151,8 +214,7 @@ class TradingLog:
     ### 시간 정보
     start_timestamp: int  # 시작 타임스탬프
     end_timestamp: Optional[int]=None  # 현재 시간 타임스탬프(포지션 종료 시점)
-    
-    
+
     ### 손절 및 종료 설정
     scale_stop_enable: bool = True  # final 손절율 or scale 손절율 적용 여부
     initial_stop_rate:float = 0.015  # 초기 손절 비율
@@ -162,31 +224,30 @@ class TradingLog:
     adjusted_interval:str = '3m'    # 조종 변동 step
     adjusted_entry_price: Optional[float]=None  # 조정된 진입 가격 (StopLoss 기준)
     stop_loss_price: Optional[float]=None  # 손절 가격 또는 종료 가격
-    
 
     ### 포지션 평가
-    initial_value: Optional[float]=None  # 진입 시점의 평가 가치 (수수료 제외)
+    initial_margin: Optional[float]=None  # 진입 시점의 평가 가치 (수수료 제외)
     current_value: Optional[float]=None  # 현재(종료) 시점의 평가 가치 (수수료 제외)
     net_pnl: float=0  # 순 손익 금액 (Net Profit or Loss, 수수료 제외)
-    net_pnl_rate: float=0  # 순 손익 비율 (Net Profit or Loss Rate, 수수료 제외)
+    net_roi: float=0  # 순 손익 비율 (Net Profit or Loss Rate, 수수료 제외)
     gross_pnl: float=0  # 총 손익 금액 (Gross Profit or Loss, 수수료 포함)
-    gross_pnl_rate: float=0  # 총 손익 비율 (Gross Profit or Loss Rate, 수수료 포함)
+    gross_roi: float=0  # 총 손익 비율 (Gross Profit or Loss Rate, 수수료 포함)
     stop_trigger_enable:bool = False    #포지션 종료여부 flag
-    
+
     ### 수수료 관련
     entry_fee: float=0  # 진입 수수료
     exit_fee: float=0  # 종료 수수료
-    
+
     def __post_init__(self):
         """
         TradingLog 선언시 진입금액과 현재금액을 계산한다.
         """
         # 진입금액(마진)을 계산한다.
-        if self.initial_value is None:
-            self.initial_value = (self.open_price * self.quantity) / self.leverage
+        if self.initial_margin is None:
+            self.initial_margin = (self.open_price * self.position_size) / self.leverage
         # 현재금액을 계산한다.
         if self.current_value is None:
-            self.current_value = (self.close_price * self.quantity) / self.leverage
+            self.current_value = (self.close_price * self.position_size) / self.leverage
     
         self.__cals_value()
         self.__cals_stop_loss()
@@ -224,15 +285,15 @@ class TradingLog:
         """
         
         # 현재 평가금액 계산한다.
-        self.current_value = (self.close_price * self.quantity) / self.leverage
+        self.current_value = (self.close_price * self.position_size) / self.leverage
         
         # 포지션에 따라서 수수료 제외한 pnl을 계산한다.
         if self.position == 1:
-            self.net_pnl = (self.close_price - self.open_price) * self.quantity
+            self.net_pnl = (self.close_price - self.open_price) * self.position_size
         elif self.position == 2:
-            self.net_pnl = (self.open_price - self.close_price) * self.quantity
+            self.net_pnl = (self.open_price - self.close_price) * self.position_size
         # 수수료 제외한 pnl의 비율을 계산한다.
-        self.net_pnl_rate = self.net_pnl / self.initial_value
+        self.net_roi = self.net_pnl / self.initial_margin
         
         
         # 수수료는 시장가 기준으로 0.05%이나 슬리피지 및 기 비용은 계산기 어우로 0.07%로 잡았다.
@@ -240,9 +301,9 @@ class TradingLog:
         # 테스트 모드 여부를 확인한다.
         if ConfigSetting.InitialSetup.mode:
             # 진입 수수료를 계산한다.
-            self.entry_fee = (self.open_price * self.quantity * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
+            self.entry_fee = (self.open_price * self.position_size * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
             # 종료 수수료를 계산한다.
-            self.exit_fee = (self.close_price * self.quantity * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
+            self.exit_fee = (self.close_price * self.position_size * FEE_RATE)   # 공식 검증 완료 👍🏻👍🏻👍🏻
         
         
         
@@ -251,7 +312,7 @@ class TradingLog:
         # 수수료 비용을 포함한 pnl을 계산한다.
         self.gross_pnl = self.net_pnl - total_fee
         # 수수료 비용을 포함한 pnl비율을 계산한다.
-        self.gross_pnl_rate = self.gross_pnl / self.initial_value
+        self.gross_roi = self.gross_pnl / self.initial_margin
     
     
     def __cals_stop_loss(self):

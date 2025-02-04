@@ -224,65 +224,6 @@ class TelegramMessage:
         response = requests.post(url, data=payload)
         return response.json()
 
-class DataContainer:
-    """
-    동적 데이터를 저장하고 관리한다. (변수명을 직접 등록하는게 아니라 함수로 생성함.)
-    """
-
-    def __init__(self):
-        """동적 데이터를 저장하고 관리하는 컨테이너."""
-        pass  # 딕셔너리 없이 속성만을 동적으로 관리
-
-    def set_data(self, data_name, data):
-        """
-        1. 기능 : 속성명을 지정하고 데이터를 저장한다.
-        2. 매개변수
-            1) data_name : 등록할 속성명
-            2) data : 저장할 data
-        """
-        # data_name이 숫자로 시작하는지 확인
-        if data_name[0].isdigit():
-            raise ValueError(f"속성명 '{data_name}'은 숫자로 시작할 수 없습니다.")
-
-        setattr(self, data_name, data)
-
-    def remove_data(self, data_name):
-        """
-        1. 기능 : 저장된 속성을 삭제한다.
-        2. 매개변수
-            1) data_name : 삭제할 속성명
-        """
-        if hasattr(self, data_name):
-            delattr(self, data_name)
-        else:
-            raise AttributeError(f"No attribute named '{data_name}' to delete")
-
-    def get_data(self, data_name):
-        """
-        1. 기능 : 저장된 속성에 대하여 데이터를 불러온다.
-        2. 매개변수
-            1) data_name : 불러올 속성명
-        """
-        if hasattr(self, data_name):
-            return getattr(self, data_name)
-        else:
-            raise AttributeError(f"No attribute named '{data_name}'")
-
-    def get_all_data_names(self):
-        """
-        1. 기능 : 현재 저장된 모든 속성명(변수명)을 반환한다.
-        2. 반환값: 속성명 리스트
-        """
-        return list(self.__dict__.keys())
-
-    def clear_all_data(self):
-        """
-        1. 기능 : 저장된 모든 속성을 초기화한다.
-        """
-        for attr in list(self.__dict__.keys()):
-            delattr(self, attr)
-
-
 # None발생시 Return 대응
 def _none_or(result: Optional[T]) -> Optional[T]:
     if not result:

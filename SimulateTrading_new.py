@@ -139,7 +139,7 @@ class BackTestManager:
 
         # SIMULATE DATA
         self.closing_sync_data: Dict[str, Dict[str, np.ndarray]] = {}
-        self.closing_indices_data: Optional[utils.DataContainer] = None
+        self.closing_indices_data: Optional[DataStoreage.DataContainer] = None
         self.current_timestamp: int = 0
         
     # closing_sync_data의 유효성을 점검한다.

@@ -464,6 +464,18 @@ def extract_exchange_symbols_info(symbol: str, exchange_data: INS_MARKET_FUTURES
 def calculate_min_position_size(
     mark_price: float, min_qty: float, step_size: float, notional: float
 ):
+    """
+    최소 진입 가능한 position size를 산출한다.
+
+    Args:
+        mark_price (float): 현재가
+        min_qty (float): extract_exchange_symbols_info()['minQty']
+        step_size (float): extract_exchange_symbols_info()['stepSize']
+        notional (float): extract_exchange_symbols_info()['notional']
+
+    Returns:
+        float: min position size
+    """
     required_size = notional / mark_price
     min_size = utils._round_up(value=required_size, step=step_size)
     return max(min_size, min_qty)
@@ -473,9 +485,22 @@ def calculate_min_position_size(
 def calculate_max_position_size(
     mark_price: float, leverage: int, step_size: float, balance: float
 ):
+    """
+    최대 진입 가능한 position size를 산출한다.
+
+    Args:
+        mark_price (float): 현재가
+        max_qty (float): extract_exchange_symbols_info()['maxQty']
+        step_size (float): extract_exchange_symbols_info()['stepSize']
+        notional (float): extract_exchange_symbols_info()['notional']
+
+    Returns:
+        float: max position size
+    """
     required_size = (balance * leverage) / mark_price
     max_size = utils._round_down(value=required_size, step=step_size)
     return max_size
+
 
 # 지정 symbol값에 대한 포지션 정보를 반환한다.
 def extract_position(symbol:str, account_data: INS_CLIENT_FUTURES.fetch_account_balance) -> Dict:
@@ -575,3 +600,63 @@ def extract_open_positions(account_data: INS_CLIENT_FUTURES.fetch_account_balanc
                 result[symbol][key] = value
     return result
 
+
+
+if __name__ == "__main__":
+    from pprint import pprint
+    import asyncio
+    import shutil
+    terminal_width = shutil.get_terminal_size().columns
+    text = "*-=-=-  EXAMPLE  -=-=-*"
+    print(' ')
+    print(text.center(terminal_width))
+    print(' ')
+    ins_client = TradeClient.FuturesClient()
+    ins_market = MarketDataFetcher.FuturesMarket()
+    account_balance = asyncio.run(ins_client.fetch_account_balance())
+
+    symbol = 'XRPUSDT'
+    position_size = 1.8
+    entry_price = 2.877
+    mark_price = float(asyncio.run(ins_market.fetch_symbol_price(symbol))['price'])
+    leverage = 2
+    imr = calculate_imr(leverage)
+    position = _validate_args_position(1)
+    direction_of_order = _validate_args_direction_of_order(position)
+    print(f'1. IMR: {imr}')
+    init_margnin = calculate_initial_margin(position_size=position_size, entry_price=entry_price, imr=imr)
+    print(f'2. initial_marging: {init_margnin:,.2f} USDT')
+    net_pnl = calculate_net_pnl(position=position, entry_price=entry_price, exit_price=mark_price, position_size=position_size)
+    print(f'3. net_pnl: {net_pnl:,.2f} USDT')
+    unrealized_pnl = calculate_unrealized_pnl(entry_price=entry_price, mark_price=mark_price, position_size=position_size, direction_of_order=direction_of_order)
+    print(f'4. unrealized_pnl: {unrealized_pnl:,.2f} USDT')
+    roi_price = calculate_roi_by_price(entry_price=entry_price, exit_price=mark_price, position=position, imr=imr)
+    print(f'5. ROI(Price): {roi_price:,.2f} %')
+    roi_pnl = calculate_roi_by_pnl(initial_margin=init_margnin, pnl=net_pnl)
+    print(f'6. ROI(PNL): {roi_pnl:,.2f} USDT')
+    ava_balance = extract_available_balance(account_balance)
+    print(f'7. available_balance: {ava_balance:,.2f} USDT')
+    total_balance = extract_total_wallet_balance(account_balance)
+    print(f'8. total_balance: {total_balance:,.2f}')
+
+    brackets_data = asyncio.run(ins_client.fetch_leverage_brackets(symbol))
+    max_leverage = extract_max_leverage(brackets_data)
+    print(f'9. MAX_leverage: {max_leverage}')
+    exchange_info = asyncio.run(ins_market.fetch_exchange_info())
+    symbols_info = extract_exchange_symbols_info(symbol, exchange_info)
+    print(f'10. symbols_info:')
+    pprint(symbols_info)
+
+    step_size = symbols_info['stepSize']
+    notionla = symbols_info['notional']
+    min_qty = symbols_info['minQty']
+    min_position_size = calculate_min_position_size(mark_price, min_qty, step_size, notionla)
+    print(f'11. min_position_size: {min_position_size}')
+    max_position_size = calculate_max_position_size(mark_price, leverage, step_size, ava_balance)
+    print(f'12. max_position_size: {max_position_size}')
+    position_info = extract_position(symbol, account_balance)
+    print(f'13. position_info:')
+    pprint(position_info)
+    open_positions = extract_open_positions(account_balance)
+    print(f'14. open_positions:')
+    pprint(open_positions)

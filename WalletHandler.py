@@ -22,14 +22,14 @@ class WalletManager(OpenTradeLog):
     반복적인 API를 피하기 위하여 wallet정보를 별도 관리한다.
     실제 거래시 슬리피지와 같은 계산하기 어려운 항목들은 exit_fee로 합산한다.
     """
-    def __init__(self, current_timestamp:int, initial_balance: float = 1_000, start_ago_hr: int = 24):
+    def _init_(self, current_timestamp:int, initial_balance: float = 1_000, start_ago_hr: int = 24):
         self.trade_history: List[TradingLog] = []
         self.closed_positions: List[List[int]] = []
         self.open_positions: List[List[int]] = []
         self.trading_count: int = 0 # 거래중인 자산 종목 수
         self.initial_balance: float = initial_balance  # 초기 자산
         self.total_wallet_balance: float = 0  # 총 평가 자산
-        self.active_value: float = 0  # 거래 중 자산 가치
+        self.initial_margins: float = 0  # 거래 중 자산 가치
         self.available_balance: float = 0  # 사용 가능한 예수금
         self.profit_loss: float = 0  # 손익 금액
         self.profit_loss_ratio: float = 0  # 손익률
@@ -38,15 +38,15 @@ class WalletManager(OpenTradeLog):
         self.total_trade_count: int = 0  # 총 체결 횟수
 
         ### instance
-        self.__ins_client_futures:TradeClient.FuturesClient = TradeClient.FuturesClient()
-        self.__ins_client_spot:TradeClient.SpotClient = TradeClient.SpotClient()
-        self.__ins_telegram:TelegramMessage = utils.TelegramMessage(ConfigSetting.SystemConfig.path_telegram_api.value)
+        self._ins_client_futures:TradeClient.FuturesClient = TradeClient.FuturesClient()
+        self._ins_client_spot:TradeClient.SpotClient = TradeClient.SpotClient()
+        self._ins_telegram:TelegramMessage = utils.TelegramMessage(ConfigSetting.SystemConfig.path_telegram_api.value)
         ### system setting
         self.start_ago_hr = start_ago_hr
         ### 시간관리 속성
         self.current_timestamp:int = current_timestamp  # 현재시간 지정(kline_data 수신시 지속 업데이트)
-        self.__start_timestamp_history: int = self.current_timestamp - (self.start_ago_hr * 3_600 * 1_000)  # trade log data로딩 범위 지정
-        self.__start_timestamp_pnl:int = current_timestamp # 수익보존 상황발생시 self.current_timestamp기준으로 자동 업데이트
+        self._start_timestamp_history: int = self.current_timestamp - (self.start_ago_hr * 3_600 * 1_000)  # trade log data로딩 범위 지정
+        self._start_timestamp_pnl:int = current_timestamp # 수익보존 상황발생시 self.current_timestamp기준으로 자동 업데이트
 
     async def init_setting(self):
         """
@@ -60,7 +60,7 @@ class WalletManager(OpenTradeLog):
         """
 
         # TradeLog 불러온다.
-        self.__trade_history_load()
+        self._trade_history_load()
 
         # 초기 지갑 잔고 설정
         if ConfigSetting.InitialSetup.mode:
@@ -75,7 +75,7 @@ class WalletManager(OpenTradeLog):
             balance
         )
 
-    def __get_path(self) -> str:
+    def _get_path(self) -> str:
         """
         트레이드 히스토리 주소를 생성 및 반환한다. 
         ConfigSetting.py에서 ConfigSetting.InitialSetup.mode값을 기준으로 생성되는 주소값이 달라진다.
@@ -104,7 +104,7 @@ class WalletManager(OpenTradeLog):
         )
         return path
 
-    def __get_attr_list(self) -> List:
+    def _get_attr_list(self) -> List:
         """
         OpenTradeLog 클라스의 속성이름을 확보한다.
         확보된 이름을 활용하여 getattr로 활용하기 위함이다.
@@ -117,12 +117,12 @@ class WalletManager(OpenTradeLog):
         names = []
         # OpenTradeLog 클라스에 저장된 속성명을 반복문을 이용해서 조회한다.
         for name in vars(OpenTradeLog):
-            # 속성명에서 "__"가 포함된 항목은 제외하고 변수값이 추가한다.
-            if "__" not in name:
+            # 속성명에서 "_"가 포함된 항목은 제외하고 변수값이 추가한다.
+            if "_" not in name:
                 names.append(name)
         return names
 
-    def __merged_positions_data(self) -> List:
+    def _merged_positions_data(self) -> List:
         """
         보유중 포지션과 거래종료 포지션 데이터를 하나의 list형태로 합친 후 반환한다.
         
@@ -134,7 +134,7 @@ class WalletManager(OpenTradeLog):
         # 두 속성값을 합친다. 비어있을경우 빈 list가 반환된다.
         return self.closed_positions + self.open_positions
 
-    def __extract_values(self, data: TradingLog) -> List:
+    def _extract_values(self, data: TradingLog) -> List:
         """
         트레이딩 로그 데이터에서 필요한 부분만 추출한다.
         추후 np.ndarray 백터연산처리를 위하여 symbol값을 10진수로 변환하였다.
@@ -177,7 +177,7 @@ class WalletManager(OpenTradeLog):
             exit_fee,#8
         ]
 
-    def __trade_history_save(self):
+    def _trade_history_save(self):
         """
         트레이드 히스토리 데이터를 저장한다.
         저장할 데이터(self.trade_history)가 없으면 함수를 종료한다.
@@ -192,17 +192,17 @@ class WalletManager(OpenTradeLog):
             return
 
         # 주소를 확보한다.
-        path = self.__get_path()
+        path = self._get_path()
         
         save_data = []
         for trade_log in self.trade_history:
-            trade_log_dict = trade_log.__dict__
+            trade_log_dict = trade_log._dict_
             save_data.append(trade_log_dict)
         
         # 변환이 완료된 데이터를 json데이터로 저장한다.
         utils._save_to_json(path, save_data)
 
-    def __trade_history_load(self):
+    def _trade_history_load(self):
         """
         저장된 Dict타입의 트레이드 히스토리를 불러온 후 속성값에 저장한다.
         본 클라스는 과거 데이터의 영향을 받는 함수가 있으므로 거래 기록이 필요하다.
@@ -218,7 +218,7 @@ class WalletManager(OpenTradeLog):
             3. 반환값: 해당없음.
         """
         # 주소를 확보한다.
-        path = self.__get_path()
+        path = self._get_path()
         # 파일 존재 유무를 확인한다.
         if not os.path.isfile(path):
             # 파일이 없으면 함수를 종료한다.
@@ -230,7 +230,7 @@ class WalletManager(OpenTradeLog):
             # 조회된 값을 언팩킹 한다.
             self.trade_history.append(TradingLog(**data))
 
-    def __update_open_positions(self):
+    def _update_open_positions(self):
         """'
         self.open_position데이터를 업데이트하는 함수다.
         대상 데이터는 OpenTradeLog 함수에서 정보를 수집한다.
@@ -241,7 +241,7 @@ class WalletManager(OpenTradeLog):
         
         """
         # class 속성명 획득
-        trade_log_list = self.__get_attr_list()
+        trade_log_list = self._get_attr_list()
         # 리스트가 비었으면
         self.open_positions = []
         if not trade_log_list:
@@ -254,14 +254,14 @@ class WalletManager(OpenTradeLog):
             data = getattr(OpenTradeLog, log)
             # pprint(data)
             # 데이터 변환 작업 실행한다.
-            extract_data = self.__extract_values(data)
+            extract_data = self._extract_values(data)
             # open_position에 저장한다.
             self.open_positions.append(extract_data)
 
-    def __update_closed_positions(self):
+    def _update_closed_positions(self):
         """
         self.closed_positions데이터를 업데이트하는 함수다.
-        대상 데이터는 self.trade_history이며, self.__start_timestamp_history보다
+        대상 데이터는 self.trade_history이며, self._start_timestamp_history보다
         큰값만 수집한다. WalletManager선언시 start_ago_hr설정값을 기준으로 한다.
         
             1. 기능: self.closed_positions를 업데이트.
@@ -273,7 +273,7 @@ class WalletManager(OpenTradeLog):
         # 데이터 초기화
         self.closed_positions = []
         # start_timestamp를 래핑한다.
-        start_timestamp = {False:self.__start_timestamp_history,
+        start_timestamp = {False:self._start_timestamp_history,
                            True:0}.get(ConfigSetting.InitialSetup.mode)
         # 만약 래핑조회 값이 None이면 오류처리한다.
         if start_timestamp is None:
@@ -286,11 +286,11 @@ class WalletManager(OpenTradeLog):
             if trade_log.start_timestamp < start_timestamp:
                 continue
             # TradeLog데이터를 list화 한다.
-            trade_log_list = self.__extract_values(trade_log)
+            trade_log_list = self._extract_values(trade_log)
             # list화한 데이fmf closed_positions에 추가한다.
             self.closed_positions.append(trade_log_list)
 
-    def __update_trade_count(self):
+    def _update_trade_count(self):
         """
         현재 운용중인 포지션 갯수를 표기한다.
         self.open_positions의 len함수를 반영해도 되나, 연산순서 오처리시
@@ -305,40 +305,40 @@ class WalletManager(OpenTradeLog):
         # 종료된 포지션과 보유중인 포지션의 데이터길이를 합친다.
         self.total_trade_count = len(self.closed_positions) + self.trading_count
         
-    def __update_active_value(self):
+    def _update_initial_margins(self):
         """
         현재 진행중인 포지션에 발생된 비용을 계산한다.
         필요한 항목은 마진, 진입 수수료를 반영한다.
 
         주로 백테스트에 주로 사용된다. 라이브 트레이딩은 balance 업데이트시 api를 수신하여 보정한다.
-        데이터 index값을 확인이 필요할 경우 self.__extract_values함수를 참고하라.
+        데이터 index값을 확인이 필요할 경우 self._extract_values함수를 참고하라.
         
-            1. 기능: self.active_value 업데이트.
+            1. 기능: self.initial_margins 업데이트.
             2. 매개변수: 해당없음.
             3. 반환값: 해당없음.
         """
         # 유지중인 포지션이 없으면
         if not self.open_positions:
             # 비용은 0
-            self.active_value = 0
+            self.initial_margins = 0
             return
         # 데이터를 np.ndarray타입으로 변환
         array_ = np.array(self.open_positions, float)
-        # index 정보(매직넘버 최소화) >> 함수 self.__extract_values() 반환값을 참고
+        # index 정보(매직넘버 최소화) >> 함수 self._extract_values() 반환값을 참고
         value_index = 3
         entry_fee_index = 7
         # 각각의 비용을 계산
         value, fee = np.sum(array_[:, [value_index, entry_fee_index]], axis=0)
         # 비용 합계
-        self.active_value = value + fee
+        self.initial_margins = value + fee
 
 
-    def __update_profit_loss(self):
+    def _update_profit_loss(self):
         """
         전체 goss_pnl값과 비율을 계산한다.
         필요한 항목은 fee(진입/이탈)와 net_pnl이다.
 
-        데이터 index값을 확인이 필요할 경우 self.__extract_values함수를 참고하라.
+        데이터 index값을 확인이 필요할 경우 self._extract_values함수를 참고하라.
         
             1. 기능: PNL정보 업데이트.
             2. 매개변수: 해당없음.
@@ -346,7 +346,7 @@ class WalletManager(OpenTradeLog):
         """
         
         # open, closed 포지션 데이터 정보 병합
-        merged_positions_data = self.__merged_positions_data()
+        merged_positions_data = self._merged_positions_data()
         # np.ndarray형태로 변환
         array_ = np.array(merged_positions_data, float)
         # 데이터가 없으면,
@@ -355,9 +355,9 @@ class WalletManager(OpenTradeLog):
             return
         
         # pnl 수집 기준이될 데이터 index획득
-        condition = np.where(array_[:, 1]>=self.__start_timestamp_pnl)
+        condition = np.where(array_[:, 1]>=self._start_timestamp_pnl)
         array_ = array_[condition]
-        # index 정보(매직넘버 최소화) >> 함수 self.__extract_values() 반환값을 참고
+        # index 정보(매직넘버 최소화) >> 함수 self._extract_values() 반환값을 참고
         profit_index = 6
         entry_fee_index = 7
         exit_fee_index = 8
@@ -370,7 +370,7 @@ class WalletManager(OpenTradeLog):
         # gross_pnl 비율을 계산한다.
         self.profit_loss_ratio = self.profit_loss / self.initial_balance
 
-    async def __update_balance(self):
+    async def _update_balance(self):
         """
         balance 파트를 업데이트한다. 아직 불안요소가 많다. 테스트버전과 라이브버전을 동시에 구현해야 하다보니
         연산순서에 따라 생각치 못한 결과가 발생할수도 있다. 특히 available_balance가 변수인데, 정확한 값으로 나올지의문이다.
@@ -387,7 +387,7 @@ class WalletManager(OpenTradeLog):
 
         # 기본설정
         self.total_wallet_balance = self.initial_balance + self.profit_loss
-        self.available_balance = self.total_wallet_balance - self.active_value
+        self.available_balance = self.total_wallet_balance - self.initial_margins
         
         # 수익보존 설정 활성화일 경우
         if ConfigSetting.SafetyConfig.profit_preservation_enabled.value:
@@ -416,14 +416,14 @@ class WalletManager(OpenTradeLog):
                 # 예수금 초기화
                 self.available_balance = self.initial_balance
                 # 현재시간 초기화
-                self.__start_timestamp_pnl = self.current_timesatmp
+                self._start_timestamp_pnl = self.current_timesatmp
             
             # 만약 라이브 트레이딩이면 실제 이체를 발생 및 값 교정
             if not ConfigSetting.InitialSetup.mode and over_pnl > 0: #live모드시 이체를 실행한다.
-                obj_and_type = {'Futures':[self.__ins_client_futures, 2],
-                                'Spot':[self.__ins_client_spot, 1]}.get(ConfigSetting.SymbolConfig.market_type.value, None)
+                obj_and_type = {'Futures':[self._ins_client_futures, 2],
+                                'Spot':[self._ins_client_spot, 1]}.get(ConfigSetting.SymbolConfig.market_type.value, None)
                 # 값 교정
-                self.total_wallet_balance = self.active_value = await obj_and_type[0].get_total_wallet_balance()
+                self.total_wallet_balance = self.initial_margins = await obj_and_type[0].get_total_wallet_balance()
                 # 그럴리 없지만 만약 None값이 나오면 오류발생
                 if obj_and_type is None:
                     raise ValueError(f'instance 호출 오류')
@@ -438,14 +438,14 @@ class WalletManager(OpenTradeLog):
             2. 매개변수: 해당없음.
             3. 반환값: 해당없음.
         """
-        self.__update_open_positions()
-        self.__update_closed_positions()
-        self.__update_trade_count()
-        self.__update_active_value()
-        self.__update_profit_loss()
-        await self.__update_balance()
+        self._update_open_positions()
+        self._update_closed_positions()
+        self._update_trade_count()
+        self._update_initial_margins()
+        self._update_profit_loss()
+        await self._update_balance()
 
-    def get_current_position(self, symbol: str, position: int):
+    def check_position_status(self, symbol: str, position: int):
         """
         symbol값과 positions을 기준으로 포지션 보유유무를 검토한다.
         True 반환시 보유중이며,
@@ -483,7 +483,7 @@ class WalletManager(OpenTradeLog):
         """
         log_symbol = data.symbol
         log_position = data.position
-        if self.get_current_position(symbol=log_symbol, position=log_position):\
+        if self.check_position_status(symbol=log_symbol, position=log_position):\
             raise ValueError(f'동일 항목 동일 포지션 보유중:{log_symbol}')
 
         attr_name = f"{log_symbol}_{log_position}"
@@ -504,16 +504,16 @@ class WalletManager(OpenTradeLog):
                     >> 2:Sell or Short
         """
         # 현재 포지션정보가 있는지 점검한다. 클라스에 저장된 데이터가 있는지 여부를 체크한다.
-        if not self.get_current_position(symbol=symbol, position=position):
+        if not self.check_position_status(symbol=symbol, position=position):
             # ###DEBUG
-            # print(OpenTradeLog.__dict__)
+            # print(OpenTradeLog._dict_)
             raise ValueError(f'제거하려는 포지션 정보 없음:{symbol}')
         # 속성명을 생성한다.
         attr_name = f"{symbol}_{position}"
 
         # instance를 래핑한다.
-        obj = {'Futures':self.__ins_client_futures,
-               'Spot':self.__ins_client_spot}.get(ConfigSetting.SymbolConfig.market_type.value, None)
+        obj = {'Futures':self._ins_client_futures,
+               'Spot':self._ins_client_spot}.get(ConfigSetting.SymbolConfig.market_type.value, None)
 
         # 그럴리 없겠지만, 만약 None이면 오류발생시킨다.
         if obj is None:
@@ -546,11 +546,11 @@ class WalletManager(OpenTradeLog):
         # 전체 업데이트한다.
         await self.update_run()
         # 수정된 trade history 전체를 로컬에 저장한다.
-        self.__trade_history_save()
+        self._trade_history_save()
         # 텔레그램 메시지를 발송한다.
-        self.__telegram_balance()
+        self._telegram_balance()
 
-    def __reverse_position_ratio(self, position:int, start_timestamp:int, kline_data: list[List[Any]]) -> float:
+    def _reverse_position_ratio(self, position:int, start_timestamp:int, kline_data: list[List[Any]]) -> float:
         """
         현재 포지션과 반대 움직임 캔들 body비율의 합계를 계산하고 반환한다.
         update_position에 적용할 보조 함수다.
@@ -619,7 +619,7 @@ class WalletManager(OpenTradeLog):
                 else:
                     self.current_timesatmp:int = int(time.time() * 1_000)
                                 
-                reversed_ratio = self.__reverse_position_ratio(position=trading_log.position,
+                reversed_ratio = self._reverse_position_ratio(position=trading_log.position,
                                                                start_timestamp=trading_log.start_timestamp,
                                                                kline_data=kline_data)
                 target_ratio = reversed_ratio * ConfigSetting.StopLossConfig.negative_reference_rate.value
@@ -636,7 +636,7 @@ class WalletManager(OpenTradeLog):
         # close_signal값을 반환한다.
         return close_signal
 
-    def __telegram_balance(self):
+    def _telegram_balance(self):
         """
         텔레그램으로 발송할 메시지를 구성한다. 아직 정리단계 함수.
         
@@ -649,19 +649,19 @@ class WalletManager(OpenTradeLog):
         f'4. 손익비율: {self.profit_loss_ratio:,.2f} %\n'
         f'5. 이익보존금: {self.profit_preservation_balance:,.2f} USDT\n'
         )
-        self.__ins_telegram.send_to_message(message)
+        self._ins_telegram.send_to_message(message)
         
-    def __telegram_trade_log(self):
+    def _telegram_trade_log(self):
         """
         텔레그램으로 발송할 메시지를 구성한다. 아직 정리단계 함수.
         """
         trade_log = self.trade_history[-1]
-        self.__ins_telegram.send_to_message(trade_log)
+        self._ins_telegram.send_to_message(trade_log)
 
 
 
 # CODE TEST
-if __name__ == "__main__":
+if _name_ == "_main_":
     
     import asyncio
     import nest_asyncio

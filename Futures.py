@@ -740,7 +740,7 @@ class FuturesProcessor:
         mark_price: float,
         balance: float,
         leverage: int,
-        test_mode: False,
+        test_mode: bool = False,
     ) -> float:
         symbol = symbol.upper()
         exchange_info = await Selector.exchange_info(test_mode)

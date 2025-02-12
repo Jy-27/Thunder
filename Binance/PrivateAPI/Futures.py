@@ -22,6 +22,9 @@ class API(BaseAPI):
         Args:
             symbol (str): 'BTCUSDT'
 
+        Notes:
+            API-KEY가 필요한 endpoint다.
+        
         Returns:
             Dict: symbol레버리지 구간별 정보
         """

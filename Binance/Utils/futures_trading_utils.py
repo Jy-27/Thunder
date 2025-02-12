@@ -1,6 +1,7 @@
+import PublicAPI.Futures
+import PrivateAPI.Futures
+
 from typing import Union, Final, Tuple, List, Dict, Optional
-import MarketDataFetcher
-import TradeClient
 import utils
 import asyncio
 import ConfigSetting
@@ -11,20 +12,18 @@ config_min_leverage = 2
 BUY_TYPE: Tuple[int, str] = (1, "BUY")
 SELL_TYPE: Tuple[int, str] = (2, "SELL")
 MARKETS: List = ["FUTURES", "SPOT"]
-SYMBOLS_STATUS: List = ["TRADING", "SETTLING"]
+SYMBOLS_STATUS: List = ["TRADING", "SETTLING", "PENDING_TRADING", "BREAK"]
 
 ### 인스턴스 생성
-INS_MARKET_FUTURES = MarketDataFetcher.FuturesMarket()
-INS_CLIENT_FUTURES = TradeClient.FuturesClient()
+ins_public_api_futures = PublicAPI.Futures.API()
+ins_private_api_futures = PrivateAPI.Futures.API()
 
 
 ### 백테스트용 base data
-init_account_balance = asyncio.run(INS_CLIENT_FUTURES.fetch_account_balance())
-init_exchange_info = asyncio.run(INS_MARKET_FUTURES.fetch_exchange_info())
+init_account_balance = ins_private_api_futures.fetch_account_balance()
+init_exchange_info = ins_public_api_futures.fetch_exchange_info()
 init_brackets_data = {
-    symbol.upper(): asyncio.run(
-        INS_CLIENT_FUTURES.fetch_leverage_brackets(symbol.upper())
-    )
+    symbol: ins_private_api_futures.fetch_leverage_brackets(symbol)
     for symbol in ConfigSetting.TestConfig.test_symbols.value
 }
 
@@ -404,6 +403,7 @@ class Calculator:
 
         # 최소 Position Size 산출
 
+    @classmethod
     def min_position_size(
         cls,
         mark_price: float,
@@ -416,6 +416,7 @@ class Calculator:
         return max(min_size, min_qty)
 
     # 최대 Position Size 산출
+    @classmethod
     def max_position_size(
         cls,
         mark_price: float,
@@ -429,88 +430,63 @@ class Calculator:
 
 
 class Extractor:
-    # API availableBalance 조회 및 반환
+    # API availableBalance 필터 및 반환
     @classmethod
-    def available_balance(
-        cls, account_data: INS_CLIENT_FUTURES.fetch_account_balance
-    ) -> float:
+    def available_balance(cls, account_data: Dict) -> float:
         """
-        Futures 계좌의 예수금을 조회한다.
-        """
-        result = account_data["availableBalance"]
-        return float(result)
-
-    # API totalWalletBalance 조회 및 반환
-    @classmethod
-    def total_wallet_balance(
-        cls, account_data: INS_CLIENT_FUTURES.fetch_account_balance
-    ) -> float:
-        result = account_data["totalWalletBalance"]
-        return float(result)
-
-    # API 최대 레버리지값 조회 및 반환
-    @classmethod
-    def max_leverage(
-        cls, brackets_data: INS_CLIENT_FUTURES.fetch_leverage_brackets
-    ) -> int:
-        leverage = brackets_data[0]["brackets"][0]["initialLeverage"]
-        return int(leverage)
-
-    @classmethod
-    def exchange_symbol_info(
-        symbol: str, exchange_data: INS_MARKET_FUTURES.fetch_exchange_info
-    ) -> dict:  # 🚀
-        """
-        exchange 데이터의 "symbols" 정보를 추출한다.
+        ⭕️ account balance 데이터에서 예수금 부분 데이터를 조회 및 반환한다.
 
         Args:
-            symbol (str): 분류하고 싶은 symbol정보
-            exchange_data (dict): MarketDataFetcher.FuturesMarket().fetch_exchange_info() 반환값
+            account_data (Dict): 함수 fetch_account_balance 반환값
 
-        # Returns:
-            {'tickSize': 0.0001,
-            'minPrice': 0.0143,
-            'maxPrice': 100000.0,
-            'minQty': 0.1,
-            'maxQty': 10000000.0,
-            'stepSize': 0.1,
-            'marketMaxQty': 2000000.0,
-            'limitOrders': 200.0,
-            'limitAlgoOrders': 10.0,
-            'notional': 5.0,
-            'multiplierUp': 1.05,
-            'multiplierDown': 0.95,
-            'multiplierDecimal': 4.0}
-
-        Notes:
-            반환값별 설명
-                'tickSize' : 가격의 최소 단위 (1틱당 가격)
-                'minPrice' : 주문 가능한 최저 가격
-                'maxPrice' : 주문 가능한 최고 가격
-                'minQty' : 주문 가능한 최소 수량
-                'maxQty' : 주문 가능한 최대 수량
-                'stepSize' : 주문 가능한 최소 단위
-                'marketMinQty' : 시장가 주문 최소 주문 가능 수량
-                'marketMaxQty' : 시장가 주문 최대 주문 가능 수량
-                'limitOrders' :  동시에 열 수 있는 주문 개수
-                'limitAlgoOrders' : 알고리즘 주문(조건부 주문 내역)
-                'notional' : 명복가치, 계약가치
-                'multiplierUp' : 주문 가능한 최저 비율
-                'multiplierDown' : 주문 가능한 최고 비율
-                'multiplierDecimal' : 가격제한 정밀도(소수점)
-
-            minPrice or multiplierDown // multiplierUp or maxPrice는 이중적 보안장치로 AND 조건임.
-
-        Example:
-            symbol = 'BTCUSDT'
-            exchange_data = MarketDataFetcher.FuturesMarket().fetch_exchange_info()
-            symbol_info = extract_exchange_symbol_info('BTCUSDT', exchange_data)
-
+        Returns:
+            float: 예수금
         """
-        symbols_data = exchange_data["symbols"]
-        symbol_info = next(item for item in symbols_data if item["symbol"] == symbol)
-        filters_data = symbol_info["filters"]
+        return float(account_data["availableBalance"])
 
+    # API totalWalletBalance 필터 및 반환
+    @classmethod
+    def total_wallet_balance(
+        cls, account_data: ins_private_api_futures.fetch_account_balance
+    ) -> float:
+        """
+        ⭕️ account balance 데이터에서 전체 금액을 조회 및 반환한다.
+
+        Args:
+            account_data (Dict): 함수 fetch_account_balance 반환값
+
+        Returns:
+            float: 전체 금액
+        """
+        return float(account_data["totalWalletBalance"])
+
+    # API 최대 레버리지값 필터 및 반환
+    @classmethod
+    def max_leverage(
+        cls, brackets_data: ins_private_api_futures.fetch_leverage_brackets
+    ) -> int:
+        """
+        ⭕️ 설정가능한 최대 레버리지값을 조회 및 반환한다.
+
+        Args:
+            brackets_data (list): 함수 fetch_leverage_brackets 반환값
+
+        Returns:
+            int: 최대 레버리지 값
+        """
+        return int(brackets_data[0]["brackets"][0]["initialLeverage"])
+
+    @classmethod
+    def symbol_filters(cls, filters_data: List):
+        """
+        ⭕️ exchange_info 데이터에서 filters 부분을 추출 및 재정렬 하여 반환한다.
+
+        Args:
+            filters_data (List): exchange_info의 filters부분
+
+        Returns:
+            dict: 필터 재구성 데이터
+        """
         return {
             "tickSize": float(
                 filters_data[0]["tickSize"]
@@ -546,96 +522,137 @@ class Extractor:
             "multiplierDecimal": float(filters_data[6]["multiplierDecimal"]),
         }  # 가격제한 정밀도(소수점)
 
-    # 거래가능한 symbol 리스트 조회 및 반환
+    # 거래가능한 symbol 리스트 필터 및 반환
     @classmethod
-    def trading_symbols(
-        cls, exchange_data: INS_MARKET_FUTURES.fetch_exchange_info
-    ) -> List[str]:
-        symbols_data = exchange_data["symbols"]
+    def trading_symbols(cls, exchange_data: dict) -> List[str]:
+        """
+        ⭕️ 마켓에서 거래가능한 symbol 리스트를 필터 및 반환한다.
+
+        Args:
+            status (str):
+            exchange_data (dict): public의 fetch_exchange_info() 함수 반환값
+
+        Returns:
+            List: symbol 리스트
+        """
+        status = "TRADING"
         return [
-            symbol["symbol"]
-            for symbol in symbols_data
-            if symbol["status"] == SYMBOLS_STATUS[0]
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
         ]
 
-    # 거래불가한 symbol 리스트 조회 및 반환
+    # 거래불가한 symbol 리스트 필터 및 반환
     @classmethod
-    def setting_symbols(
-        cls, exchange_data: INS_MARKET_FUTURES.fetch_exchange_info
-    ) -> List[str]:
-        symbols_data = exchange_data["symbols"]
+    def settling_symbols(cls, exchange_data: dict) -> List[str]:
+        """
+        ⭕️ 마켓에서 일시적 거래중단(정산진행중) symbol 리스트르르 필터 및 반환한다.
+
+        Args:
+            exchange_data (dict): public의 fetch_exchange_info() 함수 반환값
+
+        Returns:
+            List: symbol 리스트
+        """
+        status = "SETTLING"
         return [
-            symbol["symbol"]
-            for symbol in symbols_data
-            if symbol["status"] == SYMBOLS_STATUS[1]
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
+
+    @classmethod
+    def all_symbols(cls, exchange_data: dict) -> List:
+        """
+        ⭕️ 마켓에 거래중인 전체 symbol리스트를 필터 및 반환한다.
+
+        Args:
+            exchange_data (dict): public의 fetch_exchange_info() 함수 반환값
+
+        Returns:
+            List: symbol 리스트
+        """
+        return [data["symbol"] for data in exchange_data["symbols"]]
+
+    @classmethod
+    def pending_symbols(cls, exchange_data: dict) -> List:
+        """
+        ⭕️ 마켓에 거래 보류중인 symbol리스트를 필터 및 반환한다.
+
+        Args:
+            exchange_data (dict): public의 fetch_exchange_info() 함수 반환값
+
+        Returns:
+            List: symbol 리스트
+        """
+        status = "PENDING_TRADING"
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
+
+    @classmethod
+    def break_symbols(cls, exchange_data: dict) -> List:
+        """
+        ⭕️ 거래 중단된 symbol리스트를 필터 및 반환한다.
+
+        Args:
+            exchange_data (dict): public의 fetch_exchange_info() 함수 반환값
+
+        Returns:
+            List: symbol 리스트
+        """
+        status = "BREAK"
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
         ]
 
     # 지정 symbol값에 대한 포지션 정보를 반환한다.
     @classmethod
-    def position_details(
-        symbol: str, account_data: INS_CLIENT_FUTURES.fetch_account_balance
-    ) -> Dict:
+    def position_detail(cls, symbol: str, account_data: Dict) -> Dict:
         """
-        지정한 symbol값의 포지션 정보값을 반환한다.
+        ⭕️ 지정한 symbol값의 포지션 상태(설정값)값을 반환한다.
 
         Args:
             symbol (str): symbol값
-            account_data (Dict): TradeClient.FuturesClient.fetch_account_balance() 수신값
+            account_data (Dict): 함수 fetch_account_balance 반환값
 
         Returns:
-            {'symbol': 'SOLUSDT',
-            'initialMargin': '0',
-            'maintMargin': '0',
-            'unrealizedProfit': '0.00000000',
-            'positionInitialMargin': '0',
-            'openOrderInitialMargin': '0',
-            'leverage': '75',
-            'isolated': False,
-            'entryPrice': '0.0',
-            'breakEvenPrice': '0.0',
-            'maxNotional': '100000',
-            'positionSide': 'BOTH',
-            'positionAmt': '0',
-            'notional': '0',
-            'isolatedWallet': '0',
-            'updateTime': 0,
-            'bidNotional': '0',
-            'askNotional': '0'}
+            Dict:
         """
-        position_data = next(
+        return next(
             data for data in account_data["positions"] if data["symbol"] == symbol
         )
-        return position_data
+
+    @classmethod
+    def symbol_detail(cls, symbol: str, exchange_data: dict):
+        """
+        ⭕️ symbol에 대한 상태 정보를 필터 및 반환한다.
+
+        Args:
+            symbol (str): 'BTCUSDT'
+            exchange_data (dict): public의 fetch_exchange_info() 반환값
+
+        Returns:
+            Dict: 상세 내역 필터
+        """
+        return next(
+            data for data in exchange_data["symbols"] if data["symbol"] == symbol
+        )
 
     # 보유중인 포지션 정보 전체를 반환한다.
     @classmethod
-    def current_positions(
-        account_data: INS_CLIENT_FUTURES.fetch_account_balance,
-    ) -> Dict:  # 🚀
+    def open_position_details(cls, account_data: Dict) -> Dict:  # 🚀
         """
-        보유중인 포지션 전체 정보값을 반환한다.
+        ⭕️ 보유중인 포지션 전체 정보값을 반환한다.
 
         Args:
-            account_data (dict): TradeClient.FuturesClient.fetch_account_balance() 수신값
+            account_data (dict): 함수 fetch_account_balance 반환값
 
         Resturn:
-            {'XRPUSDT': {'initialMargin': 2.23689411,
-                        'maintMargin': 0.02236894,
-                        'unrealizedProfit': -0.70481176,
-                        'positionInitialMargin': 2.23689411,
-                        'openOrderInitialMargin': 0,
-                        'leverage': 2,
-                        'isolated': True,
-                        'entryPrice': 2.877,
-                        'breakEvenPrice': 2.8784385,
-                        'maxNotional': 50000000,
-                        'positionSide': 'BOTH',
-                        'positionAmt': 1.8,
-                        'notional': 4.47378823,
-                        'isolatedWallet': 2.59310914,
-                        'updateTime': 1738713600499,
-                        'bidNotional': 0,
-                        'askNotional': 0}},
             'ADAUSDT': {'initialMargin': 2.23689411,
                         'maintMargin': 0.02236894,
                         'unrealizedProfit': -0.70481176,
@@ -655,11 +672,11 @@ class Extractor:
                         'askNotional': 0}}
 
         Notes:
-            None
+            보유중인 포지션에 대한 전체 상세정보를 반환한다.
 
         Example:
-            ins_client_futures = TradeClient.FuturesClient()
-            account_data = asyncio.run(ins_client_futures.fetch_account_balance())
+            ins_private_api_futures = TradeClient.FuturesClient()
+            account_data = asyncio.run(ins_private_api_futures.fetch_account_balance())
 
             open_positions = extract_open_positions(account_data)
         """
@@ -679,40 +696,41 @@ class Extractor:
 
 class Selector:
     # instance 래핑
+    ## 본 class는 폐기 검토함.
     @classmethod
-    async def account_balance(cls, test_mode: bool):
+    def account_balance(cls, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.account_balance()
         else:
-            return await INS_CLIENT_FUTURES.fetch_account_balance()
+            return ins_private_api_futures.fetch_account_balance()
 
     @classmethod
-    async def exchange_info(cls, test_mode: bool):
+    def exchange_info(cls, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.exchange_info()
         else:
-            return await INS_MARKET_FUTURES.fetch_exchange_info()
+            return ins_public_api_futures.fetch_exchange_info()
 
     @classmethod
-    async def brackets_data(cls, test_mode: bool):
+    def brackets_data(cls, symbol: str, test_mode: bool):
         if test_mode:
-            return FakeSignalGenerator.brackets()
+            return FakeSignalGenerator.brackets(symbol)
         else:
-            return await INS_CLIENT_FUTURES.fetch_leverage_brackets()
+            return ins_private_api_futures.fetch_leverage_brackets(symbol)
 
     @classmethod
-    async def set_leverage(cls, symbol: str, leverage: int, test_mode: bool):
+    def set_leverage(cls, symbol: str, leverage: int, test_mode: bool):
         if test_mode:
             return
         else:
-            await INS_CLIENT_FUTURES.send_leverage(symbol, leverage)
+            return ins_private_api_futures.send_leverage(symbol, leverage)
 
     @classmethod
-    async def order_signal(cls, test_mode: bool, **kwargs):
+    def order_signal(cls, test_mode: bool, **kwargs):
         if test_mode:
             return FakeSignalGenerator.order_signal(**kwargs)
         else:
-            return await INS_CLIENT_FUTURES.send_order(**kwargs)
+            return ins_private_api_futures.send_order(**kwargs)
 
 
 class FakeSignalGenerator:
@@ -725,77 +743,8 @@ class FakeSignalGenerator:
         return init_exchange_info
 
     @classmethod
-    def brackets(cls):
-        return init_brackets_data
+    def brackets(cls, symbol: str):
+        return init_brackets_data[symbol]
 
     @classmethod
     def order_signal(cls, **kwargs): ...
-
-
-class FuturesProcessor:
-    @classmethod
-    async def get_positions_size(
-        cls,
-        symbol: str,
-        mark_price: float,
-        balance: float,
-        leverage: int,
-        test_mode: bool = False,
-    ) -> float:
-        symbol = symbol.upper()
-        exchange_info = await Selector.exchange_info(test_mode)
-        trading_symbols = Extractor.trading_symbols(exchange_info)
-
-        symbol_info = Extractor.exchange_symbol_info(symbol, exchange_info)
-
-        min_qty = symbol_info["minQty"]
-        step_size = symbol_info["stepSize"]
-        notional = symbol_info["notional"]
-
-        min_position_size = Calculator.min_position_size(
-            mark_price, min_qty, step_size, notional
-        )
-        max_position_size = Calculator.max_position_size(
-            mark_price, leverage, step_size, balance
-        )
-
-        if min_position_size > max_position_size:
-            return 0
-        else:
-            return max_position_size
-
-    @classmethod
-    async def get_leverage(cls, symbol: str, leverage: int, test_mode: bool):
-        brackets_data = Selector.brackets_data(test_mode)
-        max_leverage = Extractor.max_leverage(brackets_data)
-        if MIN_LEVERAGE <= max_leverage <= config_max_leverage:
-            return max_leverage
-        elif config_max_leverage < max_leverage:
-            return config_max_leverage
-        else:
-            return MIN_LEVERAGE
-
-    @classmethod
-    async def create_open_order(
-        cls,
-        symbol: str,
-        position: Union[str, int],
-        position_size: float,
-        price: Optional[float] = None,
-        test_mode: bool = False,
-    ):
-        account_balance = await Selector.account_balance(test_mode)
-        exchange_info = await Selector.exchange_info(test_mode)
-
-        kwargs = {
-            "symbol": symbol.upper(),
-            "side": "BUY" if Validator.contains(position, BUY_TYPE) else "SELL",
-            "order_type": "MARKET",
-            "quantity": position_size,
-            "price": price,
-            "time_in_force": "GTC",
-            "position_side": "BOTH",
-            "reduce_only": False,
-        }
-
-        signal = await FakeSignalGenerator.order_signal(test_mode, **kwargs)

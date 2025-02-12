@@ -1,9 +1,9 @@
-from MarketDataFetcher import MarketDataManager
+from PublicAPI.BaseAPI import BaseAPI
 from typing import Dict, Any, Optional, Union
 import asyncio
 
 
-class Manager(MarketDataManager):
+class API(BaseAPI):
     """
     Spot market에서 API-KEY가 필요 없이 조회할 수 있는 함수들의 집합이다.
     """

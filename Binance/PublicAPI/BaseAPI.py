@@ -4,12 +4,11 @@ from typing import Final, Dict, Any, Optional, List, Union, TypeVar, cast
 from abc import ABC, abstractmethod
 
 
-class MarketDataManager(ABC):
+class BaseAPI(ABC):
     """
     Binance에서 API KEY없이 조회가능한 데이터를
     수신 및 반환한다.
     """
-
     BASE_URL: str
 
     def __init__(self, base_url: str):

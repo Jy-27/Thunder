@@ -5,14 +5,13 @@ import hashlib
 import hmac
 import json
 import os
-import utils
 import math
 import requests
 from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 from abc import ABC, abstractmethod
 
-class BinanceClientManager:
+class BaseAPI:
     BASE_URL = ""  # 자식 클래스에서 URL을 설정해야 합니다.
 
     def __init__(self):
@@ -32,11 +31,15 @@ class BinanceClientManager:
         1. 기능 : API주문에 필요한 API-key와 Secret-key 저장파일(json)을 불러온다.
         2. 매개변수 : 해당없음.
         """
-        current_file_path = os.getcwd()
-        parent_directory = os.path.dirname(current_file_path)
+        # current_file_path = os.getcwd()
+        # parent_directory = os.path.dirname(current_file_path)
         file_name = "binance.json"
-        file_path = os.path.join(parent_directory, "API", file_name)
+        # file_path = os.path.join(parent_directory, "API", file_name)
 
+        #MAC TERMINAL COMMAND
+        # >> cd $HOME/github/API
+        file_path = os.path.join(os.getenv("HOME"), "github", "API", file_name)
+        
         try:
             with open(file_path, "r", encoding="utf-8") as file:
                 data = json.load(file)

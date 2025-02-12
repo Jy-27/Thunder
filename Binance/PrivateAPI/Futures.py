@@ -1,10 +1,10 @@
-from BasePrivateAPI import BasePrivateAPI
+from PrivateAPI.BaseAPI import BaseAPI
 from typing import Dict, Union, Any, Optional
 import time
 import asyncio
 
 
-class API(BasePrivateAPI):
+class API(BaseAPI):
     """
     Binance Futures API와 관련된 함수의 집합이다. API-key가 반드시 필요하다.
     오류에 대한 검증코드는 포함되지 않았다. 그러므로 본 함수를 실행전 검증 기능의 코드를 구현해야한다.

@@ -1,10 +1,14 @@
-import PublicAPI.Futures
-import PrivateAPI.Futures
-
 from typing import Union, Final, Tuple, List, Dict, Optional
-import utils
+import Utils.utils
 import asyncio
 import ConfigSetting
+import sys
+
+main_folder = os.path.join(os.getenv("HOME"), "github", "Thunder", "Binance")
+sys.path.append(main_folder)
+
+import PublicAPI.Futures
+import PrivateAPI.Futures
 
 ### 전역 상수 선언
 config_max_leverage = 125

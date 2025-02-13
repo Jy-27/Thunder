@@ -38,7 +38,7 @@ class BaseAPI:
 
         #MAC TERMINAL COMMAND
         # >> cd $HOME/github/API
-        file_path = os.path.join(os.getenv("HOME"), "github", "API", file_name)
+        file_path = os.path.join(os.getenv("HOME"), "github", "API-KEY", file_name)
         
         try:
             with open(file_path, "r", encoding="utf-8") as file:

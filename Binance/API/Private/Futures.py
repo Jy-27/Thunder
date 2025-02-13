@@ -1,4 +1,4 @@
-from PrivateAPI.BaseAPI import BaseAPI
+from Private.Base import BaseAPI
 from typing import Dict, Union, Any, Optional
 import time
 import asyncio

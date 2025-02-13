@@ -1,4 +1,4 @@
-from PublicAPI.BaseAPI import BaseAPI
+from .Base import BaseAPI
 from typing import Dict, Any, List, Union
 
 

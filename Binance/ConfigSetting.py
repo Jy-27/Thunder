@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Union, Optional
 import os
-import utils
+import Utils.BaseUtils as utils
 import asyncio
 
 
@@ -442,8 +442,8 @@ class TestConfig(Enum):
     백테스트에 필요한 정보를 설정
     """
 
-    # test_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
-    test_symbols: Union[List[str], str] = ["TRXUSDT"]
+    test_symbols: Union[List[str], str] = ["BTCUSDT", "XRPUSDT", "ETHUSDT", "TRXUSDT"]
+    # test_symbols: Union[List[str], str] = ["TRXUSDT"]
     seed_funds: Union[float, int] = 6857.3  # 초기 자본금 / None값일경우 계좌 전체 금액 반영됨.
     start_datetime: str = "2024-12-1 09:00:00"  # 백테스트 시작 날짜
     end_datetime: str = "2025-1-1 08:59:59"  # 백테스트 종료 날짜
@@ -464,8 +464,8 @@ class TestConfig(Enum):
             error_messages.append(message)
 
         ## datetime 검증_1
-        start_timestamp = utils._convert_to_timestamp_ms(cls.start_datetime.value)
-        end_timestamp = utils._convert_to_timestamp_ms(cls.end_datetime.value)
+        start_timestamp = utils.convert_to_timestamp_ms(cls.start_datetime.value)
+        end_timestamp = utils.convert_to_timestamp_ms(cls.end_datetime.value)
         # 시작일과 종료일 크기 비교
         if not start_timestamp < end_timestamp:
             message = (
@@ -528,7 +528,7 @@ class TestConfig(Enum):
                 )
                 error_messages.append(message)
 
-            kline_data = utils._load_json(path_kline_data)
+            kline_data = utils.load_json(path_kline_data)
             kline_data_symbols = list(kline_data.keys())
 
             if not set(cls.test_symbols.value) == set(kline_data_symbols):

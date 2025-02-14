@@ -1,9 +1,15 @@
 from typing import Union, Final, Tuple, List, Dict, Optional
-import MarketDataFetcher
-import TradeClient
-import utils
+
 import asyncio
 import ConfigSetting
+import os
+
+import sys
+sys.path.append(os.path.abspath("../../"))
+import API.Private.Futures as private_api
+import API.Public.Futures as public_api
+import Utils.BaseUtils as utils
+
 
 ### 전역 상수 선언
 config_max_leverage = 125
@@ -12,19 +18,17 @@ BUY_TYPE: Tuple[int, str] = (1, "BUY")
 SELL_TYPE: Tuple[int, str] = (2, "SELL")
 MARKETS: List = ["FUTURES", "SPOT"]
 SYMBOLS_STATUS: List = ["TRADING", "SETTLING", "PENDING_TRADING", "BREAK"]
-
 ### 인스턴스 생성
-INS_MARKET_FUTURES = MarketDataFetcher.FuturesMarket()
-INS_CLIENT_FUTURES = TradeClient.FuturesClient()
+ins_public_api = public_api.API()
+ins_private_api = private_api.API()
 
 
 ### 백테스트용 base data
-init_account_balance = asyncio.run(INS_CLIENT_FUTURES.fetch_account_balance())
-init_exchange_info = asyncio.run(INS_MARKET_FUTURES.fetch_exchange_info())
+init_account_balance = ins_private_api.fetch_account_balance()
+init_exchange_info = ins_public_api.fetch_exchange_info()
 init_brackets_data = {
-    symbol.upper(): asyncio.run(
-        INS_CLIENT_FUTURES.fetch_leverage_brackets(symbol.upper())
-    )
+    symbol: 
+        ins_private_api.fetch_leverage_brackets(symbol)
     for symbol in ConfigSetting.TestConfig.test_symbols.value
 }
 
@@ -64,7 +68,7 @@ class Validator:
         return position
 
     @classmethod
-    def args_leverage_range(cls, leverage: int) -> int:
+    def args_leverage(cls, leverage: int) -> int:
         """
         입력된 leverage값의 유효성을 검토한다.
 
@@ -74,7 +78,7 @@ class Validator:
         Raises:
             ValueError: 입력값이 int형이 아닌 경우
             ValueError: 입력값이 125를 초과한 경우
-            ValueError: 입력값이 MIN_LEVERAGE미만인 경우
+            ValueError: 입력값이 config_min_leverage미만인 경우
 
         Returns:
             int: leverage
@@ -85,9 +89,9 @@ class Validator:
             raise ValueError(
                 f"leverage는 {config_max_leverage}를 초과할 수 없음: {leverage}"
             )
-        if MIN_LEVERAGE > leverage:
+        if config_min_leverage > leverage:
             raise ValueError(
-                f"leverage는 최소 {MIN_LEVERAGE} 이상이어야 함: {leverage}"
+                f"leverage는 최소 {config_min_leverage} 이상이어야 함: {leverage}"
             )
         return leverage
 
@@ -147,7 +151,7 @@ class Calculator:
             imr = calculate_imr(leverage)
             print(imr)
         """
-        validate_leverage = Validator.args_leveragse(leverage)
+        validate_leverage = Validator.args_leverage(leverage)
         return 1 / validate_leverage
 
     # 초기 마진값 산출
@@ -402,8 +406,8 @@ class Calculator:
         """
         return max(0, net_collateral - open_order_losses - initial_margins)
 
-        # 최소 Position Size 산출
-
+    # 최소 Position Size 산출
+    @classmethod    
     def min_position_size(
         cls,
         mark_price: float,
@@ -412,10 +416,11 @@ class Calculator:
         notional: float,
     ):
         required_size = notional / mark_price
-        min_size = utils._round_up(value=required_size, step=step_size)
+        min_size = utils.round_up(value=required_size, step=step_size)
         return max(min_size, min_qty)
 
     # 최대 Position Size 산출
+    @classmethod    
     def max_position_size(
         cls,
         mark_price: float,
@@ -424,7 +429,7 @@ class Calculator:
         balance: float,
     ):
         required_size = (balance * leverage) / mark_price
-        max_size = utils._round_down(value=required_size, step=step_size)
+        max_size = utils.round_down(value=required_size, step=step_size)
         return max_size
 
 
@@ -432,7 +437,7 @@ class Extractor:
     # API availableBalance 필터 및 반환
     @classmethod
     def available_balance(
-        cls, account_data: INS_CLIENT_FUTURES.fetch_account_balance
+        cls, account_data: ins_private_api.fetch_account_balance
     ) -> float:
         """
         Futures 계좌의 예수금을 필터한다.
@@ -443,7 +448,7 @@ class Extractor:
     # API totalWalletBalance 필터 및 반환
     @classmethod
     def total_wallet_balance(
-        cls, account_data: INS_CLIENT_FUTURES.fetch_account_balance
+        cls, account_data: ins_private_api.fetch_account_balance
     ) -> float:
         result = account_data["totalWalletBalance"]
         return float(result)
@@ -451,14 +456,14 @@ class Extractor:
     # API 최대 레버리지값 필터 및 반환
     @classmethod
     def max_leverage(
-        cls, brackets_data: INS_CLIENT_FUTURES.fetch_leverage_brackets
+        cls, brackets_data: ins_private_api.fetch_leverage_brackets
     ) -> int:
         leverage = brackets_data[0]["brackets"][0]["initialLeverage"]
         return int(leverage)
 
     @classmethod
-    def exchange_symbol_info(
-        symbol: str, exchange_data: INS_MARKET_FUTURES.fetch_exchange_info
+    def refine_exchange_data(cls, 
+        symbol: str, exchange_data: ins_public_api.fetch_exchange_info
     ) -> dict:  # 🚀
         """
         exchange 데이터의 "symbols" 정보를 추출한다.
@@ -622,7 +627,7 @@ class Extractor:
 
     # 지정 symbol값에 대한 포지션 정보를 반환한다.
     @classmethod
-    def position_details(cls, symbol: str, account_data: Dict) -> Dict:
+    def position_detail(cls, symbol: str, account_data: Dict) -> Dict:
         """
         지정한 symbol값의 포지션 정보값을 반환한다.
 
@@ -672,7 +677,7 @@ class Extractor:
     # 보유중인 포지션 정보 전체를 반환한다.
     @classmethod
     def current_positions(
-        account_data: INS_CLIENT_FUTURES.fetch_account_balance,
+        account_data: ins_private_api.fetch_account_balance,
     ) -> Dict:  # 🚀
         """
         보유중인 포지션 전체 정보값을 반환한다.
@@ -720,8 +725,8 @@ class Extractor:
             None
 
         Example:
-            ins_client_futures = TradeClient.FuturesClient()
-            account_data = asyncio.run(ins_client_futures.fetch_account_balance())
+            ins_private_api = TradeClient.FuturesClient()
+            account_data = asyncio.run(ins_private_api.fetch_account_balance())
 
             open_positions = extract_open_positions(account_data)
         """
@@ -746,35 +751,35 @@ class Selector:
         if test_mode:
             return FakeSignalGenerator.account_balance()
         else:
-            return INS_CLIENT_FUTURES.fetch_account_balance()
+            return ins_private_api.fetch_account_balance()
 
     @classmethod
     def exchange_info(cls, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.exchange_info()
         else:
-            return INS_MARKET_FUTURES.fetch_exchange_info()
+            return ins_public_api.fetch_exchange_info()
 
     @classmethod
-    def brackets_data(cls, test_mode: bool):
+    def brackets_data(cls, symbol:str, test_mode: bool):
         if test_mode:
-            return FakeSignalGenerator.brackets()
+            return FakeSignalGenerator.brackets(symbol)
         else:
-            return INS_CLIENT_FUTURES.fetch_leverage_brackets()
+            return ins_private_api.fetch_leverage_brackets(symbol)
 
     @classmethod
     def set_leverage(cls, symbol: str, leverage: int, test_mode: bool):
         if test_mode:
             return
         else:
-            return INS_CLIENT_FUTURES.send_leverage(symbol, leverage)
+            return ins_private_api.send_leverage(symbol, leverage)
 
     @classmethod
     def order_signal(cls, test_mode: bool, **kwargs):
         if test_mode:
             return FakeSignalGenerator.order_signal(**kwargs)
         else:
-            return INS_CLIENT_FUTURES.send_order(**kwargs)
+            return ins_private_api.send_order(**kwargs)
 
 
 class FakeSignalGenerator:
@@ -787,77 +792,8 @@ class FakeSignalGenerator:
         return init_exchange_info
 
     @classmethod
-    def brackets(cls):
-        return init_brackets_data
+    def brackets(cls, symbol:str):
+        return init_brackets_data[symbol]
 
     @classmethod
     def order_signal(cls, **kwargs): ...
-
-
-class FuturesProcessor:
-    @classmethod
-    async def get_positions_size(
-        cls,
-        symbol: str,
-        mark_price: float,
-        balance: float,
-        leverage: int,
-        test_mode: bool = False,
-    ) -> float:
-        symbol = symbol.upper()
-        exchange_info = await Selector.exchange_info(test_mode)
-        trading_symbols = Extractor.trading_symbols(exchange_info)
-
-        symbol_info = Extractor.exchange_symbol_info(symbol, exchange_info)
-
-        min_qty = symbol_info["minQty"]
-        step_size = symbol_info["stepSize"]
-        notional = symbol_info["notional"]
-
-        min_position_size = Calculator.min_position_size(
-            mark_price, min_qty, step_size, notional
-        )
-        max_position_size = Calculator.max_position_size(
-            mark_price, leverage, step_size, balance
-        )
-
-        if min_position_size > max_position_size:
-            return 0
-        else:
-            return max_position_size
-
-    @classmethod
-    async def get_leverage(cls, symbol: str, leverage: int, test_mode: bool):
-        brackets_data = Selector.brackets_data(test_mode)
-        max_leverage = Extractor.max_leverage(brackets_data)
-        if MIN_LEVERAGE <= max_leverage <= config_max_leverage:
-            return max_leverage
-        elif config_max_leverage < max_leverage:
-            return config_max_leverage
-        else:
-            return MIN_LEVERAGE
-
-    @classmethod
-    async def create_open_order(
-        cls,
-        symbol: str,
-        side: Union[str, int],
-        position_size: float,
-        price: Optional[float] = None,
-        test_mode: bool = False,
-    ):
-        account_balance = await Selector.account_balance(test_mode)
-        exchange_info = await Selector.exchange_info(test_mode)
-
-        kwargs = {
-            "symbol": symbol,
-            "side": "BUY" if Validator.contains(position, BUY_TYPE) else "SELL",
-            "order_type": "MARKET",
-            "quantity": position_size,
-            "price": price,
-            "time_in_force": "GTC",
-            "position_side": "BOTH",
-            "reduce_only": False,
-        }
-
-        signal = await FakeSignalGenerator.order_signal(test_mode, **kwargs)

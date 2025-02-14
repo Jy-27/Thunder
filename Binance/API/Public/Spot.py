@@ -1,9 +1,9 @@
-from .Base import BaseAPI
+from .PublicAPI import PublicAPI
 from typing import Dict, Any, Optional, Union
 import asyncio
 
 
-class API(BaseAPI):
+class API(PublicAPI):
     """
     Spot market에서 API-KEY가 필요 없이 조회할 수 있는 함수들의 집합이다.
     """

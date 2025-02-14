@@ -4,7 +4,7 @@ from typing import Final, Dict, Any, Optional, List, Union, TypeVar, cast
 from abc import ABC, abstractmethod
 
 
-class BaseAPI(ABC):
+class PublicAPI(ABC):
     """
     Binance에서 API KEY없이 조회가능한 데이터를
     수신 및 반환한다.

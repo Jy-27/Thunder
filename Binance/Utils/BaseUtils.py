@@ -354,6 +354,12 @@ def convert_dict_to_literal(input_data: Dict[str, Any]) -> Dict:
 
 # list간 교차값 반환
 def find_common_elements(*lists) -> List:
+    """
+    ⭕️ 리스트 간에 중복되는 값 리스트로 재구성해서 반환 (교차값)
+
+    Returns:
+        List: 교차값
+    """
     common_selements = set(lists[0]).intersection(*lists[1:])
     return list(common_selements)
 
@@ -383,10 +389,35 @@ def calculate_divisible_intervals(time_unit):
 
     return divisible_intervals
 
+def sleep_next_minute(minutes:int) -> datetime:
+    """
+    ⭕️ 지정한 분(minutes)정각까지 timesleep 기능 실행
+
+    Args:
+        minutes (int): 분(minutes)
+    
+    Notes:
+        120분 입력시 2시간 뒤 정각까지 타임슬립
+
+    Returns:
+        datetime: 현재시각
+    """
+    seconds_per_minute = 60
+    sleep_minutes = seconds_per_minute * minutes
+    current_time = datetime.now()
+    ms_second = current_time.microsecond / 1_000_000
+    elapsed_seconds = current_time.second + ms_second
+    diff_second = sleep_minutes - elapsed_seconds
+    time.sleep(diff_second)
+    return datetime.now()
+
 
 # 다음 지정 간격까지 대기 (0초 return 발생)
 async def wait_until_next_interval(time_unit: str, interval: int) -> datetime:
     """
+    ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
+    비활성화 예정
+    
     1. 기능 : 다음 지정 interval시간 정각(0초) 까지 대기
     2. 매개변수
         1) time_unit : 'hour', 'minute', 'second'
@@ -415,10 +446,12 @@ async def wait_until_next_interval(time_unit: str, interval: int) -> datetime:
         # 1초 대기
         await asyncio.sleep(1)
 
-
 # 지정된 시간 동안 대기 (timesleep버전)
 async def wait_time_sleep(time_unit: str, duration: int) -> datetime:
     """
+    ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
+    비활성화 예정
+    
     1. 기능 : 지정된 시간 동안 대기 (timesleep 버전)
     2. 매개변수
         1) time_unit : 시간 종류
@@ -449,6 +482,9 @@ async def wait_time_sleep(time_unit: str, duration: int) -> datetime:
 # 다음 정각까지 대기 (0초 return 발생)
 async def wait_until_exact_time(time_unit: str) -> datetime:
     """
+    ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
+    비활성화 예정
+    
     1. 기능 : time_unit기준 정각(0초)까지 대기
     2. 매개변수
         1) time_unit : 시간 종류
@@ -821,3 +857,27 @@ def decimal_to_text(decimal: int) -> str:
     )  # 이후 문자들
 
     return first_char + rest_chars
+
+def is_time_match(interval:str) -> bool:
+    """
+    입력된 interval의 step이 현재시간에 해당여부를 확인한다.
+
+    Args:
+        interval (str): interval 값
+
+    Notes:
+        kline data 업데이트 주기여부를 확인하기 위해 생성함.
+
+    Returns:
+        bool: True or False
+    """
+    now = datetime.datetime.now()
+
+    if interval.endswith("m"):  # 분 단위 확인
+        return now.minute % int(interval[:-1]) == 0
+    elif interval.endswith("h"):  # 시간 단위 확인
+        return now.hour % int(interval[:-1]) == 0
+    elif now.hour == 0 and now.minute == 0 and now.second == 0:  # 자정 확인
+        return True
+
+    return False

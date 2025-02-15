@@ -57,9 +57,9 @@ class ReciverAPI:
         3. 반환값 : 없음.
         """
         if isinstance(symbols, str):
-            symbols = [symbol for symbol in symbols]
+            symbols = [symbol]# for symbol in symbols]
         if isinstance(ws_type, str):
-            ws_type = [type_ for type_ in ws_type]
+            ws_type = [ws_type]# for type_ in ws_type]
 
         endpoints = [self._normalize_endpoint(endpoint) for endpoint in ws_type]
         return self.BASE_URL + "/".join(
@@ -108,50 +108,31 @@ class ReciverAPI:
     # websocket stream type 최종 실행
     async def connect_stream(self, symbols: list, stream_type: str):
         """
-        1. 기능 : stream type websocket 실행전 url 구성 및 websocket start 함수 실행
-        2. 매개변수
-            1) symbols : list 또는 str 타입 쌍거래 심볼
-            2) ws_type : stream 타입.ENDPOINT 속성의 kline타입 외 전체 참조
-        3. 반환값 : 없음.
+        ⭕️ 지정하는 stream 타입별로 데이터를 수신한다.
+
+        Args:
+            symbols (list): ['BTCUSDT', 'XRPUSDT']
+            stream_type (str): self.ENDPOINT(kline 외) 참조
         """
         self.stream_type = stream_type
         url = self._streams(symbols=symbols, ws_type=stream_type)
         await self._start_websocket(url)
 
     # websocket kline type 최종 실행
-    async def connect_kline_limit(self, symbols: list, intervals: Union[str, list]):
+    async def connect_kline_limit(self, symbols: list, intervals: Optional[Union[str, list]]=None):
         """
-        1. 기능 : kline type websocket 실행전 url 구성 및 websocket start 함수 실행
-        2. 매개변수
-            1) symbols : list 또는 str 타입 쌍거래 심볼
-            2) ws_type : kline 타입.ENDPOINT 속성의 kline타입 전체 참조
-        3. 반환값 : 없음.
+        ⭕️ Kline(OHLCV)형태의 데이터를 수신한다.
+
+        Args:
+            symbols (list): ['BTCUSDT', 'XRPUSDT']
+            intervals (Optional[Union[str, list]], optional): 'kline_3m'
+        
+        Notes:
+            intervals값을 None으로 할 경우 매개변수의 intervals값 전체를 수신하고, 지정 interval 필요시
+            선언된 매개변수(interval)값 내에서 지정해야함.
         """
         self.stream_type = "kline"
+        if intervals is None:
+            intervals = [interval for interval in self.ENDPOINT if self.stream_type in interval]
         url = self._streams(symbols=symbols, ws_type=intervals)
         await self._start_websocket(url)
-
-
-# class SpotHandler(BinanceHandler):
-#     def _init__(self, intervals: Union[str, list]):
-#         super().__init__(
-#             base_url="wss://stream.binance.com:9443/ws/", intervals=intervals
-#         )
-
-
-# class FuturesHandler(BinanceHandler):
-#     def _init__(self, intervals: Union[str, list]):
-#         super().__init__(base_url="wss://fstream.binance.com/ws/", intervals=intervals)
-
-
-if __name__ == "__main__":
-    intervals_all = utils._info_kline_intervals()
-    target_intervals = intervals_all[0:3]
-    spot = SpotHandler(target_intervals)
-    futures = FuturesHandler(target_intervals)
-
-    symbols = ["btcusdt", "adausdt", "xrpusdt", "ethusdt"]
-    stream = spot.ENDPOINT[0]
-    intervals = ["kline_1m", "kline_3m"]
-
-    asyncio.run(spot.connect_kline_limit(symbols=symbols, intervals=intervals))

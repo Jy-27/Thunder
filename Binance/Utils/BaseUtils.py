@@ -320,42 +320,35 @@ def convert_to_container(kline_data):
 # 리터럴 값으로 파싱
 def convert_to_literal(input_value) -> Union[str, int, float, bool]:
     """
-    1. 기능 : 문자형으로 구성된 int, float, bool 등 원래의 자료형태로 적용 및 반환.
-    2. 매개변수
-        1) input_value : 리터럴 처리하고자 하는 단일 값
+    ⭕️ 문자형으로 구성된 데이터 타입을 본래의 타입으로 변환시킨다.
+
+    Args:
+        input_value (_type_): 변환하고자 하는 데이터
+
+    Returns:
+        Union[str, int, float, bool]: 변환된 값
     """
     try:
         return ast.literal_eval(input_value)
     except:
-        return input_value
+        if isinstance(input_value, str) and input_value.upper() == "NONE":
+            return None
+        else:
+            return input_value
 
-
-# List 안의 자료를 리터럴 값으로 파싱
-def convert_nested_list_to_literals(nested_list) -> List[Any]:
+def convert_dict_to_literal(input_data: Dict[str, Any]) -> Dict:
     """
-    리스트 타입의 리스트를 입력받아, 내부 리스트의 각 요소를 리터럴 형태로 변환하여 반환합니다.
+    ⭕️ Dict자료형의 value값을 리테일 처리한다.
 
-    :param nested_list: 변환할 리스트 타입의 리스트
-    :return: 내부 요소들이 리터럴 형태로 변환된 리스트
+    Args:
+        input_data (Dict[str, Any]): Dict자료형
+
+    Returns:
+        Dict: 리테일처리 반영데이터
     """
-    converted_result = []
-    for inner_list in nested_list:
-        converted_list = []
-        for item in inner_list:
-            converted_list.append(_convert_to_literal(item))
-        converted_result.append(converted_list)
-
-    return converted_result
-
-
-# 반환된 데이터를 리터럴값 반영
-def collections_to_literal(input_data: List[Dict[str, Any]]):
-    result = []
-    for dict_data in input_data:
-        dict_ = {}
-        for key, data in dict_data.items():
-            dict_[key] = _convert_to_literal(data)
-        result.append(dict_)
+    result = {}
+    for key, data in input_data.items():
+        result[key] = convert_to_literal(data)
     return result
 
 
@@ -563,9 +556,9 @@ def get_time_delta(
         2) end_time : timestamp_ms, datetime, '2024-01-01 00:00:00' 등
     """
     if not isinstance(start_time, datetime):
-        start_time = _convert_to_datetime(start_time)
+        start_time = convert_to_datetime(start_time)
     if not isinstance(end_time, datetime):
-        end_time = _convert_to_datetime(end_time)
+        end_time = convert_to_datetime(end_time)
     return end_time - start_time
 
 
@@ -590,39 +583,40 @@ def load_json(file_path: str) -> Optional[Union[Dict, Any]]:
 
 
 # 올림 함수
-def round_up(value: Union[str, float], step: Union[str, float]) -> float:
+def round_up(value: float, step: float) -> float:
     """
-    1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 올림 처리하는 함수.
-    2. 매개변수
-        1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
-        2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
-    """
-    if isinstance(value, str):
-        value = float(value)
-    if isinstance(step, float):
-        step = str(step)
-    if isinstance(value, int) or isinstance(step, int):
-        raise ValueError(f"type은 str 또는 float 입력해야 함.")
+    ⭕️ 실수(float)열을 올림 처리 한다.
 
+    Args:
+        value (float): 올림 대상 값
+        step (float): 올림 자리수
+
+    Returns:
+        float: 올림처리 값 반환
+    """
+    if step % 1 == 0:
+        step = str(int(step))
+    else:
+        step = str(step)
     return float(Decimal(value).quantize(Decimal(step), rounding=ROUND_UP))
 
 
 # 내림함수
 def round_down(value: Union[str, float], step: Union[str, float]) -> float:
     """
-    1. 기능 : 주어진 값을 스텝(step) 크기에 맞게 내림 처리하는 함수.
-    2. 매개변수
-        1) value (Union[str, float]): 올림 처리할 값. 문자열 또는 실수(float)로 입력 가능.
-        2) step (Union[str, float]): 올림 기준이 되는 스텝 크기. 문자열 또는 실수(float)로 입력 가능.
-    """
-    # 입력값을 Decimal로 변환 (타입 검증 및 변환 과정)
-    if isinstance(value, str):
-        value = float(value)
-    if isinstance(step, float):
-        step = str(step)
-    if isinstance(value, int) or isinstance(step, int):
-        raise ValueError(f"type은 str 또는 float 입력해야 함.")
+    ⭕️ 실수(float)열을 내림 처리 한다.
 
+    Args:
+        value (float): 내림 대상 값
+        step (float): 내림 자리수
+
+    Returns:
+        float: 내림처리 값 반환
+    """
+    if step % 1 == 0:
+        step = str(int(step))
+    else:
+        step = str(step)
     return float(Decimal(value).quantize(Decimal(step), rounding=ROUND_DOWN))
 
 

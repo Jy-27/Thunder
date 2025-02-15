@@ -6,8 +6,8 @@ import os
 
 import sys
 sys.path.append(os.path.abspath("../../"))
-import API.Private.Futures as private_api
-import API.Public.Futures as public_api
+import API.Queries.Private.Futures as private_api
+import API.Queries.Public.Futures as public_api
 import Utils.BaseUtils as utils
 
 
@@ -128,7 +128,6 @@ class Validator:
         return item in collection
 
     # def funds_sufficient(balance:)
-
 
 class Calculator:
     @classmethod

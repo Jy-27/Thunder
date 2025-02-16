@@ -52,7 +52,7 @@ class ReciverClient:
             return endpoint
         else:
             raise ValueError(
-                f"endpoint 입력오류: '{endpoint}'는 지원되지 않는 타입입니다."
+                f"  🚨 endpoint 입력오류: '{endpoint}'는 지원되지 않는 타입입니다."
             )
 
     # websocket 연결하고자 하는 url 생성 및 반환
@@ -93,7 +93,7 @@ class ReciverClient:
             elif message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
                 break
         await ws.close()
-        print("WebSocket connection closed.")
+        print(" 🔥 WebSocket connection closed.")
 
     # websocket 함수 집합 및 실행
     async def _start_websocket(self, url: str) -> None:
@@ -105,7 +105,7 @@ class ReciverClient:
         """
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(url) as ws:
-                print("WebSocket connection opened.")
+                print(f" 🚀 WebSocket connection opened.")
                 await self._handler_message(ws)
 
     # websocket stream type 최종 실행
@@ -136,7 +136,7 @@ class ReciverClient:
         """
         self.stream_type = "kline"
         if self.intervals is None:
-            raise ValueError(f"Futures에서만 실행 가능.")
+            raise ValueError(f" 🚨 Futures에서만 실행 가능.")
         convert_to_intervals = [f"{self.stream_type}_{interval}" for interval in self.intervals]
         url = self._streams(ws_type=convert_to_intervals)
         await self._start_websocket(url)

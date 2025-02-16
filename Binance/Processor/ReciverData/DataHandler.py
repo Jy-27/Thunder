@@ -48,25 +48,23 @@ class WebSocketManager(Streaming):
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
                 retry_count += 1
-                print(f"⏳{base_utils.get_current_time()}: 재접속 시도중... {retry_count}/{max_retries}")
+                print(f" ⏳ Reconnection attempt... {retry_count}/{max_retries}")
                 await asyncio.sleep(5)
-        print("최대 재시도 횟수 도달, WebSocket 종료.")
+        print(" 🚨 최대 재시도 횟수 도달, WebSocket 종료.")
 
     async def stream_run(self, stream_type: str, max_retries: int = 10):
         self.stream_type = stream_type
         retry_count = 0
         while retry_count < max_retries:
-            print(f"Stream({stream_type})")
             try:
-                print(f"Date: {base_utils.get_current_time()}")
                 await self.reciver_client.connect_stream(stream_type=self.stream_type)
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
-                print(f"접속 오류 발생: {e}")
+                print(f" 🚨 Connection error occurred.: {e}")
                 retry_count += 1
-                print(f"재접속 시도... {retry_count}/{max_retries}")
+                print(f" ⏳ Reconnection attempt... {retry_count}/{max_retries}")
                 await asyncio.sleep(5)
-        print("최대 재시도 횟수 도달, WebSocket 종료.")
+        print(" 🚨 최대 재시도 횟수 도달, WebSocket 종료.")
 
 
 class KlineHistoryFetcher(Streaming):

@@ -40,7 +40,6 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
         self.get_kline_data(symbols=self.symbols, intervals=self.intervals)
 
     def get_kline_data(self, symbols: List, intervals: List):
-        # print("🚀 kline 기초데이터 수신중...")
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_workers
         ) as executor:
@@ -52,12 +51,8 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
             # 모든 작업 완료 대기
             concurrent.futures.wait(futures)
 
-        # print("✅ Kline 데이터 수집 완료")
-
-    # async def stream_kline_run(self):
-    #     await self.kline_limit_run()
-
     async def real_storage_update(self):
+        print(" 🚀 Real-time storage update started")
         while True:
             if not self.reciver_client.asyncio_queue.empty():
                 data = await self.reciver_client.asyncio_queue.get()
@@ -72,6 +67,7 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
 
     def get_kline_cycle(self, interval_minutes: int = 1):
         """Kline 데이터를 주기적으로 가져오는 함수"""
+        print(" 🚀 Kline periodic data collection started")
         while True:
             # 유효한 intervals 필터링
             valid_intervals = [
@@ -81,9 +77,7 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
             ]
 
             if valid_intervals:
-                # print(f"🚀 kline update: {valid_intervals}")
                 self.get_kline_data(symbols=self.symbols, intervals=valid_intervals)
-                # print(f"✅ update complete\n")
 
             # 다음 주기까지 대기
             base_utils.sleep_next_minute(minutes=interval_minutes)
@@ -99,12 +93,8 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
         await asyncio.gather(task_1, task_2)
 
     def run(self):
-        # print("🚀 시스템 시작")
-        print(base_utils.get_current_time())
-
-        # print("⏳ kline cycle 실행")
+        print(f"💻 {base_utils.get_current_time()}")
         self.run_threading()
-        # print("⏳ websocket 실행")
         asyncio.run(self.run_async_tasks())
 
 if __name__ == "__main__":

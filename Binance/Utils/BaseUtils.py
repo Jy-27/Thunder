@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import importlib
 import requests
+import time
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union, Final, Dict, List, Union, Any
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
@@ -871,7 +872,7 @@ def is_time_match(interval:str) -> bool:
     Returns:
         bool: True or False
     """
-    now = datetime.datetime.now()
+    now = datetime.now()
 
     if interval.endswith("m"):  # 분 단위 확인
         return now.minute % int(interval[:-1]) == 0
@@ -881,3 +882,16 @@ def is_time_match(interval:str) -> bool:
         return True
 
     return False
+
+def get_current_time(style:str = "%Y-%m-%d %H:%M:%S") -> str:
+    """
+    현재시각을 매개변수 스타일에 맞게 반환한다.
+
+    Args:
+        style (str): 지정스타일
+
+    Returns:
+        str: 지정 스타일에 맞는 시간타입
+    """
+    return datetime.now().strftime(style)
+    

@@ -796,3 +796,8 @@ class FakeSignalGenerator:
 
     @classmethod
     def order_signal(cls, **kwargs): ...
+    
+class Convertor:
+    @classmethod
+    def ws_message(cls, s:str, t:int, T:int):
+        ...

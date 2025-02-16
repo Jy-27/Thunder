@@ -1,8 +1,13 @@
 from typing import Optional, Dict
 from dataclasses import dataclass
+import os
+import sys
 
 
-class SymbolStorage():
+sys.path.append(os.path.abspath("../../../"))
+from SystemConfig import Streaming
+
+class SymbolStorage(Streaming):
     """
     ⭕️ symbol별 KlineStorage데이터를 저장한다.
 
@@ -12,12 +17,7 @@ class SymbolStorage():
     Returns:
         _type_: _description_
     """
-    __slots__ = ("BTCUSDT",
-                 "TRXUSDT",
-                 "ETHUSDT",
-                 "XRPUSDT",
-                 "SOLUSDT",
-                 "BNBUSDT")
+    __slots__ = tuple(Streaming.symbols)
     
     def __init__(self):
         for attr in self.__slots__:
@@ -27,7 +27,7 @@ class SymbolStorage():
         return "\n".join(f"{attr}: {getattr(self, attr)}" for attr in self.__slots__)
     
     def clear(self):
-        if attr in self.__slots__:
+        for attr in self.__slots__:
             setattr(self, attr, KlineStorage())
     
     def update_data(self, symbol:str, interval:str, data:Dict):
@@ -43,30 +43,18 @@ class SymbolStorage():
             return kline_data.get_data(interval=interval)
         else:
             raise ValueError(f"지정 외 symbol입력됨: {symbol}")
+    
+    def get_attr(self):
+        return self.__slots__
         
-class KlineStorage:
+class KlineStorage(Streaming):
     """
     ⭕️ Kline데이터를 interval별로 저장한다.
 
     Raises:
         ValueError: 잘못된 interval 입력시 오류 발생
     """
-    __slots__ = (
-        "interval_1m",
-        "interval_3m",
-        "interval_5m",
-        "interval_15m",
-        "interval_30m",
-        "interval_1h",
-        "interval_2h",
-        "interval_4h",
-        "interval_6h",
-        "interval_8h",
-        "interval_12h",
-        "interval_1d",
-        "interval_3d",
-        "interval_1w",
-        "interval_1M")
+    __slots__ = tuple(f"interval_{interval}" for interval in Streaming.intervals)
     
     def __init__(self):
         for attr in self.__slots__:
@@ -93,3 +81,6 @@ class KlineStorage:
             return getattr(self, attr)
         else:
             raise ValueError(f"지정 외 interval입력됨: {interval}")
+
+    def get_attr(self):
+        return self.__slots__

@@ -1,45 +1,97 @@
 import concurrent.futures
 import threading
 import datetime
+import asyncio
+from typing import List, Optional
 
+import os
 import sys
+
 sys.path.append(os.path.abspath("../../"))
+from SystemConfig import Streaming
+
+import API.Queries.Private.PrivateAPI as private_p
 import API.Queries.Public.Futures as public_api
+import API.Reciver.Futures as reciver_api
 import Utils.DataModels as storage
 import Utils.BaseUtils as base_utils
-import Processor.ReciverData.DataHandler as handler
 
+
+# 힌트용
 ins_public_api = public_api.API()
-api_storage = storage.SymbolStorage()
+ins_reciver_api = reciver_api.API(
+    symbols=Streaming.symbols, intervals=Streaming.intervals
+)
+data_storage = storage.SymbolStorage()
 
-symbols = ["BTCUSDT","TRXUSDT","ETHUSDT","XRPUSDT","SOLUSDT","BNBUSDT"]
-# intervals = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M",]
-intervals = ["3m", "5m","1h"]#, "2h", "4h","8h", "1d"]#
 
-def fetch_and_update(symbol, interval, api, storage):
-    """심볼과 인터벌 데이터를 API에서 가져와 저장하는 함수"""
-    kline_data = api.fetch_klines_limit(symbol=symbol, interval=interval, limit=480)
-    storage.update_data(symbol, interval, kline_data)
+class WebSocketManager(Streaming):
+    """
+    websocket 데이터를 수신한다.
 
-def threaded_data_fetch(symbols: list, intervals: list, module, storage, update: bool = False, max_workers:int=5):
-    """스레드를 사용하여 심볼과 인터벌별 데이터를 병렬로 가져옴"""
+    Args:
+        Streaming : SystemConfig.py
+    """
 
-    futures = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for symbol in symbols:
-            for interval in intervals:
-                if update and not base_utils.is_time_match(interval):
-                    continue  # update 모드일 때 is_time_match가 False면 건너뜀
+    def __init__(self, ins_reciver: ins_reciver_api):
+        self.ins_reciver = ins_reciver
+        # 매개변수를 고정하여 유연성 제한함. 그냥 그렇게 강제하기로 했음.
+        # 필요시 매개변수 입력으로 수정하면 됨.
+        self.symbols: List = self.ins_reciver.symbols
+        self.intervals: List = self.ins_reciver.intervals
+        self.stream_type: Optional[str] = None
 
-                futures.append(executor.submit(fetch_and_update, symbol, interval, module, storage))
+    async def kline_limit_run(self, max_retries: int = 10):
+        """
+        ⭕️ kline형태의 웹소켓을 수신한다.
 
-        # 모든 작업 완료 대기
-        concurrent.futures.wait(futures)
+        Args:
+            max_retries (int, optional): 오류 횟수도달시 프로그램 종료
+        """
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                await self.ins_reciver.connect_kline_limit()
+                retry_count = 0  # 성공 시 초기화
+            except Exception as e:
+                retry_count += 1
+                print(f"⏳{base_utils.get_current_time()}: 재접속 시도중... {retry_count}/{max_retries}")
+                await asyncio.sleep(5)
+        print("최대 재시도 횟수 도달, WebSocket 종료.")
 
-# 실행 예제
-if __name__ == "__main__":
-    start = datetime.datetime.now()
-    threaded_data_fetch(symbols, intervals, ins_public_api, api_storage)
-    print(api_storage)
-    end = datetime.datetime.now()
-    print(f"diff_time: {end-start}")
+    async def stream_run(self, stream_type: str, max_retries: int = 10):
+        self.stream_type = stream_type
+        retry_count = 0
+        while retry_count < max_retries:
+            print(f"Stream({stream_type})")
+            try:
+                print(f"Date: {base_utils.get_current_time()}")
+                await self.ins_reciver.connect_stream(stream_type=self.stream_type)
+                retry_count = 0  # 성공 시 초기화
+            except Exception as e:
+                print(f"접속 오류 발생: {e}")
+                retry_count += 1
+                print(f"재접속 시도... {retry_count}/{max_retries}")
+                await asyncio.sleep(5)
+        print("최대 재시도 횟수 도달, WebSocket 종료.")
+
+
+class KlineHistoryFetcher(Streaming):
+    def __init__(self, symbol_storage: data_storage, ins_public: ins_public_api):
+        self.symbols = Streaming.symbols
+        self.intervals = Streaming.intervals
+        self.kline_limit = Streaming.kline_limit
+        self.storage = symbol_storage
+        self.ins_public = ins_public
+
+    def get_data(self, symbol: str, interval: str):
+        return self.ins_public.fetch_klines_limit(
+            symbol=symbol, interval=interval, limit=self.kline_limit
+        )
+
+    def update_data(self, symbol: str, interval: str, data: List):
+        self.storage.update_data(symbol=symbol, interval=interval, data=data)
+
+    def run(self, symbol: str, interval: str):
+        data = self.get_data(symbol=symbol, interval=interval)
+        self.update_data(symbol=symbol, interval=interval, data=data)

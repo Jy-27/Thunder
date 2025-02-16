@@ -2,15 +2,13 @@ from .ReciverAPI import ReciverAPI
 from typing import Union, List
 import asyncio
 
-class API(ReciverAPI):
-    def __init__(self, intervals: Union[str, List]):
-        super().__init__(base_url="wss://stream.binance.com:9443/ws/", intervals=intervals)
-        
+import os
+import sys
+sys.path.append(os.path.abspath("../../"))
+from SystemConfig import Streaming
 
-if __name__ == "__main__":
-    symbols = ['BTCUSDT', 'TRXUSDT', 'ETHUSDT']
-    intervals = ['3m', '5m']
-    data_handler = API(intervals=intervals)
-    
-    asyncio.run(data_handler.connect_stream(symbols=symbols, stream_type=data_handler.ENDPOINT[0]))
-    
+class API(ReciverAPI):
+    def __init__(self, symbols:List, intervals:List):
+        super().__init__(base_url="wss://stream.binance.com:9443/ws/",
+                         symbols=symbols)
+        self.intervals = intervals

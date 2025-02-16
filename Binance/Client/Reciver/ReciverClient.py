@@ -12,7 +12,7 @@ from SystemConfig import Streaming
 
 all_intervals = Streaming.all_intervals
 
-class ReciverAPI:
+class ReciverClient:
     """
     Binance OPEN API 데이터를 수신한다. 별도의 API KEY가 필요 없다.
     """

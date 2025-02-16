@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath("../../../"))
 import Utils.TradingUtils as futures_utils
 
 
-class Processor(ABC):
+class OrderProcessor(ABC):
     TEST_MODE: bool
 
     def __init__(self, test_mode: bool):

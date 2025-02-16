@@ -1,6 +1,6 @@
 # from abc import ABC, abstractmethod
 
-from .OrderProcessor import Processor
+from .OrderProcessor import OrderProcessor
 from typing import Union, Optional, Dict
 import os
 
@@ -8,14 +8,14 @@ import os
 import sys
 sys.path.append(os.path.abspath("../../../"))
 import Utils.TradingUtils as futures_utils
-import API.Queries.Public.Futures as public_api
-import API.Queries.Private.Futures as private_api
+import Client.Queries.Public.Futures as public_api
+import Client.Queries.Private.Futures as private_api
 
 ins_public_api = public_api.API()
 ins_private_api = private_api.API()
 
 
-class Orders(Processor):
+class Orders(OrderProcessor):
     TEST_MODE = False
 
     def __init__(self):

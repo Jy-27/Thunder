@@ -11,7 +11,7 @@ from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 from abc import ABC, abstractmethod
 
-class PrivateAPI:
+class PrivateClient:
     BASE_URL = ""  # 자식 클래스에서 URL을 설정해야 합니다.
 
     def __init__(self):

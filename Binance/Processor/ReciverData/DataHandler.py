@@ -9,21 +9,15 @@ import sys
 
 sys.path.append(os.path.abspath("../../"))
 from SystemConfig import Streaming
-
-import API.Queries.Private.PrivateAPI as private_p
-import API.Queries.Public.Futures as public_api
-import API.Reciver.Futures as reciver_api
+import Client.Queries.Public.Futures as public_client
+import Client.Reciver.Futures as reciver_client
 import Utils.DataModels as storage
 import Utils.BaseUtils as base_utils
 
-
 # 힌트용
-ins_public_api = public_api.API()
-ins_reciver_api = reciver_api.API(
-    symbols=Streaming.symbols, intervals=Streaming.intervals
-)
+ins_public_client = public_client.Client()
+ins_reciver_client = reciver_client.Client(symbols=Streaming.symbols, intervals=Streaming.intervals)
 data_storage = storage.SymbolStorage()
-
 
 class WebSocketManager(Streaming):
     """
@@ -32,13 +26,12 @@ class WebSocketManager(Streaming):
     Args:
         Streaming : SystemConfig.py
     """
-
-    def __init__(self, ins_reciver: ins_reciver_api):
-        self.ins_reciver = ins_reciver
+    def __init__(self, reciver_client: ins_reciver_client):
+        self.reciver_client = reciver_client
         # 매개변수를 고정하여 유연성 제한함. 그냥 그렇게 강제하기로 했음.
         # 필요시 매개변수 입력으로 수정하면 됨.
-        self.symbols: List = self.ins_reciver.symbols
-        self.intervals: List = self.ins_reciver.intervals
+        self.symbols: List = self.reciver_client.symbols
+        self.intervals: List = self.reciver_client.intervals
         self.stream_type: Optional[str] = None
 
     async def kline_limit_run(self, max_retries: int = 10):
@@ -51,7 +44,7 @@ class WebSocketManager(Streaming):
         retry_count = 0
         while retry_count < max_retries:
             try:
-                await self.ins_reciver.connect_kline_limit()
+                await self.reciver_client.connect_kline_limit()
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
                 retry_count += 1
@@ -66,7 +59,7 @@ class WebSocketManager(Streaming):
             print(f"Stream({stream_type})")
             try:
                 print(f"Date: {base_utils.get_current_time()}")
-                await self.ins_reciver.connect_stream(stream_type=self.stream_type)
+                await self.reciver_client.connect_stream(stream_type=self.stream_type)
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
                 print(f"접속 오류 발생: {e}")
@@ -77,15 +70,15 @@ class WebSocketManager(Streaming):
 
 
 class KlineHistoryFetcher(Streaming):
-    def __init__(self, symbol_storage: data_storage, ins_public: ins_public_api):
+    def __init__(self, symbol_storage: data_storage, public_client: ins_public_client):
         self.symbols = Streaming.symbols
         self.intervals = Streaming.intervals
         self.kline_limit = Streaming.kline_limit
         self.storage = symbol_storage
-        self.ins_public = ins_public
+        self.public_client = public_client
 
     def get_data(self, symbol: str, interval: str):
-        return self.ins_public.fetch_klines_limit(
+        return self.public_client.fetch_klines_limit(
             symbol=symbol, interval=interval, limit=self.kline_limit
         )
 

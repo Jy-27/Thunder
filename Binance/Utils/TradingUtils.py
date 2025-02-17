@@ -32,22 +32,6 @@ init_brackets_data = {
     for symbol in SystemConfig.Streaming.symbols
 }
 
-class System:
-    @classmethod
-    def add_project_path(cls, path:str=SystemConfig.Path.project):
-        """
-        각 하위 폴더들이 다른 폴더의 컴포넌트를 import 할수 있도록 부모 폴더주소를 system에 추가한다.
-
-        Args:
-            path (str, optional): 프로젝트 폴더 주소
-            
-        Notes:
-            함수 실행전에 os, sys 모듈이 import 되어있어야 한다.
-            말이 좀 안되는데...애당초 이 함수를 어떻게 실행하지.?
-            
-        """
-        sys.path.append(path)
-
 class Validator:
     ### 함수 동작을 위한 내함수
     @classmethod
@@ -757,6 +741,31 @@ class Extractor:
                     result[symbol][key] = value
         return result
 
+    @classmethod
+    def format_kline_data(cls, real_time_data):
+        """
+        kline 웹소켓 수신데이터를 kline history data에 맞게 재정렬한다.
+
+        Args:
+            ws_data (_type_): 웹소켓 ['k'] 데이터
+
+        Returns:
+            List: kline data
+        """
+        kline_data = real_time_data['k']
+        return [kline_data["t"],
+                kline_data["o"],
+                kline_data["h"],
+                kline_data["l"],
+                kline_data["c"],
+                kline_data["v"],
+                kline_data["T"],
+                kline_data["q"],
+                kline_data["n"],
+                kline_data["V"],
+                kline_data["Q"],
+                kline_data["B"]]
+    
 class Selector:
     # instance 래핑
     ## 본 class는 폐기 검토함.

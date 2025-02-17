@@ -4,7 +4,7 @@ import os
 import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-
+import Utils.TradingUtils as trading_utils
 class SymbolDataSubset:
     """특정 심볼 데이터의 서브셋을 생성하는 클래스"""
 
@@ -37,30 +37,16 @@ class SyncStorage:
                 real_time_data = real_time_stroage.get_data(symbol=symbol, interval=interval)
                 update_data = self._merge_kline_data(history_data, real_time_data)
                 history_storage.update_data(symbol, *(interval, update_data))
-                
-    def _format_kline_data(self, real_time_data):
-        return [real_time_data["t"],
-                real_time_data["o"],
-                real_time_data["h"],
-                real_time_data["l"],
-                real_time_data["c"],
-                real_time_data["v"],
-                real_time_data["T"],
-                real_time_data["q"],
-                real_time_data["n"],
-                real_time_data["V"],
-                real_time_data["Q"],
-                real_time_data["B"]]
         
     def _merge_kline_data(self, history_data, real_time_data):
-        convert_to_last_data = self._format_kline_data(real_time_data)
+        convert_to_last_data = trading_utils.Extractor.format_kline_data(real_time_data)
         history_last_data = history_data[-1]
         if convert_to_last_data[0] == history_last_data[0] and convert_to_last_data[6] == history_last_data[6]:
             history_data[-1] = convert_to_last_data
         else:
             history_data.append(convert_to_last_data)
         return history_data
-                            
+
 
 if __name__ == "__main__":
     import sys

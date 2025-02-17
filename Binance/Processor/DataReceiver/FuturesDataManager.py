@@ -105,7 +105,7 @@ class KlineDataManager(WebsocketReceiver):
                 kline_data = data["k"]
                 symbol = kline_data["s"]
                 interval = kline_data["i"]
-                self.real_time_storage.update_data(symbol, interval, kline_data)
+                self.real_time_storage.update_data(symbol, interval, data)
             else:
                 await asyncio.sleep(1)
 

@@ -122,7 +122,7 @@ class WebsocketReceiver:
         await self._start_websocket(url)
 
     # websocket kline type 최종 실행
-    async def connect_kline_limit(self):#, intervals: Optional[Union[str, list]]=None):
+    async def connect_kline_limit(self):#, intervals: List):
         """
         ⭕️ Kline(OHLCV)형태의 데이터를 수신한다.
 
@@ -134,9 +134,8 @@ class WebsocketReceiver:
             intervals값을 None으로 할 경우 매개변수의 intervals값 전체를 수신하고, 지정 interval 필요시
             선언된 매개변수(interval)값 내에서 지정해야함.
         """
+        
         self.stream_type = "kline"
-        if self.intervals is None:
-            raise ValueError(f" 🚨 Futures에서만 실행 가능.")
         convert_to_intervals = [f"{self.stream_type}_{interval}" for interval in self.intervals]
         url = self._streams(ws_type=convert_to_intervals)
         await self._start_websocket(url)

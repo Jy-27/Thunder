@@ -4,9 +4,11 @@ from .OrderProcessor import OrderProcessor
 from typing import Union, Optional, Dict
 import os
 
-
+import os
 import sys
-sys.path.append(os.path.abspath("../../../"))
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+
 import Utils.TradingUtils as futures_utils
 import SystemConfig
 import Services.PublicData.FuturesMarketFetcher as futures_market

@@ -2,8 +2,9 @@ from typing import Optional, Dict
 from dataclasses import dataclass
 import os
 import sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-sys.path.append(os.path.abspath("../../../"))
 from SystemConfig import Streaming
 
 class SymbolStorage(Streaming):

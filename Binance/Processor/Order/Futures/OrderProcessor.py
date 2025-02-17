@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Dict
+
 import os
-
 import sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-sys.path.append(os.path.abspath("../../../"))
 import Utils.TradingUtils as futures_utils
 
 

@@ -11,8 +11,8 @@ class FuturesTradingClient(TradingClient):
     """
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self, api_file_path):
-        super().__init__(api_file_path)
+    def __init__(self, api_key:str, secret:str):
+        super().__init__(api_key, secret)
 
     # Ticker의 leverage 정보 수신 및 반환
     def fetch_leverage_brackets(self, symbol: str) -> Dict:

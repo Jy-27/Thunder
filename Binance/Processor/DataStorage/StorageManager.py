@@ -1,5 +1,9 @@
 from typing import List
 
+import os
+import sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 class SymbolDataSubset:
     """특정 심볼 데이터의 서브셋을 생성하는 클래스"""

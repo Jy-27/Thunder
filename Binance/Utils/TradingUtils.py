@@ -1,15 +1,13 @@
 from typing import Union, Final, Tuple, List, Dict, Optional
-
 import asyncio
-import ConfigSetting
 import os
-
 import sys
-sys.path.append(os.path.abspath("../../"))
-import API.Queries.Private.Futures as private_api
-import API.Queries.Public.Futures as public_api
-import Utils.BaseUtils as utils
+sys.path.append(os.path.abspath("../"))
 
+import Services.PublicData.FuturesMarketFetcher as futures_market
+import Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
+import SystemConfig
+import Utils.BaseUtils as utils
 
 ### 전역 상수 선언
 config_max_leverage = 125
@@ -18,20 +16,37 @@ BUY_TYPE: Tuple[int, str] = (1, "BUY")
 SELL_TYPE: Tuple[int, str] = (2, "SELL")
 MARKETS: List = ["FUTURES", "SPOT"]
 SYMBOLS_STATUS: List = ["TRADING", "SETTLING", "PENDING_TRADING", "BREAK"]
-### 인스턴스 생성
-ins_public_api = public_api.API()
-ins_private_api = private_api.API()
 
+### API 로드
+api_keys = utils.load_json(SystemConfig.Path.bianace)
+### 인스턴스 생성
+ins_futures_market = futures_market.FuturesMarketFetcher()
+ins_futures_client = futures_client.FuturesTradingClient(api_keys['apiKey'], api_keys['secret'])
 
 ### 백테스트용 base data
-init_account_balance = ins_private_api.fetch_account_balance()
-init_exchange_info = ins_public_api.fetch_exchange_info()
+init_account_balance = ins_futures_client.fetch_account_balance()
+init_exchange_info = ins_futures_market.fetch_exchange_info()
 init_brackets_data = {
     symbol: 
-        ins_private_api.fetch_leverage_brackets(symbol)
-    for symbol in ConfigSetting.TestConfig.test_symbols.value
+        ins_futures_client.fetch_leverage_brackets(symbol)
+    for symbol in SystemConfig.Streaming.symbols
 }
 
+class System:
+    @classmethod
+    def add_project_path(cls, path:str=SystemConfig.Path.project):
+        """
+        각 하위 폴더들이 다른 폴더의 컴포넌트를 import 할수 있도록 부모 폴더주소를 system에 추가한다.
+
+        Args:
+            path (str, optional): 프로젝트 폴더 주소
+            
+        Notes:
+            함수 실행전에 os, sys 모듈이 import 되어있어야 한다.
+            말이 좀 안되는데...애당초 이 함수를 어떻게 실행하지.?
+            
+        """
+        sys.path.append(path)
 
 class Validator:
     ### 함수 동작을 위한 내함수
@@ -436,7 +451,7 @@ class Extractor:
     # API availableBalance 필터 및 반환
     @classmethod
     def available_balance(
-        cls, account_data: ins_private_api.fetch_account_balance
+        cls, account_data: ins_futures_client.fetch_account_balance
     ) -> float:
         """
         Futures 계좌의 예수금을 필터한다.
@@ -447,7 +462,7 @@ class Extractor:
     # API totalWalletBalance 필터 및 반환
     @classmethod
     def total_wallet_balance(
-        cls, account_data: ins_private_api.fetch_account_balance
+        cls, account_data: ins_futures_client.fetch_account_balance
     ) -> float:
         result = account_data["totalWalletBalance"]
         return float(result)
@@ -455,14 +470,14 @@ class Extractor:
     # API 최대 레버리지값 필터 및 반환
     @classmethod
     def max_leverage(
-        cls, brackets_data: ins_private_api.fetch_leverage_brackets
+        cls, brackets_data: ins_futures_client.fetch_leverage_brackets
     ) -> int:
         leverage = brackets_data[0]["brackets"][0]["initialLeverage"]
         return int(leverage)
 
     @classmethod
     def refine_exchange_data(cls, 
-        symbol: str, exchange_data: ins_public_api.fetch_exchange_info
+        symbol: str, exchange_data: ins_futures_market.fetch_exchange_info
     ) -> dict:  # 🚀
         """
         exchange 데이터의 "symbols" 정보를 추출한다.
@@ -676,7 +691,7 @@ class Extractor:
     # 보유중인 포지션 정보 전체를 반환한다.
     @classmethod
     def current_positions(
-        account_data: ins_private_api.fetch_account_balance,
+        account_data: ins_futures_client.fetch_account_balance,
     ) -> Dict:  # 🚀
         """
         보유중인 포지션 전체 정보값을 반환한다.
@@ -724,8 +739,8 @@ class Extractor:
             None
 
         Example:
-            ins_private_api = TradeClient.FuturesClient()
-            account_data = asyncio.run(ins_private_api.fetch_account_balance())
+            ins_futures_client = TradeClient.FuturesClient()
+            account_data = asyncio.run(ins_futures_client.fetch_account_balance())
 
             open_positions = extract_open_positions(account_data)
         """
@@ -750,35 +765,35 @@ class Selector:
         if test_mode:
             return FakeSignalGenerator.account_balance()
         else:
-            return ins_private_api.fetch_account_balance()
+            return ins_futures_client.fetch_account_balance()
 
     @classmethod
     def exchange_info(cls, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.exchange_info()
         else:
-            return ins_public_api.fetch_exchange_info()
+            return ins_futures_market.fetch_exchange_info()
 
     @classmethod
     def brackets_data(cls, symbol:str, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.brackets(symbol)
         else:
-            return ins_private_api.fetch_leverage_brackets(symbol)
+            return ins_futures_client.fetch_leverage_brackets(symbol)
 
     @classmethod
     def set_leverage(cls, symbol: str, leverage: int, test_mode: bool):
         if test_mode:
             return
         else:
-            return ins_private_api.send_leverage(symbol, leverage)
+            return ins_futures_client.send_leverage(symbol, leverage)
 
     @classmethod
     def order_signal(cls, test_mode: bool, **kwargs):
         if test_mode:
             return FakeSignalGenerator.order_signal(**kwargs)
         else:
-            return ins_private_api.send_order(**kwargs)
+            return ins_futures_client.send_order(**kwargs)
 
 
 class FakeSignalGenerator:

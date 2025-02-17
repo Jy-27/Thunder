@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import os
 import sys
 
-
 sys.path.append(os.path.abspath("../../../"))
 from SystemConfig import Streaming
 
@@ -19,21 +18,22 @@ class SymbolStorage(Streaming):
     """
     __slots__ = tuple(Streaming.symbols)
     
-    def __init__(self):
+    def __init__(self, storage):
+        self.storage = storage
         for attr in self.__slots__:
-            setattr(self, attr, KlineStorage())
+            setattr(self, attr, self.storage())
     
     def __repr__(self):
         return "\n".join(f"{attr}: {getattr(self, attr)}" for attr in self.__slots__)
     
     def clear(self):
         for attr in self.__slots__:
-            setattr(self, attr, KlineStorage())
+            setattr(self, attr, self.storage())
     
-    def update_data(self, symbol:str, interval:str, data:Dict):
+    def update_data(self, symbol:str, *args, **kwargn):
         if symbol in self.__slots__:
             kline_data = getattr(self, symbol)
-            kline_data.update_data(interval=interval, data=data)
+            kline_data.update_data(*args, **kwargn)
         else:
             raise ValueError(f"지정 외 symbol입력됨: {symbol}")
 
@@ -47,7 +47,7 @@ class SymbolStorage(Streaming):
     def get_attr(self):
         return self.__slots__
         
-class KlineStorage(Streaming):
+class IntervalStorage(Streaming):
     """
     ⭕️ Kline데이터를 interval별로 저장한다.
 

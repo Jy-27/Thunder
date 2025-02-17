@@ -1,18 +1,18 @@
-from .PrivateClient import PrivateClient
+from .TradingClient import TradingClient
 from typing import Dict, Union, Any, Optional
 import time
 import asyncio
 
 
-class API(PrivateClient):
+class FuturesTradingClient(TradingClient):
     """
     Binance Futures API와 관련된 함수의 집합이다. API-key가 반드시 필요하다.
     오류에 대한 검증코드는 포함되지 않았다. 그러므로 본 함수를 실행전 검증 기능의 코드를 구현해야한다.
     """
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, api_file_path):
+        super().__init__(api_file_path)
 
     # Ticker의 leverage 정보 수신 및 반환
     def fetch_leverage_brackets(self, symbol: str) -> Dict:
@@ -312,27 +312,3 @@ class API(PrivateClient):
         }
 
         return self._send_request("POST", endpoint, params)
-
-
-
-if __name__ == "__main__":
-    from pprint import pprint
-
-    ins_client = API()
-
-    symbol = "BTCUSDT"
-    leverage = 5
-    margin_type = "CROSSED"
-
-    brackets = asyncio.run(ins_client.fetch_leverage_brackets(symbol))
-    set_leverage = asyncio.run(ins_client.send_leverage(symbol, leverage))
-    set_margin_type = asyncio.run(ins_client.send_margin_type(symbol, margin_type))
-
-    print("brackets:")
-    pprint(brackets)
-
-    print("leverage setting:")
-    pprint(set_leverage)
-
-    print("margin:")
-    pprint(set_margin_type)

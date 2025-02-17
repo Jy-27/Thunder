@@ -8,11 +8,13 @@ import os
 import sys
 sys.path.append(os.path.abspath("../../../"))
 import Utils.TradingUtils as futures_utils
-import Client.Queries.Public.Futures as public_api
-import Client.Queries.Private.Futures as private_api
+import SystemConfig
+import Services.PublicData.FuturesMarketFetcher as futures_market
+import Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
 
-ins_public_api = public_api.API()
-ins_private_api = private_api.API()
+api_file_path = SystemConfig.Path.bianace
+ins_market_fetcher = futures_market.FuturesMarketFetcher()
+ins_private_client = futures_client.FuturesTradingClient(api_file_path)
 
 
 class Orders(OrderProcessor):
@@ -92,7 +94,7 @@ class Orders(OrderProcessor):
             Dict: 피드백 데이터
         """
         validate_leverage = cls.check_leverage(symbol=symbol, leverage=leverage)
-        return ins_private_api.set_leverage(symbol=symbol, leverage=validate_leverage)
+        return ins_private_client.set_leverage(symbol=symbol, leverage=validate_leverage)
 
     @classmethod
     def set_margin_type(cls, symbol: str, is_isolated: bool) -> Dict:
@@ -108,7 +110,7 @@ class Orders(OrderProcessor):
         Returns:
             Dict: 결과 피드백
         """
-        account_balance = ins_private_api.fetch_account_balance()
+        account_balance = ins_private_client.fetch_account_balance()
         position_detail = futures_utils.Extractor.position_detail(
             symbol=symbol, account_data=account_balance
         )
@@ -119,7 +121,7 @@ class Orders(OrderProcessor):
                 margin_type = "ISOLATED"
             else:
                 margin_type = "CROSSED"
-            return ins_private_api.set_margin_type(
+            return ins_private_client.set_margin_type(
                 symbol=symbol, margin_type=margin_type
             )
         return {"code": None, "msg": "unchanged"}
@@ -142,7 +144,7 @@ class Orders(OrderProcessor):
         symbol_position = next(
             data for data in account_balance["positions"] if data["symbol"] == symbol
         )
-        return ins_private_api.position_market_order(
+        return ins_private_client.position_market_order(
             symbol=symbol,
             side="BUY" if float(symbol_position["positionAmt"]) < 0 else "SELL",
             quantity=abs(quantity),
@@ -206,11 +208,11 @@ class Orders(OrderProcessor):
             _type_: _description_
         """
         cls.set_leverage(symbol=symbol, leverage=leverage)
-        ticker_price = ins_public_api.fetch_mark_price(symbol=symbol)
+        ticker_price = ins_market_fetcher.fetch_mark_price(symbol=symbol)
         mark_price = float(ticker_price['markPrice'])
         
         validate_leverage = futures_utils.Validator.args_leverage(leverage=leverage)
-        bracket_data = ins_private_api.fetch_leverage_brackets(symbol=symbol)
+        bracket_data = ins_private_client.fetch_leverage_brackets(symbol=symbol)
         max_leverage = futures_utils.Extractor.max_leverage(brackets_data=bracket_data)
         final_leverage = min(leverage, validate_leverage)
         cls.set_leverage(symbol=symbol, leverage=final_leverage)
@@ -220,7 +222,7 @@ class Orders(OrderProcessor):
                                      leverage=final_leverage,
                                      balance=balance)
         
-        return ins_private_api.position_market_order(symbol=symbol,
+        return ins_private_client.position_market_order(symbol=symbol,
                                                      side=side,
                                                      quantity=quantity['finalSize'],
                                                      position_side="BOTH",

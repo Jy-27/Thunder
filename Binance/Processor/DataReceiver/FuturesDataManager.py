@@ -2,40 +2,39 @@ import concurrent.futures
 import threading
 import asyncio
 
-from .DataHandler import WebSocketManager, KlineHistoryFetcher
+from .BaseDataManager import WebsocketReceiver, KlineHistoryFetcher
 from typing import List, Dict
 
 import os
 import sys
 
-sys.path.append(os.path.abspath("../../"))
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+
 from SystemConfig import Streaming
-import Client.Queries.Public.Futures as public_client
-import Client.Reciver.Futures as reciver_client
-import Utils.DataModels as storage
+import Services.PublicData.FuturesMarketFetcher as public_futures
+import Services.Receiver.FuturesWebsocketReceiver as ws_futures
 import Utils.BaseUtils as base_utils
 
-ins_public_client = public_client.Client()
-ins_reciver_client = reciver_client.Client(symbols=Streaming.symbols, intervals=Streaming.intervals)
-# 타입 힌트용
-data_storage = storage.SymbolStorage()
+ins_public_futures = public_futures.FuturesMarketFetcher()
+ins_ws_futures = ws_futures.FuturesWebsocketReceiver(symbols=Streaming.symbols, intervals=Streaming.intervals)
 
 
-class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
+class FuturesDataManager(WebsocketReceiver, KlineHistoryFetcher):
     def __init__(
         self,
-        real_storage: data_storage,
-        history_storage: data_storage,
-        public_client: ins_public_client,
-        reciver_client: ins_reciver_client,
+        real_storage,
+        history_storage,
+        public_futures: ins_public_futures,
+        ws_futures: ins_ws_futures,
         max_workers: int = 3,
     ):
-        WebSocketManager.__init__(self, reciver_client=reciver_client)
+        WebsocketReceiver.__init__(self, ws_futures)
         KlineHistoryFetcher.__init__(
-            self, symbol_storage=history_storage, public_client=public_client
+            self, history_storage, public_futures
         )
         self.real_storage = real_storage
-        self.max_workers = min(max_workers, 5)
+        self.max_workers = min(max_workers, self.MAX_WORKERS)
 
         self.get_kline_data(symbols=self.symbols, intervals=self.intervals)
 
@@ -54,8 +53,8 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
     async def real_storage_update(self):
         print(" 🚀 Real-time storage update started")
         while True:
-            if not self.reciver_client.asyncio_queue.empty():
-                data = await self.reciver_client.asyncio_queue.get()
+            if not self.ws_futures.asyncio_queue.empty():
+                data = await self.ws_futures.asyncio_queue.get()
                 k_data = data["k"]
                 symbol = k_data["s"]
                 interval = k_data["i"]
@@ -98,20 +97,20 @@ class MarketDataHandler(WebSocketManager, KlineHistoryFetcher):
         asyncio.run(self.run_async_tasks())
 
 if __name__ == "__main__":
-    """
-    실행예시 // 
-    """
+
+    import Processor.DataStorage.DataStorage as storage
+    
     symbols = SystemConfig.Streaming.symbols
     intervals = SystemConfig.Streaming.intervals
     
-    ins_public_client = public_client.PublicClient()
-    ins_reciver_client = reciver_client.ReciverClient(symbols=symbols, intervals=intervals)
+    ins_public_futures = public_futures.PublicClient()
+    ins_ws_futures = ws_futures.receiverClient(symbols=symbols, intervals=intervals)
     
     real_storage = storage.SymbolStorage()  # 실시간 데이터 수집
     history_storage = storage.SymbolStorage()   # 과거 kline_data 수집
     
     ins_threading = handler.MarketDataHandler(real_storage=real_storage,
                                               history_storage=history_storage,
-                                              ins_reciver=ins_reciver_client,
-                                              ins_public=ins_public_client)
+                                              ins_receiver=ins_ws_futures,
+                                              ins_public=ins_public_futures)
     asyncio.run(ins_threading.run())

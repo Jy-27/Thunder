@@ -11,47 +11,31 @@ from typing import Dict, Optional, List, Union, Any, cast
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
 from abc import ABC, abstractmethod
 
-class PrivateClient:
+class TradingClient:
     BASE_URL = ""  # 자식 클래스에서 URL을 설정해야 합니다.
 
-    def __init__(self):
-        data = self._load_api_keys()
-
-        if data is None:
-            raise ValueError("API 키와 시크릿 키를 로드할 수 없습니다.")
+    def __init__(self, api_file_path: str):
+        """API 키 파일을 로드하고, API 키와 시크릿 키를 설정"""
+        data = self._load_api_keys(api_file_path)
 
         self._api_key = data["apiKey"]
         self._secret_key = data["secret"]
-        # # self.account_balance: Optional[Union[Dict]] = None
-        # self.market_type: str = self.__class__.__name__.split("OrderManager")[0]
 
-    # API-key정보 json파일 로드.
-    def _load_api_keys(self) -> Optional[Dict[str, str]]:
-        """
-        1. 기능 : API주문에 필요한 API-key와 Secret-key 저장파일(json)을 불러온다.
-        2. 매개변수 : 해당없음.
-        """
-        # current_file_path = os.getcwd()
-        # parent_directory = os.path.dirname(current_file_path)
-        file_name = "binance.json"
-        # file_path = os.path.join(parent_directory, "API", file_name)
-
-        #MAC TERMINAL COMMAND
-        # >> cd $HOME/github/API
-        file_path = os.path.join(os.getenv("HOME"), "github", "API-KEY", file_name)
-        
+    def _load_api_keys(self, api_file_path: str) -> Dict[str, str]:
+        """API 주문에 필요한 API-key와 Secret-key를 저장한 JSON 파일을 불러옴"""
         try:
-            with open(file_path, "r", encoding="utf-8") as file:
+            with open(api_file_path, "r", encoding="utf-8") as file:
                 data = json.load(file)
-            if "apiKey" in data and "secret" in data:
-                return data
-            else:
-                print("JSON 파일에 'apiKey' 또는 'secret' 키가 없습니다.")
+
+            if "apiKey" not in data or "secret" not in data:
+                raise KeyError("JSON 파일에 'apiKey' 또는 'secret' 키가 없습니다.")
+
+            return data
+
         except FileNotFoundError:
-            print(f"'{file_name}' 파일이 'API' 디렉토리에 없습니다.")
+            raise FileNotFoundError(f"파일이 존재하지 않습니다: {api_file_path}")
         except json.JSONDecodeError:
-            print(f"'{file_name}' 파일이 올바른 JSON 형식이 아닙니다.")
-        return None
+            raise ValueError(f"올바른 JSON 형식이 아닙니다: {api_file_path}")
 
     # API필요한 headers생성
     def _get_headers(self) -> Dict[str, str]:

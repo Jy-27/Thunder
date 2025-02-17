@@ -36,7 +36,7 @@ class WebsocketReceiver(Streaming):
         Args:
             max_retries (int, optional): 오류 횟수도달시 프로그램 종료
         """
-        print("  🚀 웹소켓(캔들) 실행.")
+        print("  👉🏻 🚀 웹소켓(캔들) 함수 시작.")
         retry_count = 0
         while retry_count < max_retries:
             try:

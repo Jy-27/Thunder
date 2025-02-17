@@ -75,7 +75,7 @@ class KlineDataManager(WebsocketReceiver):
 
     def get_kline_cycle(self, interval_minutes: int = 1):
         """Kline 데이터를 주기적으로 가져오는 함수"""
-        print("  🚀 kline cycle 실행.")
+        print("   👉🏻 🚀 kline cycle 실행.")
         while True:
             time.sleep(1)  # 서버 업데이트 지연 예상 보정값.
             # 유효한 intervals 필터링
@@ -98,7 +98,7 @@ class KlineDataManager(WebsocketReceiver):
 
 
     async def run_real_storage_update(self):
-        print(" 🚀 실시간 저장소 업데이트 실행.")
+        print("  👉🏻 🚀 실시간 저장소 업데이트 실행.")
         while True:
             if not self.ws_receiver.asyncio_queue.empty():
                 data = await self.ws_receiver.asyncio_queue.get()

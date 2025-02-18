@@ -41,6 +41,7 @@ class WebsocketReceiver(Streaming):
         while retry_count < max_retries:
             try:
                 await self.ws_receiver.connect_kline_limit()
+                await asyncio.sleep(0)
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
                 print(f"    🚨 연결오류 발생: {e}")
@@ -55,6 +56,7 @@ class WebsocketReceiver(Streaming):
         while retry_count < max_retries:
             try:
                 await self.ws_receiver.connect_stream(stream_type)
+                await asyncio.sleep(0)
                 retry_count = 0  # 성공 시 초기화
             except Exception as e:
                 print(f"    🚨 연결오류 발생: {e}")

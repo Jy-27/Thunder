@@ -894,4 +894,39 @@ def get_current_time(style:str = "%Y-%m-%d %H:%M:%S") -> str:
         str: 지정 스타일에 맞는 시간타입
     """
     return datetime.now().strftime(style)
-    
+
+def bytes_to_gb(bytes_value) -> float:
+    """
+    Byte 👉 Giga Byte로 변경
+
+    Args:
+        bytes_value (_type_): byte값
+
+    Returns:
+        float: Giga Byte
+    """
+    return round(bytes_value / 1024**3, 2)  # GB 변환
+
+def bytes_to_mb(bytes_value) -> float:
+    """
+    Byte 👉 Mega Byte로 변경
+
+    Args:
+        bytes_value (_type_): byte값
+
+    Returns:
+        float: Mega Byte
+    """
+    return round(bytes_value / 1024**2, 2)
+
+def bytes_to_kb(bytes_value) -> float:
+    """
+    Byte 👉 Kilo Byte로 변경
+
+    Args:
+        bytes_value (_type_): byte값
+
+    Returns:
+        float: Kilo Byte
+    """
+    return round(bytes_value / 1024, 2)  # KB 변환

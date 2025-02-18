@@ -36,7 +36,7 @@ class KlineDataManager(WebsocketReceiver):
 
         self._threading_kline_update(self.symbols, self.intervals, self.kline_limit)
 
-    def _update_klie_data(self, symbol: str, interval: str, limit: int):
+    def _update_kline_data(self, symbol: str, interval: str, limit: int):
         """
         👻 kline history를 수신 후 storage에 저장한다._summary_
 
@@ -66,58 +66,47 @@ class KlineDataManager(WebsocketReceiver):
         ) as executor:
             futures = [
                 executor.submit(
-                    self._update_klie_data, symbol, interval, self.kline_limit
+                    self._update_kline_data, symbol, interval, self.kline_limit
                 )
                 for symbol in self.symbols
                 for interval in self.intervals
             ]
             concurrent.futures.wait(futures)
 
-    def get_kline_cycle(self, interval_minutes: int = 1):
+    def run_kline_cycle(self, interval_minutes: int = 1):
         """Kline 데이터를 주기적으로 가져오는 함수"""
-        print("   👉🏻 🚀 kline cycle 실행.")
-        while True:
-            time.sleep(1)  # 서버 업데이트 지연 예상 보정값.
-            # 유효한 intervals 필터링
-            valid_intervals = [
-                interval
-                for interval in self.intervals
-                if base_utils.is_time_match(interval)
-            ]
-            if valid_intervals:
-                self._threading_kline_update(
-                    self.symbols, valid_intervals, self.kline_limit
-                )
-                print(valid_intervals)
-            # 다음 분 정각까지 대기.
-            base_utils.sleep_next_minute(interval_minutes)
+        valid_intervals = [
+            interval
+            for interval in self.intervals
+            if base_utils.is_time_match(interval)
+        ]
+        if valid_intervals:
+            self._threading_kline_update(
+                self.symbols, valid_intervals, self.kline_limit
+            )
 
-    def run_threading(self):
-        t = threading.Thread(target=self.get_kline_cycle, args=(1,))
-        t.start()
+    # def start_threading(self):
+    #     t = threading.Thread(target=self.run_kline_cycle, args=(1,))
+    #     t.start()
+
+    def storage_update(self):
+        data = await self.ws_receiver.asyncio_queue.get()
+        kline_data = data["k"]
+        symbol = kline_data["s"]
+        interval = kline_data["i"]
+        self.real_time_storage.update_data(symbol, interval, data)
 
 
-    async def run_real_storage_update(self):
-        print("  👉🏻 🚀 실시간 저장소 업데이트 실행.")
-        while True:
-            if not self.ws_receiver.asyncio_queue.empty():
-                data = await self.ws_receiver.asyncio_queue.get()
-                kline_data = data["k"]
-                symbol = kline_data["s"]
-                interval = kline_data["i"]
-                self.real_time_storage.update_data(symbol, interval, data)
-            else:
-                await asyncio.sleep(1)
-
-    async def run_async_tasks(self):
+    async def start_async_tasks(self):
         t1 = asyncio.create_task(self.kline_limit_run())
         t2 = asyncio.create_task(self.run_real_storage_update())
-        await asyncio.gather(t1, t2)
+        await asyncio.gather(t2, t1)
 
-    def run(self):
+    def start(self):
         print(f"💻 DataManager 실행: {base_utils.get_current_time()}")
-        self.run_threading()
-        asyncio.run(self.run_async_tasks())
+        asyncio.run(self.start_async_tasks())
+        self.start_threading()
+        print("잘된다.!!!")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,9 @@ import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 import Utils.TradingUtils as trading_utils
+
+
+
 class SymbolDataSubset:
     """특정 심볼 데이터의 서브셋을 생성하는 클래스"""
 
@@ -14,7 +17,10 @@ class SymbolDataSubset:
         for symbol in symbols:
             setattr(self, symbol, getattr(storage, symbol))  # ✅ 해당 심볼 데이터 저장
 
-    def get_data(self, symbol: str, interval: str):
+    def get_data_symbol(self, symbol:str):
+        return getattr(self, symbol)
+
+    def get_data_detail(self, symbol: str, interval: str):
         """특정 심볼의 특정 interval 데이터를 가져옴"""
         symbol_obj = getattr(self, symbol)
         interval_key = f"interval_{interval}"
@@ -33,8 +39,8 @@ class SyncStorage:
     def data_sync(self, history_storage, real_time_stroage):
         for symbol in self.symbols:
             for interval in self.intervals:
-                history_data = history_storage.get_data(symbol=symbol, interval=interval)
-                real_time_data = real_time_stroage.get_data(symbol=symbol, interval=interval)
+                history_data = history_storage.get_data_interval(symbol=symbol, interval=interval)
+                real_time_data = real_time_stroage.get_data_interval(symbol=symbol, interval=interval)
                 update_data = self._merge_kline_data(history_data, real_time_data)
                 history_storage.update_data(symbol, *(interval, update_data))
         
@@ -46,6 +52,8 @@ class SyncStorage:
         else:
             history_data.append(convert_to_last_data)
         return history_data
+
+
 
 
 if __name__ == "__main__":

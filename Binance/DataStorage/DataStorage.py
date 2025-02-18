@@ -38,7 +38,10 @@ class SymbolStorage(Streaming):
         else:
             raise ValueError(f"지정 외 symbol입력됨: {symbol}")
 
-    def get_data(self, symbol:str, interval:str):
+    def get_data_symbol(self, symbol:str):
+        return getattr(self, symbol)
+
+    def get_data_interval(self, symbol:str, interval:str):
         if symbol in self.__slots__:
             kline_data = getattr(self, symbol)
             return kline_data.get_data(interval=interval)

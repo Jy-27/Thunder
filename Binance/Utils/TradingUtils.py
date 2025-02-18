@@ -2,6 +2,10 @@ from typing import Union, Final, Tuple, List, Dict, Optional
 import asyncio
 import os
 import sys
+import psutil
+import platform
+import socket
+import subprocess
 sys.path.append(os.path.abspath("../"))
 
 import Services.PublicData.FuturesMarketFetcher as futures_market
@@ -765,7 +769,85 @@ class Extractor:
                 kline_data["V"],
                 kline_data["Q"],
                 kline_data["B"]]
+
+class System:
+    @classmethod
+    def os(cls) -> Dict:
+        os_type = platform.system()
+        os_version = platform.version()
+        os_detail = platform.platform()
+        return {"Type":os_type,
+                "Version":os_version,
+                "Detail":os_detail}
+
+    @classmethod
+    def process_id(cls) -> dict:
+        current_p_id = os.getpid()
+        parent_p_id = os.getppid()
+        return {"CurrentID":current_p_id,
+                "ParentID":parent_p_id}
+
+    @classmethod
+    def cpu(cls):
+        processor = platform.processor()
+        login_core = psutil.cpu_count(True)
+        physical_core = psutil.cpu_count(False)
+        freq
+        return {"Processor":processor,
+                "LoginCore":login_core,
+                "PhysicalCore":physical_core}
+
+    @classmethod
+    def memory(cls) -> Dict:
+        memory_info = psutil.virtual_memory()
+        total = memory_info.total
+        used = memory_info.used
+        available = memory_info.available
+        used_percent = memory_info.percent
+        return {"Total":total,
+                "Used":used,
+                "Available":available,
+                "UsedPercent":used_percent,
+                "Unit":"byte"}
+
+    @classmethod
+    def disk(cls) -> Dict:
+        disk_info = psutil.disk_usage('/')
+        total = disk_info.total
+        used = disk_info.used
+        free = disk_info.free
+        used_percent = disk_info.percent
+        return {"Total":total,
+                "Used":used,
+                "Available":free,
+                "UsedPercent":used_percent,
+                "Unit":"byte"}
     
+    @classmethod
+    def network_status(cls):
+        net_info = psutil.net_io_counters()
+        sent = net_info.bytes_sent
+        receiverd = net_info.bytes_recv
+        return {
+            "Sent":sent,
+            "Receiverd":receiverd,
+            "Unit":"byte"}
+    
+    @classmethod
+    def execute_command(cls, command: str) -> Tuple[int, str]:
+        """
+        시스템 명령어 실행
+        :param command: 실행할 명령어 (예: 'ls', 'pwd', 'echo hello')
+        :return: (리턴 코드, 실행 결과 문자열)
+        """
+        try:
+            result = subprocess.run(
+                command, shell=True, text=True, capture_output=True
+            )
+            return result.returncode, result.stdout.strip()
+        except Exception as error:
+            return -1, str
+
 class Selector:
     # instance 래핑
     ## 본 class는 폐기 검토함.

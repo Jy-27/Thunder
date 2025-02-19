@@ -3,13 +3,6 @@ import json
 import asyncio
 from typing import Dict, List, Optional, Final, Union
 
-import os
-import sys
-
-home_path = os.path.expanduser("~")
-sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-
-
 class WebsocketReceiver:
     """
     웹소켓 실행을 위한 기본 클래스
@@ -95,7 +88,11 @@ class WebsocketReceiver:
 
 
 if __name__ == "__main__":
-
+    import os
+    import sys
+    home_path = os.path.expanduser("~")
+    sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance", "Workspace"))
+    import SystemConfig
     async def main():
         """
         🚀 테스트용 실행함수
@@ -105,10 +102,15 @@ if __name__ == "__main__":
         intervals = ["3m", "5m"]
         session = aiohttp.ClientSession()
         queue = asyncio.Queue()
-
-        ws_receiver = WebSocketReceiver(base_url, symbols, session, queue)
+        ws_receiver = WebsocketReceiver(base_url, symbols, session, queue)
         await ws_receiver.setup_kline_stream(intervals)
-        for _ in range(10):
+        print("🚀 Websocket Open!!\n")
+        for _ in range(3):
             await ws_receiver.receive_data()
+            print(await queue.get())
+        await session.close()
+        print("\n👍🏻 Websocket Close!!")
 
     asyncio.run(main())
+
+    # 실행 명령어: python3 -m Workspace.Services.Receiver.WebsocketReceiver

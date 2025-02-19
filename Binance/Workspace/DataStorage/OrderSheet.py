@@ -14,6 +14,7 @@ class OrderSheet:
     side:str    # "BUY" or "SELL"
     quantity:Union[float, int]
     order_type:str  #"CLOSE" or "OPEN"
+    close_position:bool # 매도(매각)일경우 True
     timestamp:int   #ms_timestamp
     strategy_type:str   # 전략 클라스명
     leverage:Optional[int] = field(default=None)
@@ -33,6 +34,9 @@ class OrderSheet:
         
         if self.order_type not in ("CLOSE", "OPEN"):
             raise ValueError(f"order_type 입력 오류: {self.order_type}")
+        
+        if not isinstance(self.close_position, bool):
+            raise ValueError(f"close position 입력 오류: {self.close_position}")
         
         if not isinstance(self.timestamp, int):
             raise ValueError(f"timesetamp 입력 오류: {self.timestamp}")

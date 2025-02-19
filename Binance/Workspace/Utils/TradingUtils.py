@@ -6,12 +6,17 @@ import psutil
 import platform
 import socket
 import subprocess
-sys.path.append(os.path.abspath("../"))
 
-import Services.PublicData.FuturesMarketFetcher as futures_market
-import Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
+import os
+import sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+
+
+import Workspace.Services.PublicData.FuturesMarketFetcher as futures_market
+import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
 import SystemConfig
-import Utils.BaseUtils as utils
+import Workspace.Utils.BaseUtils as utils
 
 ### 전역 상수 선언
 config_max_leverage = 125
@@ -907,3 +912,20 @@ class Convertor:
     @classmethod
     def ws_message(cls, s:str, t:int, T:int):
         ...
+        
+
+import asyncio        
+import multiprocessing
+
+class Convertor:
+    @classmethod
+    async def queue_async_to_mp(cls, async_q:asyncio.Queue, mp_q:multiprocessing.Queue):
+        data =await async_q.get()
+        mp_q.put(data)
+    
+    @classmethod
+    async def queue_mp_to_async(cls, mp_q: multiprocessing.Queue, async_q: asyncio.Queue):
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor() as pool:
+            data = await loop.run_in_executor(pool, mp_q.get)  # 블로킹 방지
+        await async_q.put(data)

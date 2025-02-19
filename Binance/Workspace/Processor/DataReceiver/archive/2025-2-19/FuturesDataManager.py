@@ -7,7 +7,6 @@ from typing import List, Dict
 
 import os
 import sys
-
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 

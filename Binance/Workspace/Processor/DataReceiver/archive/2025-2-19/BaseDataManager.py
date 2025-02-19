@@ -6,7 +6,6 @@ from typing import List, Optional
 
 import os
 import sys
-
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -14,6 +13,8 @@ from SystemConfig import Streaming
 
 # import Utils.DataModels as storage
 import Utils.BaseUtils as base_utils
+
+
 
 
 class WebsocketReceiver(Streaming):

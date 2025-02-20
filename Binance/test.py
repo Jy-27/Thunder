@@ -1,117 +1,102 @@
-
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 import requests
-import websocket
-import json
-import threading
-import time
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 
-# 🔹 바이낸스 선물 API 정보
-FUTURES_API_URL = "https://fapi.binance.com"
-API_KEY = 
-HEADERS = {"X-MBX-APIKEY": API_KEY}
+def fetch_binance_klinedata(symbol='BTCUSDT', interval='1h', limit=100):
+    url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
+    response = requests.get(url)
+    data = response.json()
+    data = np.array([[float(candle[1]), float(candle[2]), float(candle[3]), float(candle[4]), float(candle[5])] for candle in data])
+    return data
 
-class BinanceFuturesWebSocket:
-    def __init__(self):
-        self.listen_key = None
-        self.ws = None
-        self.running = True  # WebSocket 실행 상태
-        self.lock = threading.Lock()
+def create_sequences(data, seq_length=10, future_target=10):
+    sequences, labels = [], []
+    for i in range(len(data) - seq_length - future_target):
+        sequences.append(data[i:i+seq_length])
+        labels.append(data[i+seq_length+future_target-1, 3])  # 예측값: 미래 close price
+    return np.array(sequences), np.array(labels)
 
-    def get_listen_key(self):
-        """
-        🔹 Listen Key를 생성하여 반환 (선물 계정용)
-        """
-        response = requests.post(f"{FUTURES_API_URL}/fapi/v1/listenKey", headers=HEADERS)
-        self.listen_key = response.json().get("listenKey")
-        if not self.listen_key:
-            print("❌ Listen Key 생성 실패")
-        else:
-            print(f"✅ Listen Key 발급 완료: {self.listen_key}")
+# 데이터 수집
+data = fetch_binance_klinedata()
+prices = data[:, 3].reshape(-1, 1)  # close price
 
-    def refresh_listen_key(self):
-        """
-        🔹 Listen Key를 30분마다 갱신하여 만료되지 않도록 유지
-        """
-        while self.running:
-            time.sleep(1800)  # 30분마다 갱신
-            response = requests.put(f"{FUTURES_API_URL}/fapi/v1/listenKey", headers=HEADERS)
-            if response.status_code == 200:
-                print("🔄 Listen Key 갱신 완료")
-            else:
-                print("⚠️ Listen Key 갱신 실패, WebSocket 재연결 필요")
-                self.reconnect()
+# 데이터 정규화
+scaler = MinMaxScaler()
+prices_scaled = scaler.fit_transform(prices)
 
-    def on_message(self, ws, message):
-        """
-        🔹 WebSocket 메시지 수신 핸들러 (체결 정보 출력)
-        """
-        data = json.loads(message)
-        print(f"📩 수신 데이터: {data}")
+# 학습 데이터 생성
+seq_length = 10
+future_target = 10
+X, y = create_sequences(prices_scaled, seq_length, future_target)
 
-        if data.get("e") == "executionReport":
-            print(f"✅ 체결 정보 수신: {data}")
+# 데이터셋 분할
+split = int(len(X) * 0.8)
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
 
-    def on_error(self, ws, error):
-        """
-        🔹 WebSocket 오류 핸들러
-        """
-        print(f"❌ WebSocket 에러 발생: {error}")
+# LSTM 모델 구축
+model = Sequential([
+    LSTM(64, return_sequences=True, input_shape=(seq_length, 1)),
+    Dropout(0.2),
+    LSTM(64, return_sequences=False),
+    Dropout(0.2),
+    Dense(32),
+    Dense(1)
+])
 
-    def on_close(self, ws, close_status_code, close_msg):
-        """
-        🔹 WebSocket 종료 핸들러 (자동 재연결)
-        """
-        print("🔴 WebSocket 연결 종료됨, 재연결 시도...")
-        self.reconnect()
+# 모델 컴파일 및 학습
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(X_train, y_train, epochs=20, batch_size=16, validation_data=(X_test, y_test))
 
-    def on_open(self, ws):
-        """
-        🔹 WebSocket 연결 성공 시 실행
-        """
-        print("🟢 WebSocket 연결 성공")
+# 예측 수행
+y_pred = model.predict(X_test)
+y_pred_rescaled = scaler.inverse_transform(y_pred.reshape(-1, 1))
+y_test_rescaled = scaler.inverse_transform(y_test.reshape(-1, 1))
 
-    def start_websocket(self):
-        """
-        🔹 WebSocket을 시작하고 실행 유지
-        """
-        with self.lock:  # 스레드 안전성 확보
-            if not self.listen_key:
-                self.get_listen_key()
-            ws_url = f"wss://fstream.binance.com/ws/{self.listen_key}"
-            print(f"🛠️ WebSocket 연결 중: {ws_url}")
+# 수익률 계산 함수
+def calculate_pnl(actual_prices, predicted_prices, stop_loss=0.015, take_profit=0.015):
+    capital = 100  # 초기 자본 (예제)
+    position = 0  # 현재 포지션 (1: long, -1: short, 0: 없음)
+    profit = 0
 
-            self.ws = websocket.WebSocketApp(
-                ws_url,
-                on_message=self.on_message,
-                on_error=self.on_error,
-                on_close=self.on_close
-            )
-            self.ws.on_open = self.on_open
-            self.ws.run_forever()
+    for i in range(len(actual_prices) - 1):
+        actual = actual_prices[i]
+        predicted = predicted_prices[i]
+        next_actual = actual_prices[i + 1]
 
-    def reconnect(self):
-        """
-        🔹 WebSocket 재연결 로직
-        """
-        with self.lock:
-            if self.ws:
-                self.ws.close()
-            self.get_listen_key()
-            self.start_websocket()
+        if predicted > actual:  # 롱 포지션 진입
+            entry_price = actual
+            stop_price = entry_price * (1 - stop_loss)
+            take_price = entry_price * (1 + take_profit)
+            
+            if next_actual >= take_price:  # 익절
+                profit += take_profit * capital
+            elif next_actual <= stop_price:  # 손절
+                profit -= stop_loss * capital
 
-    def run(self):
-        """
-        🔹 WebSocket 및 Listen Key 자동 갱신을 병렬 실행
-        """
-        # Listen Key 갱신 스레드 실행
-        threading.Thread(target=self.refresh_listen_key, daemon=True).start()
+        elif predicted < actual:  # 숏 포지션 진입
+            entry_price = actual
+            stop_price = entry_price * (1 + stop_loss)
+            take_price = entry_price * (1 - take_profit)
+            
+            if next_actual <= take_price:  # 익절
+                profit += take_profit * capital
+            elif next_actual >= stop_price:  # 손절
+                profit -= stop_loss * capital
+    
+    return profit
 
-        # WebSocket 실행
-        self.start_websocket()
+# 수익률 계산
+pnl = calculate_pnl(y_test_rescaled.flatten(), y_pred_rescaled.flatten())
+print(f"총 수익률: {pnl:.2f}%")
 
-if __name__ == "__main__":
-    """
-    🔹 메인 실행부
-    """
-    binance_ws = BinanceFuturesWebSocket()
-    binance_ws.run()
+# 결과 시각화
+start_index = seq_length + future_target  # 예측값을 앞으로 이동
+plt.plot(range(len(y_test_rescaled)), y_test_rescaled, label='Actual Price')
+plt.plot(range(start_index, start_index + len(y_pred_rescaled)), y_pred_rescaled, label='Predicted Price', linestyle='dashed')
+plt.legend()
+plt.show()

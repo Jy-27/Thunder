@@ -12,6 +12,7 @@ from Workspace.DataStorage.DataStorage import SymbolStorage as storage
 from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket as futures_mk_ws
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket as futures_exe_ws
 from Workspace.DataStorage.StorageManager import SyncStorage
+from Workspace.Processor.Order.Futures.RealTradingProcessor import Orders
 
 
 class AsyncioWorks:
@@ -19,6 +20,7 @@ class AsyncioWorks:
         self,
 
         event_history_analysis: mp_q,
+        event_anlysis_order: mp_q,
         event_monitor_order:mp_q,
         event_wallet_monitor:mp_q,
         
@@ -34,6 +36,7 @@ class AsyncioWorks:
         self.event_history_to_analysis:mp_q
 
         self.event_mp_history_analysis = event_history_analysis
+        self.event_mp_anlysis_order = event_anlysis_order
         self.event_mp_monitor_order = event_monitor_order
         self.event_mp_wallet_monitor = event_wallet_monitor
 
@@ -64,13 +67,13 @@ class AsyncioWorks:
             interval = kline_data['i']
             self.storage_real_time.update_data(symbol, *(interval, data))
     
-    async def run_excute_websocket(self):
+    async def run_execute_websocket(self):
         """
         🚀 Executtion Websocket 데이터를 이벤트 발생시에 수신한다.
         수신된 데이터는 지갑 저장소로 queue 발송하여 업데이트 시그널로 활용한다.
         """
         await self.ins_execution_ex.open_connection()
-        print(f"  🚀 웹소켓(체결 내역) 시작")
+        print(f"  🔗 웹소켓(체결 내역) 연결완료")
         while True:
             # await asyncio.sleep(0)
             data = await self.ins_execution_ex.receive_message()
@@ -111,29 +114,50 @@ class AsyncioWorks:
     async def run_open_order(self):
         print(f"  🚀 매수 주문 감시 시작.")
         while True:
-            message = None
-            self.event_order_to_wallet.put(message)
+            """
+            분석 신호의 결과에 따라 주문을 생성한다.
             
-            # 일단 이렇게 구성하고 주문을 준비하자..
-            symbol = None
-            leverage = None
-            balance = None
-            side = None
             
-            ...
+            Nones:
+                Limit 거래시 현재 값보다 높은 가격에 하락 배팅 현재 값보다 낮은 가격에 상승 배팅 가능하다.
+            """
+
+            
+            
+            anlysis_data = self.loop.run_in_executor(None, self.event_mp_anlysis_order.get)
+            
+            ## get_params << 하나 만들어서 생성할 것. 검토 결과는 Orders의 매개변수값에 맞출 것.
+            
+            params = {"symbol":'BTCUSDT', "type":"LIMT"}
+            
+            order_type = params['type']
+            
+            Orders.set_leverage(**params)
+            Orders.set_margin_type(**params)
+            send_order = {"MARKET":Orders.open_market_position(**params),
+                          "LIMIT":Orders.open_limit_order(**params)}.get(order_type, None)
+            # None이 아닐경우 sent_order값을 OrderLog에 저장할 것. 추가 분석 시작.
     
     async def run_close_order(self):
         print(f"  🚀 매도 주문 감시 시작")
         while True:
-            message = None
-            close_signal = self.loop.run_in_executor(None, self.event_mp_monitor_order.get)
             """
             모니터링 함수로부터 종료 신호를 받으면,
             포지션을 종료하고
             종료신호를 wallet에 보낸다.    
             """
+            monitor_data = self.loop.run_in_executor(None, self.event_mp_monitor_order.get)
+            
+            ## get_params << 하나 만들어서 생성할 것. 검토 결과는 Orders의 매개변수값에 맞출 것.
+            
+            params = {"symbol":'BTCUSDT', 'account_balance':1000}
+            Orders.close_position(**params)
+            
             self.event_order_to_wallet.put(message)
             ...
+
+    async def run_wallet_update(self):
+        ...
 
     async def run_status_message(self):
         print(f"  🚀 상태 메시지 발신 시작.")

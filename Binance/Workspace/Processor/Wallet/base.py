@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class TradeOrder:
+    """주문 실행시 발생하는 메시지"""
     orderId:int
     symbol:str
     status:str
@@ -47,3 +48,18 @@ class TradingPosition:
     updateTime:int
     bidNotional:int
     askNotional:int
+    
+
+class OrderLog:
+    def __init__(self, *symbols:tuple):
+        self.__slots__ = symbols
+
+        
+    
+
+class Wallet:
+    def __init__(self):
+        self.total_balance:float = 0
+        self.margin_balance:float = 0
+        self.available_balance:float = 0
+        

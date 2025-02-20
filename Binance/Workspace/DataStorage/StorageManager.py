@@ -36,13 +36,13 @@ class SyncStorage:
         self.symbols = symbols
         self.intervals = intervals
         
-    def data_sync(self, history_storage, real_time_stroage):
+    def data_sync(self, storage_history, storage_real_time):
         for symbol in self.symbols:
             for interval in self.intervals:
-                history_data = history_storage.get_data_interval(symbol=symbol, interval=interval)
-                real_time_data = real_time_stroage.get_data_interval(symbol=symbol, interval=interval)
+                history_data = storage_history.get_data_interval(symbol=symbol, interval=interval)
+                real_time_data = storage_real_time.get_data_interval(symbol=symbol, interval=interval)
                 update_data = self._merge_kline_data(history_data, real_time_data)
-                history_storage.update_data(symbol, *(interval, update_data))
+                storage_history.update_data(symbol, *(interval, update_data))
         
     def _merge_kline_data(self, history_data, real_time_data):
         convert_to_last_data = trading_utils.Extractor.format_kline_data(real_time_data)

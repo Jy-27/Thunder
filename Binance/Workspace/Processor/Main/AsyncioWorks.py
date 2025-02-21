@@ -8,7 +8,7 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 # 힌트용
 from multiprocessing import Queue as mp_q
-from Workspace.DataStorage.DataStorage import SymbolStorage as storage
+from Workspace.DataStorage.DataStorage import MainStroage as storage
 from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket as futures_mk_ws
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket as futures_exe_ws
 from Workspace.DataStorage.StorageManager import SyncStorage
@@ -66,7 +66,7 @@ class AsyncioWorks:
             kline_data = data['k']
             symbol = kline_data['s']
             interval = kline_data['i']
-            self.storage_real_time.update_data(symbol, *(interval, data))
+            self.storage_real_time.set_data(symbol, interval, data)
     
     async def run_execute_websocket(self):
         """

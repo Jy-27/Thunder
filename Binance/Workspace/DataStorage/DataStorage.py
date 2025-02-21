@@ -1,90 +1,258 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 import os
 import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-from SystemConfig import Streaming
+from typing import List, Any
+from copy import deepcopy
 
-class SymbolStorage(Streaming):
+
+class SubStorage:
     """
-    ⭕️ symbol별 KlineStorage데이터를 저장한다.
-
-    Notes:
-        kline data 저장용으로도 사용하지만, 웹소켓 메시지 저장용으로도 사용가능하다.
-
-    Returns:
-        _type_: _description_
+    💾 메인 저장소의 field에 저장될 보조 저장소다.
+    Node Tree를 구현하기 위함이다.
     """
-    __slots__ = tuple(Streaming.symbols)
+    def __init__(self, fields:List[str]):
+        for field in fields:
+            setattr(self, field, [])
     
-    def __init__(self, storage):
-        self.storage = storage
-        for attr in self.__slots__:
-            setattr(self, attr, self.storage())
-    
-    def __repr__(self):
-        return "\n".join(f"{attr}: {getattr(self, attr)}" for attr in self.__slots__)
-    
-    def clear(self):
-        for attr in self.__slots__:
-            setattr(self, attr, self.storage())
-    
-    def update_data(self, symbol:str, *args, **kwargn):
-        if symbol in self.__slots__:
-            kline_data = getattr(self, symbol)
-            kline_data.update_data(*args, **kwargn)
-        else:
-            raise ValueError(f"지정 외 symbol입력됨: {symbol}")
+    def clear_field(self, field:str):
+        """
+        🧹 지정 필드(속성)값을 초기화 한다.
 
-    def get_data_symbol(self, symbol:str):
-        return getattr(self, symbol)
+        Args:
+            field (str): 필드명(속성명)
 
-    def get_data_interval(self, symbol:str, interval:str):
-        if symbol in self.__slots__:
-            kline_data = getattr(self, symbol)
-            return kline_data.get_data(interval=interval)
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if hasattr(self, field):
+            setattr(self, field, [])
         else:
-            raise ValueError(f"지정 외 symbol입력됨: {symbol}")
+            raise ValueError(f"sub field 입력 오류: {field}")
     
-    def get_attr(self):
-        return self.__slots__
+    def clear_all(self):
+        """
+        🧹 전체 필드(속성)값을 초기화 한다.
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        for field in self.__dict__:
+            setattr(self, field, [])
+    
+    def add_data(self, field:str, data:Any):
+        """
+        📥 지정 필드(속성)값에 데이터를 추가한다.
+
+        Args:
+            field (str): 필드명(속성명)
+            data (Any): 추가할 데이터
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if hasattr(self, field):
+            getattr(self, field).append(data)
+
+        else:
+            raise ValueError(f"field 입력 오류: {field}")
+    
+    def get_data(self, field:str) -> List[Any]:
+        """
+        📤 지정 필드(속성)값을 반환한다.
+
+        Args:
+            field (str): 필드명(속성명)
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+
+        Returns:
+            List[Any]: 필드 저장 데이터
+        """
+        if hasattr(self, field):
+            return getattr(self, field)
+        else:
+            raise ValueError(f"field 입력 오류: {field}")
+    
+    def set_data(self, field:str, data:List[Any]):
+        """
+        📥 지정 필드(속성)값에 데이터를 저장(덮어쓰기) 한다.
+
+        Args:
+            field (str): 필드명(속성명)
+            data (Any): 추가할 데이터
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if not isinstance(data, list):
+            raise ValueError(f"data 타입 입력 오류: {type(data)}")
         
-class IntervalStorage(Streaming):
-    """
-    ⭕️ Kline데이터를 interval별로 저장한다.
+        if hasattr(self, field):
+            setattr(self, field, data)
+        else:
+            raise ValueError(f"field 입력 오류: {field}")
 
-    Raises:
-        ValueError: 잘못된 interval 입력시 오류 발생
-    """
-    __slots__ = tuple(f"interval_{interval}" for interval in Streaming.intervals)
+
+    def get_field(self) -> List[Any]:
+        """
+        🔍 저장소의 필드명(속성명)을 반환한다.
+
+        Returns:
+            List[str]: 메인 필드명
+        """
+        return list(self.__dict__.keys())
     
-    def __init__(self):
-        for attr in self.__slots__:
-            setattr(self, attr, None)
-
     def __repr__(self):
-        return "\n".join(f"{attr}: {getattr(self, attr)}" for attr in self.__slots__)
-    
-    def clear(self):
-        # 구현은 했으나 사용하지 않는다.
-        for attr in self.__slots__:
-            setattr(self, attr, None)
-    
-    def update_data(self, interval:str, data:Dict):
-        attr = f"interval_{interval}"
-        if attr in self.__slots__:
-            setattr(self, attr, data)
-        else:
-            raise ValueError(f"지정 외 interval입력됨: {interval}")
+        """
+        🖨️ print 함수 사용시 속성값을 출력한다.
 
-    def get_data(self, interval:str):
-        attr = f"interval_{interval}"
-        if attr in self.__slots__:
-            return getattr(self, attr)
-        else:
-            raise ValueError(f"지정 외 interval입력됨: {interval}")
+        Returns:
+            str: 필드값 전체
+        """
+        result = {}
+        for field in self.__dict__:
+            result[field] = getattr(self, field)
+        return str(result)
 
-    def get_attr(self):
-        return self.__slots__
+
+class MainStroage:
+    """
+    💾 메인 저장소의 field에 저장될 보조 저장소다.
+    Node Tree를 구현하기 위함이다.
+    """
+    def __init__(self, fields:List, sub_storage:SubStorage):
+        for field in fields:
+            setattr(self, field, deepcopy(sub_storage))
+    
+    def clear_field(self, main_field:str, sub_field:str):
+        """
+        🧹 서브 저장소 지정 필드(속성)값을 초기화 한다.
+
+        Args:
+            field (str): 필드명(속성명)
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if hasattr(self, main_field):
+            main_data = getattr(self, main_field)
+            if hasattr(main_data, sub_field):
+                main_data.clear_field(sub_field)
+
+    def clear_all(self, main_field:str):
+        """
+        🧹 서브 저장소 전체 필드(속성)값을 초기화 한다.
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if hasattr(self, main_field):
+            main_data = getattr(self, main_field)
+            main_data.clear_all()
+        else:
+            raise ValueError(f"main field 입력 오류: {main_field}")
+
+    def add_data(self, main_field:str, sub_field:str, data:Any):
+        """
+        📥 서브 지정 필드(속성)값에 데이터를 추가한다.
+
+        Args:
+            field (str): 필드명(속성명)
+            data (Any): 추가할 데이터
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if hasattr(self, main_field):
+            main_data = getattr(self, main_field)
+            if hasattr(main_data, sub_field):
+                main_data.add_data(sub_field, data)
+            else:
+                raise ValueError(f"sub field 입력 오류: {sub_field}")
+        else:
+            raise ValueError(f"main field 입력 오류: {main_field}")
+    
+    def get_data(self, main_field:str, sub_field:str) -> List[Any]:
+        """
+        📤 서브 지정 필드(속성)값을 반환한다.
+
+        Args:
+            field (str): 필드명(속성명)
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+
+        Returns:
+            List[Any]: 필드 저장 데이터
+        """
+        if hasattr(self, main_field):
+            main_data = getattr(self, main_field)
+            if hasattr(main_data, sub_field):
+                return main_data.get_data(sub_field)
+            else:
+                raise ValueError(f"sub field 입력 오류: {sub_field}")
+        else:
+            raise ValueError(f"main field 입력 오류: {main_field}")
+    
+    def set_data(self, main_field:str, sub_field:str, data:List[Any]):
+        """
+        📥 서브 지정 필드(속성)값에 데이터를 저장(덮어쓰기) 한다.
+
+        Args:
+            field (str): 필드명(속성명)
+            data (Any): 추가할 데이터
+
+        Raises:
+            ValueError: 필드명(속성명)이 존재하지 않을 때
+        """
+        if not isinstance(data, list):
+            raise ValueError(f"data 타입 입력 오류: {type(data)}")
+        
+        if hasattr(self, main_field):
+            main_data = getattr(self, main_field)
+            if hasattr(main_data, sub_field):
+                main_data.set_data(sub_field, data)
+            else:
+                raise ValueError(f"sub field 입력 오류: {sub_field}")
+        else:
+            raise ValueError(f"main field 입력 오류: {main_field}")
+
+    def get_main_field(self) -> List[str]:
+        """
+        🔍 메인 저장소의 필드명(속성명)을 반환한다.
+
+        Returns:
+            List[str]: 메인 필드명
+        """
+        return list(self.__dict__.keys())
+    
+    def get_sub_field(self) -> List[str]:
+        """
+        🔍 서브 저장소의 필드명(속성명)을 반환한다.
+
+        Returns:
+            List[str]: 메인 필드명
+        """
+        main_fields = self.get_main_field()
+        return getattr(self, main_fields[0]).get_field()
+    
+    
+    def __repr__(self):
+        """
+        🖨️ print 함수 사용시 속성값을 출력한다.
+
+        Returns:
+            str: 필드값 전체
+        """
+        result = {}
+        for main_field in self.__dict__:
+            result[main_field] = {}
+            main_data = getattr(self, main_field)
+            for sub_field in main_data.__dict__:
+                result[main_field][sub_field] = getattr(main_data, sub_field)
+        return str(result)

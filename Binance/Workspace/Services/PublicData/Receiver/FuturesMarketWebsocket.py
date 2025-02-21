@@ -10,6 +10,8 @@ class FuturesMarketWebsocket(MarketWebsocket):
     매개변수의 session은 변할일이 없을것으로 판단되어,
     의존성 생성처리 하였다.
 
+    Alias: futures_mk_ws
+
     Args:
         symbols (List): 심볼 리스트
     """

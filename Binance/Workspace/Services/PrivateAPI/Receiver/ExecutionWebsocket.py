@@ -6,6 +6,17 @@ from typing import Dict
 
 class ExecutionWebsocket:
     def __init__(self, api_key: str, market_base_url: str, websocket_base_url: str, endpoint: str):
+        """
+        사용자의 체결정보를 웹소켓으로 실시간 수신받는다.
+
+        Alias: exe_ws
+
+        Args:
+            api_key (str): api key
+            market_base_url (str): 마켓 url
+            websocket_base_url (str): 웹소켓 url
+            endpoint (str): endpoint url
+        """
         self._api_key = api_key
         self.market_base_url = market_base_url
         self.websocket_base_url = websocket_base_url

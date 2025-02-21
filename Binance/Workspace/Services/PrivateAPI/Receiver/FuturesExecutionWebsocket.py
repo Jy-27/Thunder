@@ -1,10 +1,22 @@
 from .ExecutionWebsocket import ExecutionWebsocket
 
 class FuturesExecutionWebsocket(ExecutionWebsocket):
+    """
+    Futures 시장의 사용자 체결정보를 웹소켓으로 실시간 수신받는다.
+    
+    Alias: futures_exe_ws
+
+    Args:
+        ExecutionWebsocket (class): 클라스 상속
+    """
     market_base_url = "https://fapi.binance.com"
     websocket_base_url = "wss://fstream.binance.com/ws/"
     endpoint = "/fapi/v1/listenKey"
     def __init__(self, api_key:str):
+        """
+        Args:
+            api_key (str): binance api key
+        """
         super().__init__(api_key, self.market_base_url, self.websocket_base_url, self.endpoint)
         
         

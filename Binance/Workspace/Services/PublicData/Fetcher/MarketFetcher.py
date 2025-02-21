@@ -8,6 +8,8 @@ class MarketFetcher(ABC):
     """
     Binance에서 API KEY없이 조회가능한 데이터를
     수신 및 반환한다.
+    
+    Alias: mk_fetcher
     """
     BASE_URL: str
 

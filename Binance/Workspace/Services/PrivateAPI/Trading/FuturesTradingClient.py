@@ -8,11 +8,15 @@ class FuturesTradingClient(TradingClient):
     """
     Binance Futures API와 관련된 함수의 집합이다. API-key가 반드시 필요하다.
     오류에 대한 검증코드는 포함되지 않았다. 그러므로 본 함수를 실행전 검증 기능의 코드를 구현해야한다.
+    
+    Alias: futures_tr_client
     """
     BASE_URL = "https://fapi.binance.com"
 
-    def __init__(self, api_key:str, secret:str):
-        super().__init__(api_key, secret)
+    def __init__(self, **kwargs):
+        api_key = kwargs["apiKey"]
+        secret = kwargs["secret"]
+        super().__init__(api_key=api_key, secret=secret)
 
     # Ticker의 leverage 정보 수신 및 반환
     def fetch_leverage_brackets(self, symbol: str) -> Dict:

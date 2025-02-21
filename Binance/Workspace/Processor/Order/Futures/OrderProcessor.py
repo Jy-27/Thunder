@@ -10,6 +10,12 @@ import Utils.TradingUtils as futures_utils
 
 
 class OrderProcessor(ABC):
+    """
+    주문 관련 함수들
+
+    Alias: order_proc
+    """
+    
     TEST_MODE: bool
 
     def __init__(self, test_mode: bool):

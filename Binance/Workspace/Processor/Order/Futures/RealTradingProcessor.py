@@ -20,6 +20,11 @@ ins_private_client = futures_client.FuturesTradingClient(api_file_path)
 
 
 class Orders(OrderProcessor):
+    """
+    리얼 트레이딩 주문관련 함수
+
+    Alias: real_order_proc
+    """
     TEST_MODE = False
 
     def __init__(self):

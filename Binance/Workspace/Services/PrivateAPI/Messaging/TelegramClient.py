@@ -5,6 +5,8 @@ from typing import Dict
 class TelegramClient:
     """
     텔레그램 bot 대화방에 메시지를 발송한다.
+    
+    Alias: telegram_client
     """
     def __init__(self, api_file_path:str):
         self.api_key:Dict = self._load_api_keys(api_file_path)

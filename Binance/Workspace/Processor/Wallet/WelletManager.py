@@ -1,68 +1,3 @@
-from dataclasses import dataclass, field
-
-@dataclass
-class TradeOrder:
-    """주문 실행시 발생하는 메시지"""
-    orderId:int
-    symbol:str
-    status:str
-    clientOrderId:str
-    price:float
-    avgPrice:float
-    origQty:float
-    executedQty:float
-    cumQuote:float
-    timeInForce:str
-    type:str
-    reduceOnly:bool
-    closePosition:bool
-    side:str
-    positionSide:str
-    stopPrice:float
-    workingType:str
-    priceProtect:bool
-    origType:str
-    priceMatch:Optional[Any]
-    selfTradePreventionMode:str
-    goodTillDate:float
-    time:int
-    updateTime:int
-
-@dataclass
-class TradingPosition:
-    symbol:str
-    initialMargin:float
-    maintMargin:float
-    unrealizedProfit:float
-    positionInitialMargin:float
-    openOrderInitialMargin:float
-    leverage:int
-    isolated:bool
-    entryPrice:float
-    breakEvenPrice:float
-    maxNotional:Union[float, int]
-    positionSide:str
-    positionAmt:float
-    notional:float
-    isolatedWallet:float
-    updateTime:int
-    bidNotional:int
-    askNotional:int
-    
-
-class OrderLog:
-    def __init__(self, *symbols:tuple):
-        self.__slots__ = symbols
-
-        
-    
-
-class Wallet:
-    def __init__(self):
-        self.total_balance:float = 0
-        self.margin_balance:float = 0
-        self.available_balance:float = 0
-
 from typing import Optional
 from SystemConfig import Path
 from asyncio import Queue
@@ -72,7 +7,7 @@ from SystemConfig import Path
 
 
 class Wallet:
-    def __init__(self, init_balance: float, queue: Queue, futures_trading_client: futures_tr_client):
+    def __init__(self, init_balance: float, futures_trading_client: futures_tr_client):
         self.init_balance: float = init_balance
         self.total_balance: float = self.init_balance
         self.free_balance: float = self.init_balance
@@ -81,7 +16,6 @@ class Wallet:
         self.pnl_balance: float = 0
         self.unrealized_pnl_balance: float = 0
         self.pnl_ratio: float = 0
-        self.queue = queue
         self.futures_tr_client = futures_trading_client
 
     async def update_balance(self):
@@ -100,7 +34,7 @@ class Wallet:
         # ZeroDivisionError 방지
         self.pnl_ratio = (self.pnl_balance / self.init_balance) if self.init_balance != 0 else 0
     
-    
+
     def get_balance(self, key: str) -> float:
         """
         🔎 잔고 관련 특정 값을 조회하는 함수

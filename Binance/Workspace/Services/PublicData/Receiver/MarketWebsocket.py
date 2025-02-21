@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Final, Union
 class MarketWebsocket:
     """
     웹소켓 실행을 위한 기본 클래스
+    
+    Alias: mk_ws
     """
 
     def __init__(

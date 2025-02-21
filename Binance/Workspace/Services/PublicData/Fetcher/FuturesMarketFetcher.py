@@ -5,6 +5,8 @@ from typing import Dict, Any, List, Union
 class FuturesMarketFetcher(MarketFetcher):
     """
     Futures market에서 API-KEY가 필요 없이 조회할 수 있는 함수들의 집합이다.
+    
+    Alias: futures_mk_fecher
     """
     BASE_URL = "https://fapi.binance.com/fapi/v1/"
 

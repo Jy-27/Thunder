@@ -14,6 +14,8 @@ from abc import ABC, abstractmethod
 class TradingClient:
     """
     🔥 트레이딩과 관련된 클라이언트다. 코드를 최대한 간단하고 핵심기능만 부여한다.
+    
+    Alias: Tr_client
     """
     BASE_URL = ""  # 자식 클래스에서 URL을 설정해야 합니다.
 

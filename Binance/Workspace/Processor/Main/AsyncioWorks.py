@@ -13,7 +13,7 @@ from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import Future
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket as futures_exe_ws
 from Workspace.DataStorage.StorageManager import SyncStorage
 from Workspace.Processor.Order.Futures.RealTradingProcessor import Orders
-
+from Workspace.Processor.Wallet.WelletManager import Wallet
 
 class AsyncioWorks:
     def __init__(
@@ -23,12 +23,13 @@ class AsyncioWorks:
         event_anlysis_order: mp_q,
         event_monitor_order:mp_q,
         event_wallet_monitor:mp_q,
-        
+
         storage_real_time: storage,
         storage_history:storage,
-        
+
         ins_market_ws: futures_mk_ws,
         ins_execution_ws: futures_exe_ws,
+        ins_wallet: Wallet
     ):
         self.event_ws_execution_to_wallet = asyncio.Queue()
         self.event_order_to_wallet = asyncio.Queue()
@@ -45,15 +46,15 @@ class AsyncioWorks:
 
         self.ins_market_ws = ins_market_ws
         self.ins_execution_ex = ins_execution_ws
+        self.ins_wallet = ins_wallet
 
         self.symbols = self.ins_market_ws.symbols
         self.stream = self.ins_market_ws.interval_streams
-        
+
         self.ins_sync_storage = SyncStorage(self.symbols, self.storage_history)
-        
+
         self.loop = asyncio.get_running_loop()
         
-
     async def run_market_websocket(self):
         """
         🚀 Market Websocket 데이터를 무기한 수신한다.
@@ -78,17 +79,18 @@ class AsyncioWorks:
             # await asyncio.sleep(0)
             data = await self.ins_execution_ex.receive_message()
             # await asyncio.sleep(0)
-            self.event_order_to_wallet.put(data)
-    
+            await self.event_order_to_wallet.put(data)
+
     async def run_wallet_update(self):
-        print(f"  🚀 wallet 실시간 업데이트 시작")
+        """
+        🔄 Order 주문 발생시 월렛 정보를 업데이트한다.
+        """
+        print(f"  🚀 wallet 업데이트 시작.")
         while True:
-            trading_message = self.event_order_to_wallet.get()
-            symbol = trading_message['s']
-            
-            # 보유 positions이 있으면 발송할 것.
-            balance_message = self.event_mp_wallet_monitor.put(True)
-    
+            data = await self.event_order_to_wallet.get()
+            await self.ins_wallet.update_balance()
+            await self.event_order_to_wallet.task_done()
+
     async def run_update_listen_key(self):
         """
         🚀 listen key를 지정 시간단위로 갱신한다.
@@ -99,7 +101,7 @@ class AsyncioWorks:
             await asyncio.sleep(1800)
             await self.ins_execution_ex.renew_listen_key()
             print(f"  🔄 listen key 업데이트 완료")
-    
+
     async def run_history_storage_update(self):
         """
         🚀 주기적으로 kline data를 업데이트한 후 분석함수에 시작 신호를 보낸다.
@@ -109,7 +111,6 @@ class AsyncioWorks:
             await asyncio.sleep(20)
             self.ins_sync_storage.data_sync(self.storage_history, self.storage_real_time)
             self.event_history_to_analysis.put(True)
-            
 
     async def run_open_order(self):
         print(f"  🚀 매수 주문 감시 시작.")
@@ -156,9 +157,6 @@ class AsyncioWorks:
             self.event_order_to_wallet.put(message)
             ...
 
-    async def run_wallet_update(self):
-        ...
-
     async def run_status_message(self):
         print(f"  🚀 상태 메시지 발신 시작.")
         while True:
@@ -167,7 +165,11 @@ class AsyncioWorks:
             """
             ...
     
-    # async def run_kline_cycle(se
+    async def start(self):
+        """
+        전체를 실행시킨다.
+        """
+        ...
 
 if __name__ == "__main__":
     import Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket as futures_wse

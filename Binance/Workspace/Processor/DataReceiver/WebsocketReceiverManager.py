@@ -16,6 +16,9 @@ class WebsocketReceiverManager:
     웹소켓 데이터를 수신할 수 있도록 코드 구현하였다.
     🔥 반드시 websocket_receiver는 setup함수를 이용하여 ws_connect에 url반영된 상태로 의존성 주입해야 한다.
     상위 함수(또는 class)에서 구현할 수 있도록 본 클라스에서는 반복 수신 기능을 구현하지 않았다.
+    
+    Alias: ws_recv_manager
+    
     """
     def __init__(self, websocket_receiver:WebsocketReceiver):
         self.websocket_receiver = websocket_receiver

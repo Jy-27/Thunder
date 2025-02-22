@@ -9,31 +9,6 @@ import Utils.TradingUtils as trading_utils
 #힌트용
 from Workspace.DataStorage.DataStorage import MainStroage as storage
 
-class SymbolDataSubset:
-    """
-    ❌ storage 코드 수정되면서 동작 불가함.
-    특정 심볼 데이터의 서브셋을 생성하는 클래스"""
-
-    def __init__(self, *symbols:tuple(str), storage:storage):
-        """선택한 심볼만 포함하는 객체 생성"""
-        self.__class__.__slots__ = symbols  # ✅ __slots__을 동적으로 지정
-        for symbol in symbols:
-            setattr(self, symbol, getattr(storage, symbol))  # ✅ 해당 심볼 데이터 저장
-
-    def get_data_symbol(self, symbol:str):
-        return getattr(self, symbol)
-
-    def get_data_detail(self, symbol: str, interval: str):
-        """특정 심볼의 특정 interval 데이터를 가져옴"""
-        symbol_obj = getattr(self, symbol)
-        interval_key = f"interval_{interval}"
-        return getattr(symbol_obj, interval_key)
-
-    def clear(self):
-        """저장된 데이터를 초기화"""
-        for slot in self.__slots__:
-            setattr(self, slot, None)  # ✅ 데이터를 None으로 초기화
-
 class SyncStorage:
     @classmethod
     def sync_data(cls, storage_history:storage, storage_real_time:storage):

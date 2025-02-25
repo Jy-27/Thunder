@@ -51,8 +51,20 @@ class MarketWebsocket:
         """
         self.stream_type = "kline"
         self.interval_streams = [f"{self.stream_type}_{i}" for i in intervals]
-        url = self._build_stream_url(self.interval_streams)
-        self.websocket = await self.session.ws_connect(url)
+        stream_url = self._build_stream_url(self.interval_streams)
+        async with aiohttp.ClientSession() as session:  # ✅ 명확한 세션 관리
+            async with session.ws_connect(stream_url) as ws:
+                self.websocket = ws
+        # self.websocket = await self.session.ws_connect(url)
+
+
+    # async def setup_general_stream(self, stream_url):
+    #     async with aiohttp.ClientSession() as session:  # ✅ 명확한 세션 관리
+    #         async with session.ws_connect(stream_url) as ws:
+    #             self.websocket = ws
+    #             # async for message in ws:
+                #     print("Received:", message.data)  # 데이터 처리 로직 추가
+
 
     async def setup_general_stream(self, stream_type: str):
         """

@@ -34,8 +34,6 @@ class ThreadingWorks:
         self.symbols = self.history_storage.symbols
         self.intervals = self.history_storage.intervals
 
-
-
         self._threading_kline_update(self.symbols, self.intervals, self.kline_limit)
 
     def _update_kline_data(self, symbol: str, interval: str, limit: int):

@@ -13,7 +13,7 @@ home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 
-import Workspace.Services.PublicData.FuturesMarketFetcher as futures_market
+import Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher as futures_market
 import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
 import SystemConfig
 import Workspace.Utils.BaseUtils as utils
@@ -30,7 +30,7 @@ SYMBOLS_STATUS: List = ["TRADING", "SETTLING", "PENDING_TRADING", "BREAK"]
 api_keys = utils.load_json(SystemConfig.Path.bianace)
 ### 인스턴스 생성
 ins_futures_market = futures_market.FuturesMarketFetcher()
-ins_futures_client = futures_client.FuturesTradingClient(api_keys['apiKey'], api_keys['secret'])
+ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 
 ### 백테스트용 base data
 init_account_balance = ins_futures_client.fetch_account_balance()
@@ -683,7 +683,7 @@ class Extractor:
 
     # 보유중인 포지션 정보 전체를 반환한다.
     @classmethod
-    def current_positions(
+    def current_positions(cls,
         account_data: ins_futures_client.fetch_account_balance,
     ) -> Dict:  # 🚀
         """

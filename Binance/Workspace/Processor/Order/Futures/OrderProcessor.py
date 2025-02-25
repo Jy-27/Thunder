@@ -3,60 +3,47 @@ from typing import Dict
 
 import os
 import sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-import Utils.TradingUtils as futures_utils
+import Workspace.Utils.TradingUtils as tr_utils
+
+# 힌트
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import (
+    FuturesTradingClient as futures_tr_client,
+)
+from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import (
+    FuturesMarketFetcher as futures_mk_fetcher,
+)
 
 
-class OrderProcessor(ABC):
-    """
-    주문 관련 함수들
+class OrderProcessor:
+    def __init__(
+        self,
+        futures_tr_client: futures_tr_client,
+        futures_mk_fetcher: futures_mk_fetcher,
+    ):
+        self.ins_trading_client = futures_tr_client
+        self.ins_market_fetcher = futures_mk_fetcher
 
-    Alias: order_proc
-    """
-    
-    TEST_MODE: bool
-
-    def __init__(self, test_mode: bool):
-        TEST_MODE: bool = test_mode
-
-    @classmethod
     def position_size(
-        cls, symbol: str, mark_price: float, leverage: int, balance: float
-    ) -> float:
-        """
-        ⭕️ 매개 변수 조건에 의한 진입 가능한 포지션 수량을 계산한다.
+        self, symbol: str, mark_price: float, leverage: int, balance: float
+    ):
+        exchange_data = self.ins_market_fetcher.fetch_exchange_info()
+        filter_data = tr_utils.Extractor.refine_exchange_data(symbol, exchange_data)
 
-        Args:
-            symbol (str): 'BTCUSDT'
-            mark_price (float): 진입 가격
-            leverage (int): 레버리지
-            balance (float): 진입 금액
-            test_mode (bool): 테스트 모드 여부
-
-        Notes:
-            반환값이 0일경우 최소 진입 수량조차 미달됨(예수금 부족)
-            TEST MODE와 겸용으로 사용한다.
-
-        Returns:
-            float: 진입 가능한 수량값 반환
-        """
-        exchange_data = futures_utils.Selector.exchange_info(cls.TEST_MODE)
-        filter_data = futures_utils.Extractor.refine_exchange_data(
-            symbol, exchange_data
-        )
         min_qty = filter_data["minQty"]
         step_size = filter_data["stepSize"]
         notional = filter_data["notional"]
 
-        min_position_size = futures_utils.Calculator.min_position_size(
+        min_position_size = tr_utils.Calculator.min_position_size(
             mark_price=mark_price,
             min_qty=min_qty,
             step_size=step_size,
             notional=notional,
         )
-        max_position_size = futures_utils.Calculator.max_position_size(
+        max_position_size = tr_utils.Calculator.max_position_size(
             mark_price=mark_price,
             leverage=leverage,
             step_size=step_size,
@@ -67,8 +54,7 @@ class OrderProcessor(ABC):
             return 0
         return max_position_size
 
-    @classmethod
-    def check_leverage(cls, symbol: str, leverage: int) -> int:
+    def check_leverage(self, symbol: str, leverage: int) -> int:
         """
         ⭕️ 설정하고자 하는 레버리지값의 유효성을 검사하고 적용가능한 레버리지값을 반환한다.
 
@@ -80,8 +66,8 @@ class OrderProcessor(ABC):
         Returns:
             int: 적용가능한 레버리지값
         """
-        brackets_data = futures_utils.Selector.brackets_data(symbol, cls.TEST_MODE)
-        max_leverage = futures_utils.Extractor.max_leverage(brackets_data)
+        brackets_data = self.ins_trading_client.fetch_leverage_brackets(symbol)
+        max_leverage = tr_utils.Extractor.max_leverage(brackets_data)
 
         min_leverage = 2
 
@@ -92,34 +78,131 @@ class OrderProcessor(ABC):
         else:
             return min_leverage
 
-    @classmethod
-    @abstractmethod
-    def set_leverage(cls, symbol: str, leverage: int) -> Dict:
+    def set_leverage(self, symbol: str, leverage: int) -> Dict:
         """
-        레버리지 값을 설정한다.
+        ⭕️ symbol의 레버리지 값을 설정한다.
 
         Args:
             symbol (str): 'BTCUSDT'
-            leverage (int): 지정하려는 레버리지 값
+            leverage (int): 레버리지
 
         Notes:
-            test모드의 일경우 exchange_info에 레버리지값 적용처리함.
+            API 수신 데이터를 활용하여 기존 레버리지 값과 설정하고자 하는 레버리지값을 비교 후
+            레버리지 설정여부 결정하려 했으나, 결국 API호출이 불가피하므로 반복 재설정하는걸로 결정함.
 
-        Return:
-            Dict: 레버리지 설정값 피드백
+        Returns:
+            Dict: 피드백 데이터
         """
-        pass
+        validate_leverage = self.check_leverage(symbol, leverage)
+        return self.ins_trading_client.set_leverage(symbol, validate_leverage)
+        
+    def set_margin_type(self, symbol:str, is_isolated:bool) -> Dict:
+        account_balance = self.ins_trading_client.fetch_account_balance()
+        position_detail = tr_utils.Extractor.position_detail(symbol, account_balance)
+        is_margin_type = position_detail["isolated"]
 
-    @classmethod
-    def set_margin_type(cls, symbol: str, margin_type: str) -> Dict:
+        if is_margin_type != is_isolated:
+            if is_isolated:
+                margin_type = "ISOLATED"
+            else:
+                margin_type = "CROSSED"
+            return ins_private_client.set_margin_type(
+                symbol=symbol, margin_type=margin_type
+            )
+        return {"code": None, "msg": "unchanged"}
+    
+    def close_partial_position_at_market(self, symbol:str, quantity:float) -> Dict:
         """
-        마진 타입을 설정한다.
+        ⭕️ 지정 symbol의 일부만 포지션 종료(매도) 처리한다.
 
         Args:
             symbol (str): 'BTCUSDT'
-            margin_type (str): 지정하는 마진 타입
+            quantity (float): 매도 수량
+            account_balance (Dict): 함수 fetch_account_balance() 반환값
 
         Returns:
-            Dict: 설정상태 피드백
+            Dict: 결과 피드백
         """
-        pass
+        symbol_position = next(
+            data for data in account_balance["positions"] if data["symbol"] == symbol
+            )
+        return ins_private_client.position_market_order(
+            symbol=symbol,
+            side="BUY" if float(symbol_position["positionAmt"]) < 0 else "SELL",
+            quantity=abs(quantity),
+            position_side="BOTH",
+            reduce_only=True,
+            )
+        
+    def close_position_at_market(self, symbol:str):
+        """
+        ⭕️ 지정 심볼의 포지션을 종료(매도)처리한다.
+
+        Args:
+            symbol (str): 'BTCUSDT'
+            account_balance (Dict): 함수 fetch_account_balance() 반환값
+
+        Returns:
+            Dict: 결과 피드백
+        """
+        account_balance = self.ins_trading_client.fetch_account_balance()
+        symbol_position = next(
+            data for data in account_balance["positions"] if data["symbol"] == symbol
+        )
+        position_data = {"positions": [symbol_position]}
+        position_amount = int(symbol_position["positionAmt"])
+        return cls.close_partial_position(
+            symbol=symbol, quantity=position_amount, account_balance=position_data
+        )
+    
+    def close_position_at_market(self, symbol: str) -> Dict:
+        """
+        ⭕️ 지정 심볼의 포지션을 종료(매도)처리한다.
+
+        Args:
+            symbol (str): 'BTCUSDT'
+            account_balance (Dict): 함수 fetch_account_balance() 반환값
+
+        Returns:
+            Dict: 결과 피드백
+        """
+        account_balance = self.ins_trading_client.fetch_account_balance()
+        symbol_position = next(
+            data for data in account_balance["positions"] if data["symbol"] == symbol
+        )
+        position_data = {"positions": [symbol_position]}
+        position_amount = int(symbol_position["positionAmt"])
+        return cls.close_partial_position(
+            symbol=symbol, quantity=position_amount, account_balance=position_data
+        )
+    
+    def close_all_position_at_market(self):
+        account_balance = self.ins_trading_client.fetch_account_balance()
+        position_data = {}
+        for data in account_balance["positions"]:
+            if float(data["positionAmt"]) != 0:
+                position_data["positions"] = [data]
+                symbol = data["symbol"]
+                cls.close_position(symbol, position_data)
+                
+    def open_position_at_market(self, symbol: str, side: str, balance: float, leverage: int) -> Dict:
+        self.set_leverage(symbol, leverage)
+        mark_price = self.ins_market_fetcher.fetch_mark_price(symbol)
+        quantity = self.position_size(symbol, mark_price, leverage, balance)
+        return self.ins_trading_client.position_market_order(symbol=symbol,
+                                                             side=side,
+                                                             quantity=quantity['finalSize'],
+                                                             position_side="BOTH",
+                                                             reduce_only=False)
+    
+    def limit_orders(self, symbol:str, side:str, balance: float, price:float, leverage:int, reduce_only:bool) -> Dict:
+        positions_side = "BOTH"
+        quantity = self.position_size(symbol, price, leverage, balance)
+        return self.ins_trading_client.position_limit_order(symbol=symbol,
+                                                            side=side,
+                                                            quantity=quantity,
+                                                            position_side=positions_side,
+                                                            price=price,
+                                                            time_in_force='GTC',
+                                                            reduce_only=reduce_only)
+    

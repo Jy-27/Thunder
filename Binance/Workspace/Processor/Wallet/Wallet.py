@@ -1,79 +1,11 @@
-from dataclasses import dataclass, field
+import os, sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-@dataclass
-class TradeOrder:
-    """주문 실행시 발생하는 메시지"""
-    orderId:int
-    symbol:str
-    status:str
-    clientOrderId:str
-    price:float
-    avgPrice:float
-    origQty:float
-    executedQty:float
-    cumQuote:float
-    timeInForce:str
-    type:str
-    reduceOnly:bool
-    closePosition:bool
-    side:str
-    positionSide:str
-    stopPrice:float
-    workingType:str
-    priceProtect:bool
-    origType:str
-    priceMatch:Optional[Any]
-    selfTradePreventionMode:str
-    goodTillDate:float
-    time:int
-    updateTime:int
-
-@dataclass
-class TradingPosition:
-    symbol:str
-    initialMargin:float
-    maintMargin:float
-    unrealizedProfit:float
-    positionInitialMargin:float
-    openOrderInitialMargin:float
-    leverage:int
-    isolated:bool
-    entryPrice:float
-    breakEvenPrice:float
-    maxNotional:Union[float, int]
-    positionSide:str
-    positionAmt:float
-    notional:float
-    isolatedWallet:float
-    updateTime:int
-    bidNotional:int
-    askNotional:int
-    
-
-class OrderLog:
-    def __init__(self, *symbols:tuple):
-        self.__slots__ = symbols
-
-        
-    
-
-class Wallet:
-    def __init__(self):
-        self.total_balance:float = 0
-        self.margin_balance:float = 0
-        self.available_balance:float = 0
-
-from typing import Optional
-from SystemConfig import Path
-from asyncio import Queue
-import Workspace.Utils.BaseUtils as base_utils
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_tr_client
-from Workspace.DataStorage.NodeStorage
-from SystemConfig import Path
-
 
 class Wallet:
-    def __init__(self, init_balance: float, queue: Queue, futures_trading_client: futures_tr_client, ):
+    def __init__(self, init_balance: float, futures_trading_client: futures_tr_client):
         self.init_balance: float = init_balance
         self.total_balance: float = self.init_balance
         self.free_balance: float = self.init_balance
@@ -82,7 +14,6 @@ class Wallet:
         self.pnl_balance: float = 0
         self.unrealized_pnl_balance: float = 0
         self.pnl_ratio: float = 0
-        self.queue = queue
         self.futures_tr_client = futures_trading_client
 
     async def update_balance(self):
@@ -96,10 +27,10 @@ class Wallet:
         self.free_balance = float(data["availableBalance"])
         self.lock_balance = float(data["totalOpenOrderInitialMargin"])
         self.unrealized_pnl_balance = float(data["totalUnrealizedProfit"])
-        self.pnl_balance = float(data["totalCrossUnPnl"])
+        self.pnl_balance = self.total_balance - self.init_balance
 
         # ZeroDivisionError 방지
-        self.pnl_ratio = (self.pnl_balance / self.init_balance) if self.init_balance != 0 else 0
+        self.pnl_ratio = self.pnl_balance / self.init_balance if self.pnl_balance != 0 else 0
     
     
     def get_balance(self, key: str) -> float:
@@ -139,7 +70,20 @@ class Wallet:
             f"3. margin: {self.margin_balance:,.2f} usdt\n"
             f"4. free: {self.free_balance:,.2f} usdt\n"
             f"5. lock: {self.lock_balance:,.2f} usdt\n"
-            f"6. un_pnl: {self.unrealized_pnl_balance:,.2f}\n"
-            f"7. pnl: {self.pnl_balance:,.2f}\n"
+            f"6. un_pnl: {self.unrealized_pnl_balance:,.2f} usdt\n"
+            f"7. pnl: {self.pnl_balance:,.2f} usdt\n"
             f"8. pnl ratio: {self.pnl_ratio * 100:,.2f} %\n"
         )
+        
+if __name__ == "__main__":
+    import SystemConfig
+    import Workspace.Utils.BaseUtils as base_utils
+    import asyncio
+    
+    api_path = SystemConfig.Path.bianace
+    api = base_utils.load_json(api_path)
+    ins_futures_tr_client = futures_tr_client(**api)
+    
+    obj = Wallet(5, ins_futures_tr_client)
+    asyncio.run(obj.update_balance())
+    print(obj)

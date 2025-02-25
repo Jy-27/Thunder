@@ -12,12 +12,12 @@ class FuturesExecutionWebsocket(ExecutionWebsocket):
     market_base_url = "https://fapi.binance.com"
     websocket_base_url = "wss://fstream.binance.com/ws/"
     endpoint = "/fapi/v1/listenKey"
-    def __init__(self, api_key:str):
+    def __init__(self, **kwarage):
         """
         Args:
             api_key (str): binance api key
         """
-        super().__init__(api_key, self.market_base_url, self.websocket_base_url, self.endpoint)
+        super().__init__(kwarage['apiKey'], self.market_base_url, self.websocket_base_url, self.endpoint)
         
         
 # 출력예시

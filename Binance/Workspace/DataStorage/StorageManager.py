@@ -1,10 +1,10 @@
-from typing import List
+from typing import List, Any
 
 import os
 import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-import Utils.TradingUtils as trading_utils
+import Workspace.Utils.TradingUtils as trading_utils
 
 #힌트용
 from Workspace.DataStorage.DataStorage import MainStroage as storage
@@ -22,7 +22,7 @@ class SyncStorage:
         
         fields = cls._get_fields(storage_history)
         for main_field in fields["target"]:
-            for sub_field in fields["new"]
+            for sub_field in fields["new"]:
                 history_data = storage_history.get_data(main_field, sub_field)
                 real_time_data = storage_real_time.get_data(main_field, sub_field)
                 update_data = cls._merge_data(history_data, real_time_data)

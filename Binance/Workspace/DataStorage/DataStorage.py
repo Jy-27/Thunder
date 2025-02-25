@@ -91,7 +91,6 @@ class SubStorage:
         else:
             raise ValueError(f"field 입력 오류: {field}")
 
-
     def get_field(self) -> List[Any]:
         """
         🔍 저장소의 필드명(속성명)을 반환한다.
@@ -100,7 +99,6 @@ class SubStorage:
             List[str]: 메인 필드명
         """
         return list(self.__slots__.keys())
-    
     
     def to_dict(self) -> Dict:
         """

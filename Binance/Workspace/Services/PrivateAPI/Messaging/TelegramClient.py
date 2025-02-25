@@ -8,37 +8,9 @@ class TelegramClient:
     
     Alias: telegram_client
     """
-    def __init__(self, api_file_path:str):
-        self.api_key:Dict = self._load_api_keys(api_file_path)
-    
-    def _load_api_keys(self, api_file_path: str) -> Dict[str, str]:
-        """
-        ⭕️ token값과 chat_id값이 저장된 파일을 불러온다.
-
-        Args:
-            api_file_path (str): 파일 주소
-
-        Raises:
-            KeyError: 불러온 파일안에 "token"과 "chat_id"가 없음
-            FileNotFoundError: 파일 주소에 파일이 존재하지 않음
-            ValueError: 파일 형태에 문제가 있음.
-
-        Returns:
-            Dict[str, str]: _description_
-        """
-        try:
-            with open(api_file_path, "r", encoding="utf-8") as file:
-                data = json.load(file)
-
-            if "chat_id" not in data or "token" not in data:
-                raise KeyError("JSON 파일에 'chat_id' 또는 'token' 키가 없습니다.")
-
-            return data
-
-        except FileNotFoundError:
-            raise FileNotFoundError(f"파일이 존재하지 않습니다: {api_file_path}")
-        except json.JSONDecodeError:
-            raise ValueError(f"올바른 JSON 형식이 아닙니다: {api_file_path}")
+    def __init__(self, **kwargs):
+        self.token = kwargs["token"]
+        self.chat_id = kwargs["chat_id"]
     
     def send_message(self, message):
         """
@@ -47,9 +19,9 @@ class TelegramClient:
         Args:
             message : 발송하려는 메시지
         """
-        url = f"https://api.telegram.org/bot{self.api_key["token"]}/sendMessage"
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         payload = {
-            "chat_id": self.api_key["chat_id"],
+            "chat_id": self.chat_id,
             "text": message,
         }
         response = requests.post(url, data=payload)

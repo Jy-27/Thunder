@@ -4,6 +4,7 @@ import aiohttp
 import websockets
 from typing import Dict
 
+
 class ExecutionWebsocket:
     def __init__(self, api_key: str, market_base_url: str, websocket_base_url: str, endpoint: str):
         """
@@ -67,3 +68,51 @@ class ExecutionWebsocket:
         if self.websocket_client:
             message = await self.websocket_client.recv()
             return json.loads(message)  # JSON 데이터 변환
+
+if __name__ == "__main__":
+    import asyncio
+    import os, sys
+    home_path = os.path.expanduser("~")
+    sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+    
+    import SystemConfig
+    import Workspace.Processor.Order.PendingOrder as pending_order
+    import Workspace.Utils.BaseUtils as base_utils
+    
+    import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_tr_client
+    
+    import Workspace.DataStorage.NodeStorage as storage
+    api_path = SystemConfig.Path.bianace
+    api_keys = base_utils.load_json(api_path)
+    
+    api = api_keys['apiKey']
+    market_base_url = "https://fapi.binance.com"
+    websocket_base_url = "wss://fstream.binance.com/ws/"
+    endpoint = "/fapi/v1/listenKey"
+    
+    
+    sub_fields = ["LIMIT", "TAKE_PROFIT", "STOP_MARKET", "TAKE_PROFIT_MARKET"]
+    # MARKET 도 있으나 미체결위주이므로 제외시킨다.
+    sub_storage = storage.SubStorage(sub_fields)
+    main_fields = ['BTCUSDT', 'ADAUSDT']
+    main_storage = storage.MainStorage(main_fields, sub_storage)
+    
+    ins_client = futures_tr_client.FuturesTradingClient(**api_keys)
+    pending_o = pending_order.PedingOrder(['ADAUSDT', 'XRPUSDT'], ins_client)
+    
+    obj = ExecutionWebsocket(api, market_base_url, websocket_base_url, endpoint)
+    async def run(count:int):
+        print(f" ⏳ 연결 시도중")
+        await obj.open_connection()
+        print(f" 🔗 websocket 연결")
+        for _ in range(count):
+            data = await obj.receive_message()
+            pending_o.update_order(data)
+            
+            print(f" 🖨️ data: \n{pending_o.storage}\n")
+        
+        print(f" 👍🏻 수신 완료")
+        await obj.close_connection()
+        print(f" ⛓️‍💥 websocket 연결 해제")
+    
+    asyncio.run(run(20))

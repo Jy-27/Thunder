@@ -9,10 +9,10 @@ import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-import Utils.TradingUtils as futures_utils
+import Workspace.Utils.TradingUtils as futures_utils
 import SystemConfig
-import Services.PublicData.FuturesMarketFetcher as futures_market
-import Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
+import Workspace.Services.PublicData.FuturesMarketFetcher as futures_market
+import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
 
 api_file_path = SystemConfig.Path.bianace
 ins_market_fetcher = futures_market.FuturesMarketFetcher()

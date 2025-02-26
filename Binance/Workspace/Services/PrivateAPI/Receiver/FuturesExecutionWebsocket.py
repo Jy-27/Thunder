@@ -19,7 +19,6 @@ class FuturesExecutionWebsocket(ExecutionWebsocket):
         """
         super().__init__(kwarage['apiKey'], self.market_base_url, self.websocket_base_url, self.endpoint)
         
-        
 # 출력예시
 
 # {'e': 'TRADE_LITE',

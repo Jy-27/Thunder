@@ -10,8 +10,6 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 from SystemConfig import Streaming
 
-
-
 from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher as futures_mk_fetcher
 from Workspace.DataStorage.DataStorage import SymbolStorage as storage
 import Utils.TradingUtils as tr_utils

@@ -877,7 +877,7 @@ def is_time_match(interval:str) -> bool:
     if interval.endswith("m"):  # 분 단위 확인
         return now.minute % int(interval[:-1]) == 0
     elif interval.endswith("h"):  # 시간 단위 확인
-        return now.hour % int(interval[:-1]) == 0
+        return now.hour % int(interval[:-1]) == 0 and now.minute == 0
     elif now.hour == 0 and now.minute == 0 and now.second == 0:  # 자정 확인
         return True
 

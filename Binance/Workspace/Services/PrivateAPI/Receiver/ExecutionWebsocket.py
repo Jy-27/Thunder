@@ -25,30 +25,32 @@ class ExecutionWebsocket:
         self.listen_key = None
         self.headers = {"X-MBX-APIKEY": self._api_key}
         self.websocket_client = None
-        self.session = None  # aiohttp 세션 추가
+        self.session = None
+
+    async def init_setting(self):
+        self.session = aiohttp.ClientSession()
 
     async def create_listen_key(self):
         """👻 Listen Key를 최초 생성"""
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.market_base_url}{self.endpoint}", headers=self.headers) as response:
-                if response.status == 200:
-                    self.listen_key = (await response.json()).get("listenKey")
-                else:
-                    raise RuntimeError(f"Listen Key 생성 실패: {await response.text()}")
+        async with self.session.post(f"{self.market_base_url}{self.endpoint}", headers=self.headers) as response:
+            if response.status == 200:
+                self.listen_key = (await response.json()).get("listenKey")
+            else:
+                raise RuntimeError(f"Listen Key 생성 실패: {await response.text()}")
 
     async def renew_listen_key(self):
         """🔄 Listen Key 갱신 (30분마다 실행)"""
-        while True:
-            await asyncio.sleep(1800)  # 30분 대기
-            async with aiohttp.ClientSession() as session:
-                async with session.put(f"{self.market_base_url}{self.endpoint}", headers=self.headers) as response:
-                    if response.status != 200:
-                        print(f"Listen Key 갱신 실패: {await response.text()}")
-                    else:
-                        print("✅ Listen Key 갱신 완료")
+        async with self.session.put(f"{self.market_base_url}{self.endpoint}", headers=self.headers) as response:
+            if response.status != 200:
+                print(f"Listen Key 갱신 실패: {await response.text()}")
+            else:
+                print("✅ Listen Key 갱신 완료")
 
     async def open_connection(self):
         """🔗 웹소켓 연결"""
+        await self.init_setting()
+        await self.create_listen_key()
+        # await self.renew_listen_key()
         if not self.listen_key:
             await self.create_listen_key()
 
@@ -76,7 +78,7 @@ if __name__ == "__main__":
     sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
     
     import SystemConfig
-    import Workspace.Processor.Order.PendingOrder as pending_order
+    import Workspace.DataStorage.PendingOrder as pending_order
     import Workspace.Utils.BaseUtils as base_utils
     
     import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_tr_client
@@ -98,7 +100,7 @@ if __name__ == "__main__":
     main_storage = storage.MainStorage(main_fields, sub_storage)
     
     ins_client = futures_tr_client.FuturesTradingClient(**api_keys)
-    pending_o = pending_order.PedingOrder(['ADAUSDT', 'XRPUSDT'], ins_client)
+    pending_o = pending_order.PendingOrder(['ADAUSDT', 'XRPUSDT'], ins_client)
     
     obj = ExecutionWebsocket(api, market_base_url, websocket_base_url, endpoint)
     async def run(count:int):

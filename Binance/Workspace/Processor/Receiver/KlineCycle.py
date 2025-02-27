@@ -10,6 +10,7 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 import Workspace.DataStorage.NodeStorage as storage
 import Workspace.Utils.BaseUtils as base_utils
 
+import time
 class KlineCycle:
     def __init__(self, symbols: List, intervals: List, storage: storage, limit: int = 480):
         self.symbols = symbols
@@ -50,13 +51,12 @@ class KlineCycle:
         🐣 전체 데이터를 초기 업데이트 한다.
         """
         self.session = aiohttp.ClientSession()
-        print("🚀 Kline 전체 데이터 수신 중...")
         tasks = [
             self._update_storage(symbol, interval, self.limit)
             for symbol in self.symbols for interval in self.intervals
         ]
         await asyncio.gather(*tasks)
-        print("👍🏻 수신 완료!")
+        print("  👍🏻 kline 기초 데이터 수신 완료.")
 
     async def _fetch_kline_limit(self, symbol: str, interval: str, limit: int) -> List[List[Union[int, str]]]:
         """
@@ -82,25 +82,25 @@ class KlineCycle:
             interval (str): sub field
             limit (int): 수신할 데이터 개수
         """
+        kline_data = await self._fetch_kline_limit(symbol, interval, limit)
+        
+        print(kline_data)
         self.storage.set_data(
             symbol,
             f"interval_{interval}",
-            await self._fetch_kline_limit(symbol, interval, limit)
-        )
+            kline_data)
     
     async def start(self):
         await self._init_setting()
+        print(f"  🔄 periodic Kline updates start!!")
         while True:
             valid_intervals = [interval for interval in self.intervals if base_utils.is_time_match(interval)]
             if valid_intervals:
-                start = datetime.now()
                 tasks = [
                     asyncio.create_task(self._update_storage(symbol, interval, self.limit))
                     for symbol in self.symbols for interval in valid_intervals
                 ]
                 await asyncio.gather(*tasks)
-                end = datetime.now()
-                print(f"소요시간: {(end - start).total_seconds():,.2f} sec")
             await self._sleep_next_minute(1, 0.5)
     
     async def close(self):

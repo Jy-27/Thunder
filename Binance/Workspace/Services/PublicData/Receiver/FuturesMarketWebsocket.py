@@ -2,7 +2,7 @@ from .MarketWebsocket import MarketWebsocket
 from typing import Union, List, Final
 import asyncio
 import aiohttp
-
+import json
 
 class FuturesMarketWebsocket(MarketWebsocket):
     """
@@ -18,9 +18,8 @@ class FuturesMarketWebsocket(MarketWebsocket):
     def __init__(
         self, symbols: List):
         super().__init__(
-            base_url="wss://stream.binance.com:9443/ws/",
-            symbols=symbols,
-            session=aiohttp.ClientSession())
+            base_url="wss://stream.binance.com:9443",
+            symbols=symbols)
 
 if __name__ == "__main__":
     import os
@@ -28,24 +27,30 @@ if __name__ == "__main__":
     home_path = os.path.expanduser("~")
     sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
     from SystemConfig import Streaming
+
     async def main():
         """
-        🚀 테스트용 실행함수
+        🚀 테스트용 실행 함수
         """
+        # base_url = "wss://stream.binance.com:9443"  # ✅ URL 형식 변경
         symbols = Streaming.symbols
         intervals = Streaming.intervals
+        ws_receiver = FuturesMarketWebsocket(symbols=symbols)
 
-        ws_receiver = FuturesMarketWebsocket(symbols)
-        await ws_receiver.setup_kline_stream(intervals)
-        # await ws_receiver.setup_general_stream("depth")
-        print("\n")
-        print("🚀 Websocket Open!!\n")
-        for _ in range(3):
-            data = await ws_receiver.receive_data()
-            print(data)
-        await ws_receiver.close()
-        print("\n👍🏻 Websocket Close!!")
-        
-    asyncio.run(main())
+        await ws_receiver.setup_kline_stream(intervals)  # ✅ WebSocket 설정
+        print("\n🚀 WebSocket 연결 성공!\n")
+
+        try:
+            for _ in range(3):
+                data = await ws_receiver.receive_message()
+                print(data)
+                # print(json.dumps(data, indent=2, ensure_ascii=False))  # ✅ JSON 포맷 출력
+        except Exception as e:
+            print(f"⚠️ 오류 발생: {e}")
+
+        await ws_receiver.close_connection()
+        print("\n👍🏻 WebSocket 연결 종료!")
+
+    asyncio.run(main())  # ✅ 메인 실행
 
     # 실행 명령어: python3 -m Workspace.Services.PublicData.Receiver.FuturesWebsocketReceiver

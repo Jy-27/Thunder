@@ -17,7 +17,7 @@ class KlineCycle:
         self.limit = limit
         self.storage = storage
         self.BASE_URL = "https://fapi.binance.com/fapi/v1/"
-        self.session = aiohttp.ClientSession()
+        self.session = None
     
     async def _retrieve_api_data(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
         url = self.BASE_URL + endpoint
@@ -49,6 +49,7 @@ class KlineCycle:
         """
         🐣 전체 데이터를 초기 업데이트 한다.
         """
+        self.session = aiohttp.ClientSession()
         print("🚀 Kline 전체 데이터 수신 중...")
         tasks = [
             self._update_storage(symbol, interval, self.limit)

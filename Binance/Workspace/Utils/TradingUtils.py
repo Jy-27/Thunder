@@ -751,7 +751,25 @@ class Extractor:
         return result
 
     @classmethod
-    def format_kline_data(cls, real_time_data):
+    def format_websocket(cls, message:dict) -> tuple:
+        """
+        market websocket message에서 symbol, interval, kline data를 추출한다.
+
+        Args:
+            message (dict): market websocket
+
+        Returns:
+            tuple: symbol, interval
+        """
+        main_data = message["data"]
+        kline_data = main_data["k"]
+        symbol = kline_data["s"]
+        interval = kline_data["i"]
+        
+        return symbol, interval
+
+    @classmethod
+    def format_kline_data(cls, real_time_data) -> List[Union[int, float]]:
         """
         kline 웹소켓 수신데이터를 kline history data에 맞게 재정렬한다.
 
@@ -761,7 +779,8 @@ class Extractor:
         Returns:
             List: kline data
         """
-        kline_data = real_time_data['k']
+        data = real_time_data['data']
+        kline_data = data['k']
         return [kline_data["t"],
                 kline_data["o"],
                 kline_data["h"],

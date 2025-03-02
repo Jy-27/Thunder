@@ -19,50 +19,32 @@ class SyncStorage:
             storage_history (storage): 거래기록 저장소
             storage_real_time (storage): 실시간 저장소
         """
-        
-        fields = cls._get_fields(storage_history)
-        for main_field in fields["target"]:
-            for sub_field in fields["new"]:
+        main_fields, sub_fields = cls.get_all_fields(storage_history)
+
+        for main_field in main_fields:
+            for sub_field in sub_fields:
                 history_data = storage_history.get_data(main_field, sub_field)
                 real_time_data = storage_real_time.get_data(main_field, sub_field)
-                update_data = cls._merge_data(history_data, real_time_data)
+                update_data = cls.data_merge(history_data, real_time_data)
                 storage_history.set_data(main_field, sub_field, update_data)
 
     @classmethod
-    def _get_fields(cls, storage:storage):
-        """
-        👻 메인과 서브 저장소의 필드명을 조회한다.
-
-        Args:
-            storage (storage): class strage
-
-        Returns:
-            Dict: 필드정보
-        """
-        return {"target":storage.get_main_field(),
-                "new":storage.get_sub_field()}
-    
-    @classmethod
-    def _merge_data(cls, target_data:List[Any], new_data:List[Any]) -> List[Any]:
-        """
-        👻 실시간 저장소를 이용하여 히스토리 저장소를 동기화 한다.
-
-        Args:
-            target_data (List[Any]): old data
-            new_data (List[Any]): new data
-
-        Returns:
-            List[Any]: update data
-        """
-        old_last_data = target_data[-1]
-        if new_data[0] == old_last_data[0] and new_data[6] == old_last_data[6]:
+    def data_merge(cls, target_data:storage, new_data:storage):
+        target_timestamp = target_data[-1][0]
+        new_timestamp = new_data[0]
+        if target_timestamp == new_timestamp:
             target_data[-1] = new_data
         else:
-            history_data.append(new_data)
+            target_data.append(new_data)
         return target_data
-
-
-
+        
+    
+    @classmethod
+    def get_all_fields(cls, main_storage:storage) -> List[str]:
+        main_field =main_storage.get_fields()
+        field = main_field[0]
+        sub_field = getattr(main_storage, field).get_fields()
+        return main_field, sub_field
 
 if __name__ == "__main__":
     import sys

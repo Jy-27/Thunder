@@ -83,8 +83,7 @@ class KlineCycle:
             limit (int): 수신할 데이터 개수
         """
         kline_data = await self._fetch_kline_limit(symbol, interval, limit)
-        
-        print(kline_data)
+
         self.storage.set_data(
             symbol,
             f"interval_{interval}",

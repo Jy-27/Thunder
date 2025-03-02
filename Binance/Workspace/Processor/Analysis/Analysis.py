@@ -1,14 +1,16 @@
 ### 초기설정
 
 import asyncio
-import MarketDataFetcher
 import numpy as np
-import DataStoreage
-import utils
 from pprint import pprint
 from typing import Dict, List, Final, Optional
 from copy import copy
 
+
+import os, sys
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+from Workspace.DataStorage.NodeStorage import SubStorage
 
 class IndicatorMA:
     """
@@ -17,18 +19,17 @@ class IndicatorMA:
 
     def __init__(
         self,
-        kline_datasets: Dict[str, DataStoreage.KlineData],
+        kline_datasets: SubStorage,
         data_type: str = "sma",
-        interval: str = "3m",
         periods: List = [7, 25, 99],
     ):
         self.kline_datasets = kline_datasets
         self.periods: List[int] = periods
-        self.interval: str = interval
         self.type_str: str = data_type
         self.ma_types: Final[List[str]] = ["sma", "ema", "wma"]
+        self.attrs = []
 
-    def cals_sma(self, data: np.ndarray, period: int) -> np.ndarray:
+    def sma(self, data: np.ndarray, period: int) -> np.ndarray:
         """
         단순 이동평균(SMA)을 계산하는 함수
         """
@@ -36,7 +37,7 @@ class IndicatorMA:
         prices = data[:, 4]
         return np.convolve(prices, np.ones(period) / period, mode="valid")
 
-    def cals_ema(self, data: np.ndarray, period: int) -> np.ndarray:
+    def ema(self, data: np.ndarray, period: int) -> np.ndarray:
         """
         지수 이동평균(EMA)을 계산하는 함수
         """
@@ -54,7 +55,7 @@ class IndicatorMA:
 
         return ema[period - 1 :]
 
-    def cals_wma(self, data: np.ndarray, period: int) -> np.ndarray:
+    def wma(self, data: np.ndarray, period: int) -> np.ndarray:
         """
         지수 이동평균(WMA)을 계산하는 함수
         """
@@ -64,25 +65,30 @@ class IndicatorMA:
         wma = np.convolve(prices, weights / weights.sum(), mode="valid")
         return wma
 
+    def get_attrs(self):
+        return self.attrs
+
+    def get_data(self, attr_name: str):
+        return getattr(self, attr_name)
+    
     def run(self):
         if not self.type_str in self.ma_types:
             raise ValueError(f"type 입력 오류:{self.type_str}")
 
-        ma_func = {"sma": self.cals_sma, "ema": self.cals_ema, "wma": self.cals_wma}
-
-        for symbol, data in self.kline_datasets.items():
-            base_data = data.get_data(interval=self.interval)
-            array_data = np.array(base_data, float)
-            for preiod in self.periods:
-                result = ma_func[self.type_str](data=array_data, period=preiod)
-                setattr(self, f"{symbol}_{self.type_str}_{preiod}", result)
-
+        ma_func = {"sma": self.sma, "ema": self.ema, "wma": self.wma}
+        convert_to_array = np.array(self.kline_datasets, float)
+        
+        for ma_type in self.ma_types:
+            for period in self.periods:
+                result = ma_func[ma_type](convert_to_array, period)
+                attr_name = f"{ma_type}_{period}"
+                setattr(self, attr_name, result)
+                self.attrs.append(attr_name)
 
 class IndicatorMACD:
     def __init__(
         self,
-        kline_datasets: Dict[str, DataStoreage.KlineData],
-        interval: str = "3m",
+        kline_datasets: SubStorage,
         data_type: str = "macd",
         col_index: int = 4,
         short_window: int = 12,
@@ -90,7 +96,6 @@ class IndicatorMACD:
         signal_window: int = 9,
     ):
         self.kline_datasets = kline_datasets
-        self.interval = interval
         self.type_str = data_type
         self.col_index = col_index
         self.short_window = short_window
@@ -105,7 +110,6 @@ class IndicatorMACD:
 
         for i in range(1, len(data)):
             ema_values[i] = alpha * data[i] + (1 - alpha) * ema_values[i - 1]
-
         return ema_values
 
     def macd(
@@ -123,21 +127,21 @@ class IndicatorMACD:
         return macd_line, signal_line, histogram
 
     def run(self):
-        for symbol, data in self.kline_datasets.items():
-            base_data = data.get_data(interval=self.interval)
-            array_data = np.array(base_data, float)
+        conver_to_array = np.array(self.kline_datasets, float)
+        result = self.macd(
+            data=conver_to_array,
+            col_index=self.col_index,
+            short_window=self.short_window,
+            long_window=self.long_window,
+            signal_window=self.signal_window,
+        )
+        attrs = ["macd", "signal", "histogram"]
 
-            result = self.macd(
-                data=array_data,
-                col_index=self.col_index,
-                short_window=self.short_window,
-                long_window=self.long_window,
-                signal_window=self.signal_window,
-            )
+        for index, attr in enumerate(attrs):
             setattr(
                 self,
-                f"{symbol}_{self.type_str}_{self.short_window}_{self.long_window}_{self.signal_window}",
-                result,
+                f"{self.type_str}_{attr}",
+                result[index],
             )
 
 
@@ -147,252 +151,246 @@ class IndicatorRSI: ...
 class IndicatorOscillator: ...
 
 
-class SellStrategy1:
-    """
-    Short 포지션 관련 분석
-    """
+# class SellStrategy1:
+#     """
+#     Short 포지션 관련 분석
+#     """
 
-    def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
-        self.ins_ma = ma_data
-        self.ins_macd = macd_data
+#     def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
+#         self.ins_ma = ma_data
+#         self.ins_macd = macd_data
 
-        self.kline_datasets = self.ins_ma.kline_datasets
-        self.periods = self.ins_ma.periods
-        self.interval = self.ins_ma.interval
-        self.type_str = self.ins_ma.type_str
+#         self.kline_datasets = self.ins_ma.kline_datasets
+#         self.periods = self.ins_ma.periods
 
-        # 어떻게 결과물을 발생시킬지 검토필요함.
-        self.result: Optional[list[int]] = None
+#         # 어떻게 결과물을 발생시킬지 검토필요함.
+#         self.result: Optional[list[int]] = None
 
-        # 상태(True/False) / position(1/2) / class number(1)
-        self.fail_message: List = [0, 2, 1, 0]
-        self.success_message: List = [1, 2, 1]
+#         # 상태(True/False) / position(1/2) / class number(1)
+#         self.fail_message: List = [0, 2, 1, 0]
+#         self.success_message: List = [1, 2, 1]
 
-    def reset_message(self):
-        self.fail_message: List = [0, 2, 1, 0]
-        self.success_message: List = [1, 2, 1]
+#     def reset_message(self):
+#         self.fail_message: List = [0, 2, 1, 0]
+#         self.success_message: List = [1, 2, 1]
 
-    def run(self):
-        symbols = list(self.kline_datasets.keys())
-        result = {}
-        for symbol in symbols:
-            ma_1 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[0]}"
-            )  # 7
-            ma_2 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[1]}"
-            )  # 25
-            ma_3 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[2]}"
-            )  # 99
+#     def run(self):
+#         result = {}
 
-            macd = getattr(
-                self.ins_macd,
-                f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}",
-            )
-            macd_line = macd[0]
-            signal_line = macd[1]
-            histogram = macd[2]
+#         ma_1 = self.ins_ma.get_data
 
-            base_data = getattr(
-                self.kline_datasets[symbol], f"interval_{self.interval}"
-            )
-            convert_to_array = np.array(base_data, float)
-            current_price = float(convert_to_array[-1][4])
-            open_price = float(convert_to_array[-1][1])
+#         ma_1 = getattr(
+#             self.ins_ma, f"{self.type_str}_{self.periods[0]}"
+#         )  # 7
+#         ma_2 = getattr(
+#             self.ins_ma, f"{self.type_str}_{self.periods[1]}"
+#         )  # 25
+#         ma_3 = getattr(
+#             self.ins_ma, f"{self.type_str}_{self.periods[2]}"
+#         )  # 99
 
-            # 조건 1 : 캔들 하락
-            if not open_price > current_price:
-                result[symbol] = self.fail_message
-                continue
+#         histogram = getattr(self.ins_macd, f"{self.ins_macd.type_str}_histogram")
+#         signal_line = getattr(self.ins_macd, f"{self.ins_macd.type_str}_signal")
+#         macd_line = getattr(self.ins_macd, f"{self.ins_macd.type_str}_macd")
 
-            # 조건 2 : MA간 순위 비교
-            is_price_trend = current_price < ma_3[-1] < open_price < ma_1[-1] < ma_2[-1]
-            if not is_price_trend:
-                result[symbol] = self.fail_message
-                continue
+#         base_data = getattr(
+#             self.kline_datasets[symbol], f"interval_{self.interval}"
+#         )
+#         convert_to_array = np.array(base_data, float)
+#         current_price = float(convert_to_array[-1][4])
+#         open_price = float(convert_to_array[-1][1])
 
-            # 조건 3 : 볼륨 강도
-            volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
-            volume_target_ratio = 0.45
-            if not volume_ratio <= volume_target_ratio:
-                result[symbol] = self.fail_message
-                continue
+#         # 조건 1 : 캔들 하락
+#         if not open_price > current_price:
+#             result = self.fail_message
+#             return
 
-            ### DEBUG CODE
-            if not macd_line[-1] > signal_line[-1]:
-                result[symbol] = self.fail_message
-                continue
+#         # 조건 2 : MA간 순위 비교
+#         is_price_trend = current_price < ma_3[-1] < open_price < ma_1[-1] < ma_2[-1]
+#         if not is_price_trend:
+#             result = self.fail_message
+#             return
 
-            # 조건 4 : 장기 MA 하락
-            target_hr = 6
-            hour_minute = 60
-            interval_min = 3
-            data_lengh = int((target_hr * hour_minute) / interval_min)
-            # print(f' data_lengh = {data_lengh}')
-            select_data_ma_3 = ma_3[-1 * data_lengh :]
-            # print(f'ma_lengh = {len(ma_3)}')
-            group_count = 5
-            if data_lengh % group_count != 0:
-                raise ValueError(f"시간 또는 그룹값 수정 필요함.")
+#         # 조건 3 : 볼륨 강도
+#         volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
+#         volume_target_ratio = 0.45
+#         if not volume_ratio <= volume_target_ratio:
+#             result = self.fail_message
+#             return
 
-            data_step = int(data_lengh / group_count)
-            group_condition = []
-            for count in range(group_count):
+#         ### DEBUG CODE
+#         if not macd_line[-1] > signal_line[-1]:
+#             result = self.fail_message
+#             return
 
-                start = count * data_step
-                stop = start + data_step
-                group_condition.append(np.arange(start=start, stop=stop, step=1))
-            down_count = 0
+#         # 조건 4 : 장기 MA 하락
+#         target_hr = 6
+#         hour_minute = 60
+#         interval_min = 3
+#         data_lengh = int((target_hr * hour_minute) / interval_min)
+#         # print(f' data_lengh = {data_lengh}')
+#         select_data_ma_3 = ma_3[-1 * data_lengh :]
+#         # print(f'ma_lengh = {len(ma_3)}')
+#         group_count = 5
+#         if data_lengh % group_count != 0:
+#             raise ValueError(f"시간 또는 그룹값 수정 필요함.")
 
-            target_ratio = 1
+#         data_step = int(data_lengh / group_count)
+#         group_condition = []
+#         for count in range(group_count):
 
-            for condition in reversed(group_condition):
-                diff_ma = np.diff(select_data_ma_3[condition])
-                positive_ratio = np.sum(diff_ma < 0) / (data_step - 1)
-                if not target_ratio <= positive_ratio:
-                    continue
-                down_count += 1
+#             start = count * data_step
+#             stop = start + data_step
+#             group_condition.append(np.arange(start=start, stop=stop, step=1))
+#         down_count = 0
 
-            if down_count < 2:
-                result[symbol] = self.fail_message
-                continue
-            self.success_message.append(down_count)
-            result[symbol] = self.success_message
-            self.reset_message()
-        self.result = result
+#         target_ratio = 1
+
+#         for condition in reversed(group_condition):
+#             diff_ma = np.diff(select_data_ma_3[condition])
+#             positive_ratio = np.sum(diff_ma < 0) / (data_step - 1)
+#             if not target_ratio <= positive_ratio:
+#                 continue
+#             down_count += 1
+
+#         if down_count < 2:
+#             result[symbol] = self.fail_message
+#             return
+#         self.success_message.append(down_count)
+#         result[symbol] = self.success_message
+#         self.reset_message()
+#     self.result = result
 
 
-class BuyStrategy1:
-    """
-    Short 포지션 관련 분석
-    """
+# class BuyStrategy1:
+#     """
+#     Short 포지션 관련 분석
+#     """
 
-    def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
-        self.ins_ma = ma_data
-        self.ins_macd = macd_data
+#     def __init__(self, ma_data: IndicatorMA, macd_data: IndicatorMACD):
+#         self.ins_ma = ma_data
+#         self.ins_macd = macd_data
 
-        self.kline_datasets = self.ins_ma.kline_datasets
-        self.periods = self.ins_ma.periods
-        self.interval = self.ins_ma.interval
-        self.type_str = self.ins_ma.type_str
+#         self.kline_datasets = self.ins_ma.kline_datasets
+#         self.periods = self.ins_ma.periods
+#         self.interval = self.ins_ma.interval
+#         self.type_str = self.ins_ma.type_str
 
-        # 어떻게 결과물을 발생시킬지 검토필요함.
-        self.result: Optional[list[int]] = None
+#         # 어떻게 결과물을 발생시킬지 검토필요함.
+#         self.result: Optional[list[int]] = None
 
-        # 상태(True/False) / position(1/2) / class number(1)
-        self.fail_message: List = [0, 1, 1, 0]
-        self.success_message: List = [1, 1, 1]
+#         # 상태(True/False) / position(1/2) / class number(1)
+#         self.fail_message: List = [0, 1, 1, 0]
+#         self.success_message: List = [1, 1, 1]
 
-    def reset_message(self):
-        self.fail_message: List = [0, 1, 1, 0]
-        self.success_message: List = [1, 1, 1]
+#     def reset_message(self):
+#         self.fail_message: List = [0, 1, 1, 0]
+#         self.success_message: List = [1, 1, 1]
 
-    def run(self):
-        symbols = list(self.kline_datasets.keys())
-        result = {}
-        for symbol in symbols:
-            ma_1 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[0]}"
-            )  # 7
-            ma_2 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[1]}"
-            )  # 25
-            ma_3 = getattr(
-                self.ins_ma, f"{symbol}_{self.type_str}_{self.periods[2]}"
-            )  # 99
+#     def run(self):
+#         symbols = list(self.kline_datasets.keys())
+#         result = {}
+#         for symbol in symbols:
+#             ma_1 = getattr(
+#                 self.ins_ma, f"{self.type_str}_{self.periods[0]}"
+#             )  # 7
+#             ma_2 = getattr(
+#                 self.ins_ma, f"{self.type_str}_{self.periods[1]}"
+#             )  # 25
+#             ma_3 = getattr(
+#                 self.ins_ma, f"{self.type_str}_{self.periods[2]}"
+#             )  # 99
 
-            macd = getattr(
-                self.ins_macd,
-                f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}",
-            )
-            macd_line = macd[0]
-            # print(f'MACD:{macd_line}')
-            signal_line = macd[1]
-            histogram = macd[2]
+#             macd = getattr(
+#                 self.ins_macd,
+#                 f"{symbol}_{self.ins_macd.type_str}_{self.ins_macd.short_window}_{self.ins_macd.long_window}_{self.ins_macd.signal_window}",
+#             )
+#             macd_line = macd[0]
+#             # print(f'MACD:{macd_line}')
+#             signal_line = macd[1]
+#             histogram = macd[2]
 
-            base_data = getattr(
-                self.kline_datasets[symbol], f"interval_{self.interval}"
-            )
-            convert_to_array = np.array(base_data, float)
-            current_price = float(convert_to_array[-1][4])
-            open_price = float(convert_to_array[-1][1])
+#             base_data = getattr(
+#                 self.kline_datasets[symbol], f"interval_{self.interval}"
+#             )
+#             convert_to_array = np.array(base_data, float)
+#             current_price = float(convert_to_array[-1][4])
+#             open_price = float(convert_to_array[-1][1])
 
-            # 조건 1 : 캔들 상승
-            if not open_price < current_price:
-                result[symbol] = self.fail_message
-                # print(f'fail 1 {symbol} - {result[symbol]}')
-                continue
+#             # 조건 1 : 캔들 상승
+#             if not open_price < current_price:
+#                 result[symbol] = self.fail_message
+#                 # print(f'fail 1 {symbol} - {result[symbol]}')
+#                 continue
 
-            # 조건 2 : MA간 순위 비교
-            is_price_trend = current_price > ma_1[-1] > open_price > ma_3[-1] > ma_2[-1]
+#             # 조건 2 : MA간 순위 비교
+#             is_price_trend = current_price > ma_1[-1] > open_price > ma_3[-1] > ma_2[-1]
 
-            if not is_price_trend:
-                result[symbol] = self.fail_message
-                continue
+#             if not is_price_trend:
+#                 result[symbol] = self.fail_message
+#                 continue
 
-            # 조건 3 : 볼륨 강도
-            volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
-            volume_target_ratio = 0.55
-            if not volume_ratio >= volume_target_ratio:
-                result[symbol] = self.fail_message
-                continue
+#             # 조건 3 : 볼륨 강도
+#             volume_ratio = np.mean(convert_to_array[-3:, 10] / convert_to_array[-3:, 7])
+#             volume_target_ratio = 0.55
+#             if not volume_ratio >= volume_target_ratio:
+#                 result[symbol] = self.fail_message
+#                 continue
 
-            ### DEBUG CODE
-            if not macd_line[-1] < signal_line[-1]:
-                result[symbol] = self.fail_message
-                continue
+#             ### DEBUG CODE
+#             if not macd_line[-1] < signal_line[-1]:
+#                 result[symbol] = self.fail_message
+#                 continue
 
-            # 조건 4 : 장기 MA 하락
-            target_hr = 6
-            hour_minute = 60
-            interval_min = 3
-            data_lengh = int((target_hr * hour_minute) / interval_min)
-            select_data_ma_3 = ma_3[-1 * data_lengh :]
+#             # 조건 4 : 장기 MA 하락
+#             target_hr = 6
+#             hour_minute = 60
+#             interval_min = 3
+#             data_lengh = int((target_hr * hour_minute) / interval_min)
+#             select_data_ma_3 = ma_3[-1 * data_lengh :]
 
-            group_count = 5
-            if data_lengh % group_count != 0:
-                raise ValueError(f"시간 또는 그룹값 수정 필요함.")
+#             group_count = 5
+#             if data_lengh % group_count != 0:
+#                 raise ValueError(f"시간 또는 그룹값 수정 필요함.")
 
-            data_step = int(data_lengh / group_count)
-            group_condition = []
-            for count in range(group_count):
+#             data_step = int(data_lengh / group_count)
+#             group_condition = []
+#             for count in range(group_count):
 
-                start = count * data_step
-                stop = start + data_step
-                group_condition.append(np.arange(start=start, stop=stop, step=1))
-            down_count = 0
+#                 start = count * data_step
+#                 stop = start + data_step
+#                 group_condition.append(np.arange(start=start, stop=stop, step=1))
+#             down_count = 0
 
-            target_ratio = 1
-            for condition in reversed(group_condition):
-                diff_ma = np.diff(select_data_ma_3[condition])
-                positive_ratio = np.sum(diff_ma > 0) / (data_step - 1)
-                if not target_ratio <= positive_ratio:
-                    continue
-                # print(positive_ratio)
-                down_count += 1
-            if down_count < 2:
-                result[symbol] = self.fail_message
-                continue
+#             target_ratio = 1
+#             for condition in reversed(group_condition):
+#                 diff_ma = np.diff(select_data_ma_3[condition])
+#                 positive_ratio = np.sum(diff_ma > 0) / (data_step - 1)
+#                 if not target_ratio <= positive_ratio:
+#                     continue
+#                 # print(positive_ratio)
+#                 down_count += 1
+#             if down_count < 2:
+#                 result[symbol] = self.fail_message
+#                 continue
 
-            self.success_message.append(down_count)
-            result[symbol] = self.success_message
-            self.reset_message()
-        self.result = result
-        # print(self.result)
+#             self.success_message.append(down_count)
+#             result[symbol] = self.success_message
+#             self.reset_message()
+#         self.result = result
+#         # print(self.result)
 
 
 class Intervals:
     intervals = ["3m", "5m"]
 
-
 class AnalysisManager:
-    def __init__(self, kline_datasets: Dict[str, DataStoreage.KlineData]):
-        self.data_sets = kline_datasets
+    def __init__(self, datasets: SubStorage):
+        self.datasets = datasets
 
         ### 공통 설정
-        self.interval_3m: str = "3m"
-        self.interval_5m: str = "5m"
+        self.interval_3m: str = "interval_3m"
+        self.interval_5m: str = "interval_5m"
 
         ### MA 분석
         self.data_type_sma: str = "sma"
@@ -401,9 +399,8 @@ class AnalysisManager:
         self.data_type_macd: str = "macd"
         self.periods: List[int] = [7, 25, 99]
         self.ins_ma_sma_3m = IndicatorMA(
-            kline_datasets=self.data_sets,
+            kline_datasets=self.datasets.get_data(self.interval_3m),
             data_type=self.data_type_sma,
-            interval=self.interval_3m,
             periods=self.periods,
         )
 
@@ -414,21 +411,21 @@ class AnalysisManager:
         self.long_window = 26
         self.signal_window = 9
         self.ins_macd_12_26_9 = IndicatorMACD(
-            kline_datasets=self.data_sets,
+            kline_datasets=self.datasets.get_data(self.interval_3m),
             col_index=self.col_index,
             short_window=self.short_window,
             long_window=self.long_window,
             signal_window=self.signal_window,
         )
 
-        self.ins_sell_strategy_1: BuyStrategy1 = SellStrategy1(
-            self.ins_ma_sma_3m, self.ins_macd_12_26_9
-        )
-        self.ins_buy_strategy_1: BuyStrategy1 = BuyStrategy1(
-            self.ins_ma_sma_3m, self.ins_macd_12_26_9
-        )
+        # self.ins_sell_strategy_1: BuyStrategy1 = SellStrategy1(
+        #     self.ins_ma_sma_3m, self.ins_macd_12_26_9
+        # )
+        # self.ins_buy_strategy_1: BuyStrategy1 = BuyStrategy1(
+        #     self.ins_ma_sma_3m, self.ins_macd_12_26_9
+        # )
 
-        self.success_signals: List[Any] = []
+        # self.success_signals: List[Any] = []
 
     def reset_signal(self):
         self.success_signals: List[Any] = []

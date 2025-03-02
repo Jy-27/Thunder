@@ -3,27 +3,41 @@
 
 import asyncio
 import json
-#nest injection
+
+# nest injection
 import os, sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 import Workspace.Processor.Receiver.KlineCycle as KlineCycle
 
-#DependencyCreate
-from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher
-from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket
+# DependencyCreate
+from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import (
+    FuturesMarketFetcher,
+)
+from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import (
+    FuturesMarketWebsocket,
+)
 
-#DepedencyInjection
+# DepedencyInjection
 from Workspace.DataStorage.NodeStorage import MainStorage, SubStorage
 from Workspace.Processor.Receiver.KlineCycle import KlineCycle
-from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket
+from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import (
+    FuturesExecutionWebsocket,
+)
 from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClient
 
 
 class TradingAsyncLoop:
-    def __init__(self, kline_cycle:KlineCycle, execution_ws: FuturesExecutionWebsocket, real_time:MainStorage, event_to_wallet:asyncio.Event):
-        #DependencyCreate
+    def __init__(
+        self,
+        kline_cycle: KlineCycle,
+        execution_ws: FuturesExecutionWebsocket,
+        real_time: MainStorage,
+        event_to_wallet: asyncio.Event,
+    ):
+        # DependencyCreate
         self.ins_market_fetcher = FuturesMarketFetcher()
         self.ins_kline_cycle = kline_cycle
 
@@ -45,7 +59,7 @@ class TradingAsyncLoop:
             message = await self.ins_market_ws.receive_message()
             kline_data = message["data"]["k"]
             symbol = kline_data["s"]
-            interval = f"interval_{kline_data["i"]}"
+            interval = f"interval_{kline_data['i']}"
             self.storage_real_time.set_data(symbol, interval, kline_data)
         await self.ins_market_ws.close_connection()
         print(f"  ⛓️‍💥 Websocket(Market) Disconnected!")
@@ -58,7 +72,7 @@ class TradingAsyncLoop:
             self.event_to_wallet.set()
         await self.ins_execution_ws.close_connection()
         print(f"  ⛓️‍💥 Websocket(Execution) Disconnected!")
-    
+
     async def start(self):
         task_1 = asyncio.create_task(self.ins_kline_cycle.start())
         task_2 = asyncio.create_task(self.run_market_websocket())
@@ -66,31 +80,32 @@ class TradingAsyncLoop:
 
         await asyncio.gather(task_1, task_2, task_3)
 
+
 if __name__ == "__main__":
     import SystemConfig
     import Workspace.Utils.BaseUtils as base_utils
     import Workspace.Services.PrivateAPI.Messaging.TelegramClient as telegram_client
-    import os    
+    import os
 
     symbols = SystemConfig.Streaming.symbols
     intervals = SystemConfig.Streaming.intervals
     path_binance_api = SystemConfig.Path.bianace
     path_telegram_api = SystemConfig.Path.telegram
-        
+
     binance_api = base_utils.load_json(path_binance_api)
     teltegram_api = base_utils.load_json(path_telegram_api)
 
     convert_to_intervals = [f"interval_{i}" for i in intervals]
     sub_storage = SubStorage(convert_to_intervals)
     history = MainStorage(symbols, sub_storage)
-    
+
     kline_cycle = KlineCycle(symbols, intervals, history)
     execution_ws = FuturesExecutionWebsocket(**binance_api)
     real_time = MainStorage(symbols, sub_storage)
     telegram_client = TelegramClient(**teltegram_api)
-        
+
     event_1 = asyncio.Event()
-    
+
     obj = TradingAsyncLoop(kline_cycle, execution_ws, real_time, event_1)
     os.system("clear")
     asyncio.run(obj.start())

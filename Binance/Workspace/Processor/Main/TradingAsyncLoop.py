@@ -9,6 +9,7 @@ home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 import Workspace.Processor.Receiver.KlineCycle as KlineCycle
+import Workspace.Utils.TradingUtils as tr_utils
 
 #DependencyCreate
 from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher
@@ -24,7 +25,6 @@ from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClien
 class TradingAsyncLoop:
     def __init__(self, kline_cycle:KlineCycle, execution_ws: FuturesExecutionWebsocket, real_time:MainStorage, event_to_wallet:asyncio.Event):
         #DependencyCreate
-        self.ins_market_fetcher = FuturesMarketFetcher()
         self.ins_kline_cycle = kline_cycle
 
         # kline attr
@@ -43,10 +43,10 @@ class TradingAsyncLoop:
         print(f"  🔗 Websocket(Market) Connect!!")
         while True:
             message = await self.ins_market_ws.receive_message()
-            kline_data = message["data"]["k"]
-            symbol = kline_data["s"]
-            interval = f"interval_{kline_data["i"]}"
-            self.storage_real_time.set_data(symbol, interval, kline_data)
+            symbol, interval = tr_utils.Extractor.format_websocket(message)
+            convert_to_interval = f"interval_{interval}"
+            kline_data = tr_utils.Extractor.format_kline_data(message)
+            self.storage_real_time.set_data(symbol, convert_to_interval, kline_data)
         await self.ins_market_ws.close_connection()
         print(f"  ⛓️‍💥 Websocket(Market) Disconnected!")
 

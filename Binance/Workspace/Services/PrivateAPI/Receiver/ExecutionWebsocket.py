@@ -83,6 +83,8 @@ if __name__ == "__main__":
     
     import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_tr_client
     
+    import Workspace.DataStorage.ExecutionMessage as message_storage
+    
     import Workspace.DataStorage.NodeStorage as storage
     api_path = SystemConfig.Path.bianace
     api_keys = base_utils.load_json(api_path)
@@ -102,6 +104,8 @@ if __name__ == "__main__":
     ins_client = futures_tr_client.FuturesTradingClient(**api_keys)
     pending_o = pending_order.PendingOrder(['ADAUSDT', 'XRPUSDT'], ins_client)
     
+    last_message = message_storage.ExecutionMessage(main_fields)
+    
     obj = ExecutionWebsocket(api, market_base_url, websocket_base_url, endpoint)
     async def run(count:int):
         print(f" ⏳ 연결 시도중")
@@ -109,7 +113,10 @@ if __name__ == "__main__":
         print(f" 🔗 websocket 연결")
         for _ in range(count):
             data = await obj.receive_message()
+            print(data)
             pending_o.update_order(data)
+            last_message.set_data(data)
+            
             
             print(f" 🖨️ data: \n{pending_o.storage}\n")
         
@@ -117,4 +124,4 @@ if __name__ == "__main__":
         await obj.close_connection()
         print(f" ⛓️‍💥 websocket 연결 해제")
     
-    asyncio.run(run(20))
+    asyncio.run(run(4))

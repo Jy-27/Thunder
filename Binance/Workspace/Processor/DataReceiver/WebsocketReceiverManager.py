@@ -9,7 +9,7 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 #힌트 제공용
 from asyncio import Queue
 from aiohttp import ClientSession
-from Workspace.Services.Receiver.WebsocketReceiver import WebsocketReceiver
+from Workspace.Services.PublicData.Receiver.MarketWebsocket import MarketWebsocket
 
 class WebsocketReceiverManager:
     """
@@ -20,22 +20,23 @@ class WebsocketReceiverManager:
     Alias: ws_recv_manager
     
     """
-    def __init__(self, websocket_receiver:WebsocketReceiver):
+    def __init__(self, websocket_receiver:MarketWebsocket, queue:Queue):
         self.websocket_receiver = websocket_receiver
         self.intervals = self.websocket_receiver.interval_streams
+        self.queue = Queue()
     
     async def receive_data(self):
         """
         🚀 웹소켓 데이터 수신 함수이다. 1회 실행시 1회 수신한다.
         계속 수신하려면 반복문 내에 배치하면 된다. 데이터는 Queue로 공유된다.
         """
-        await self.websocket_receiver.receive_data()
+        await self.websocket_receiver.receive_message()
     
     def clear_queue(self):
         """
         🧹 Queue데이터를 지운다. 동기식 함수가 맞다.
         """
-        self.websocket_receiver.queue.get_nowait()
+        self.queue.get_nowait()
         
     async def get_data(self) -> Dict:
         """
@@ -44,12 +45,14 @@ class WebsocketReceiverManager:
         Returns:
             Dict: websocket message
         """
-        return await self.websocket_receiver.queue.get()            
+        return await self.queue.get()            
 
 if __name__ == "__main__":
     import SystemConfig
-    import Workspace.Services.Receiver.FuturesWebsocketReceiver as futures_wsr
+    import Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket as futures_wsr
     import asyncio
+    
+    queue = Queue()
     
     async def main():
         """
@@ -57,15 +60,15 @@ if __name__ == "__main__":
         """
         symbols = SystemConfig.Streaming.symbols
         intervals = SystemConfig.Streaming.intervals
+        wsr = futures_wsr.FuturesMarketWebsocket(symbols)
+        await wsr.open_connection(intervals)
         
-        queue = Queue()
-        sess = ClientSession()
-        wsr = futures_wsr.FuturesWebsocketReceiver(symbols, sess, queue)
-        await wsr.setup_kline_stream(intervals)
-        ins_wsr = WebsocketReceiverManager(wsr)
+        
+        
+        ins_wsr = WebsocketReceiverManager(wsr, queue)
         print(" 🚀 Websocket 수신 테스트!!")
         for _ in range(3):
-            await ins_wsr.receive_data()
+            print(await ins_wsr.receive_data())
         print(" 👍🏻 websocket 수신 완료\n")
         
         print(" 🚀 websocket queue 테스트")

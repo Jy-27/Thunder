@@ -80,7 +80,7 @@ if __name__ == "__main__":
         intervals = SystemConfig.Streaming.intervals
         ws_receiver = MarketWebsocket(base_url, symbols)
 
-        await ws_receiver.setup_kline_stream(intervals)  # ✅ WebSocket 설정
+        await ws_receiver.open_connection(intervals)  # ✅ WebSocket 설정
         print("\n🚀 WebSocket 연결 성공!\n")
 
         try:

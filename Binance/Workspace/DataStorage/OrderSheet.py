@@ -50,3 +50,34 @@ class OrderSheet:
         
         if self.leverage is not None and (not isinstance(self.leverage, int) or not 1<= self.leverage <= 125):
             raise ValueError(f"leverage 입력 오류: {self.leverage}")
+        
+        
+
+@dataclass
+class TradingSheet:
+    e:str   # 이벤트 타입
+    E:int   # 이벤트 발생 시간
+    T:int   # 트랙잭션 시간
+    s:str   # 심볼
+    q:float # 거래된 수량
+    p:float # 거래 가격
+    m:bool   # True: Maker / False:Taker
+    c:str   # client ID
+    S:str   # 주문 방향 (BUY or SELL)
+    L:float # 거래 실행 가격
+    l:float # 실행된 수량
+    t:int   # 거래 ID
+    i:int   # 주문 ID
+    {'e': 'TRADE_LITE',
+     'E': 1741065018742,
+     'T': 1741065018741,
+     's': 'ADAUSDT',
+     'q': '7',
+     'p': '0.00000',
+     'm': False,
+     'c': 'ios_XcnRHY76xFSeE8cwTwaZ',
+     'S': 'SELL',
+     'L': '0.81850',
+     'l': '7',
+     't': 1438516741,
+     'i': 51261552850}

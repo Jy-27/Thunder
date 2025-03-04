@@ -337,6 +337,7 @@ def convert_to_literal(input_value) -> Union[str, int, float, bool]:
         else:
             return input_value
 
+
 def convert_dict_to_literal(input_data: Dict[str, Any]) -> Dict:
     """
     ⭕️ Dict자료형의 value값을 리테일 처리한다.
@@ -390,13 +391,14 @@ def calculate_divisible_intervals(time_unit):
 
     return divisible_intervals
 
-def sleep_next_minute(minutes:int) -> datetime:
+
+def sleep_next_minute(minutes: int) -> datetime:
     """
     ⭕️ 지정한 분(minutes)정각까지 timesleep 기능 실행
 
     Args:
         minutes (int): 분(minutes)
-    
+
     Notes:
         120분 입력시 2시간 뒤 정각까지 타임슬립
 
@@ -418,7 +420,7 @@ async def wait_until_next_interval(time_unit: str, interval: int) -> datetime:
     """
     ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
     비활성화 예정
-    
+
     1. 기능 : 다음 지정 interval시간 정각(0초) 까지 대기
     2. 매개변수
         1) time_unit : 'hour', 'minute', 'second'
@@ -447,12 +449,13 @@ async def wait_until_next_interval(time_unit: str, interval: int) -> datetime:
         # 1초 대기
         await asyncio.sleep(1)
 
+
 # 지정된 시간 동안 대기 (timesleep버전)
 async def wait_time_sleep(time_unit: str, duration: int) -> datetime:
     """
     ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
     비활성화 예정
-    
+
     1. 기능 : 지정된 시간 동안 대기 (timesleep 버전)
     2. 매개변수
         1) time_unit : 시간 종류
@@ -485,7 +488,7 @@ async def wait_until_exact_time(time_unit: str) -> datetime:
     """
     ❌❌❌❌❌❌❌❌❌❌❌❌❌❌
     비활성화 예정
-    
+
     1. 기능 : time_unit기준 정각(0초)까지 대기
     2. 매개변수
         1) time_unit : 시간 종류
@@ -859,7 +862,8 @@ def decimal_to_text(decimal: int) -> str:
 
     return first_char + rest_chars
 
-def is_time_match(interval:str) -> bool:
+
+def is_time_match(interval: str) -> bool:
     """
     입력된 interval의 step이 현재시간에 해당여부를 확인한다.
 
@@ -883,7 +887,8 @@ def is_time_match(interval:str) -> bool:
 
     return False
 
-def get_current_time(style:str = "%Y-%m-%d %H:%M:%S") -> str:
+
+def get_current_time(style: str = "%Y-%m-%d %H:%M:%S") -> str:
     """
     현재시각을 매개변수 스타일에 맞게 반환한다.
 
@@ -894,6 +899,7 @@ def get_current_time(style:str = "%Y-%m-%d %H:%M:%S") -> str:
         str: 지정 스타일에 맞는 시간타입
     """
     return datetime.now().strftime(style)
+
 
 def bytes_to_gb(bytes_value) -> float:
     """
@@ -907,6 +913,7 @@ def bytes_to_gb(bytes_value) -> float:
     """
     return round(bytes_value / 1024**3, 2)  # GB 변환
 
+
 def bytes_to_mb(bytes_value) -> float:
     """
     Byte 👉 Mega Byte로 변경
@@ -918,6 +925,7 @@ def bytes_to_mb(bytes_value) -> float:
         float: Mega Byte
     """
     return round(bytes_value / 1024**2, 2)
+
 
 def bytes_to_kb(bytes_value) -> float:
     """

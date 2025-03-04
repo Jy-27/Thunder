@@ -2,6 +2,7 @@
 
 from .OrderProcessor import OrderProcessor
 from typing import Union, Optional, Dict
+
 import os
 
 import os
@@ -9,6 +10,7 @@ import sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
+from Workspace.Processor.Order.PendingOrder import PendingOrder
 import Workspace.Utils.TradingUtils as futures_utils
 import SystemConfig
 import Workspace.Services.PublicData.FuturesMarketFetcher as futures_market
@@ -238,3 +240,13 @@ class Orders(OrderProcessor):
     @classmethod
     def open_limit_order(cls):
         ...
+        
+
+
+
+class ValidatePosition:
+    def __init__(self, pending_order:PermissionError):
+        self.pending_order = pending_order
+        
+    def check_limit_order(self, symbol:str):
+        pending_data = self.pending_order

@@ -52,6 +52,17 @@ class PendingOrder:
         if field not in fields:
             raise ValueError(f"field 입력 오류: {field}")
 
+    def get_pending_order(self, symbol:str) -> Dict:
+        """
+        🐣 symbol별 pending 데이터를 조회하여 dict타입으로 반환한다.        
+
+        Args:
+            symbol (str): 심볼명
+
+            Dict : pending 데이터
+        """
+        return getattr(self.storage, symbol).to_dict()
+
     def set_pending_order(self, symbol:str, pending_type:str, price:float):
         """
         🐣 신규 주문 발생시 필드를 업데이트한다.
@@ -119,4 +130,4 @@ if __name__ == "__main__":
     client = futures_tr_client(**api)
     symbols = ['ADAUSDT', "XRPUSDT"]
     
-    obj = PedingOrder(symbols, client)
+    obj = PendingOrder(symbols, client)

@@ -21,11 +21,18 @@ from Workspace.Processor.Receiver.KlineCycle import KlineCycle
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket
 from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClient
 
+from Workspace.Processor.Order.PendingOrder import PendingOrder
+from Workspace.Processor.Wallet.Wallet import Wallet
+from Workspace.DataStorage.ExecutionMessage import ExecutionMessage
 
 class TradingAsyncLoop:
-    def __init__(self, kline_cycle:KlineCycle, execution_ws: FuturesExecutionWebsocket, real_time:MainStorage, event_to_wallet:asyncio.Event):
+    def __init__(self, kline_cycle:KlineCycle, execution_ws: FuturesExecutionWebsocket, real_time:MainStorage, pending_order:PendingOrder, wallet:Wallet, exe_message:ExecutionMessage):#, event_to_wallet:asyncio.Event):
         #DependencyCreate
         self.ins_kline_cycle = kline_cycle
+
+        self.pending_order = pending_order
+        self.wallet = wallet
+        self.exe_message = exe_message
 
         # kline attr
         self.symbols = self.ins_kline_cycle.symbols
@@ -36,7 +43,7 @@ class TradingAsyncLoop:
         self.ins_execution_ws = execution_ws
 
         self.storage_real_time = real_time
-        self.event_to_wallet = event_to_wallet
+        self.queue = asyncio.Queue()
 
     async def run_market_websocket(self):
         await self.ins_market_ws.open_connection(self.intervals)
@@ -55,22 +62,34 @@ class TradingAsyncLoop:
         print(f"  🔗 Websocket(Execution) Connect!!")
         while True:
             message = str(await self.ins_execution_ws.receive_message())
-            self.event_to_wallet.set()
+            await self.queue.put(message)
         await self.ins_execution_ws.close_connection()
         print(f"  ⛓️‍💥 Websocket(Execution) Disconnected!")
+
+    async def run_update(self):
+        print("  🔄 Data Sync start")
+        while True:
+            message = await self.queue.get()
+            await self.wallet.update_balance()
+            self.pending_order.update_order(message)
+            self.exe_message.set_data(message)
     
     async def start(self):
         task_1 = asyncio.create_task(self.ins_kline_cycle.start())
         task_2 = asyncio.create_task(self.run_market_websocket())
         task_3 = asyncio.create_task(self.run_execution_websocket())
+        task_4 = asyncio.create_task(self.run_update())
 
-        await asyncio.gather(task_1, task_2, task_3)
+        await asyncio.gather(task_1, task_2, task_3, task_4)
 
 if __name__ == "__main__":
     import SystemConfig
     import Workspace.Utils.BaseUtils as base_utils
     import Workspace.Services.PrivateAPI.Messaging.TelegramClient as telegram_client
-    import os    
+    import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_tr_client
+    import os
+    from Workspace.Processor.Wallet.Wallet import Wallet
+    from Workspace.DataStorage.ExecutionMessage import ExecutionMessage
 
     symbols = SystemConfig.Streaming.symbols
     intervals = SystemConfig.Streaming.intervals
@@ -88,9 +107,14 @@ if __name__ == "__main__":
     execution_ws = FuturesExecutionWebsocket(**binance_api)
     real_time = MainStorage(symbols, sub_storage)
     telegram_client = TelegramClient(**teltegram_api)
-        
-    event_1 = asyncio.Event()
     
-    obj = TradingAsyncLoop(kline_cycle, execution_ws, real_time, event_1)
+    path = SystemConfig.Path.bianace
+    api = base_utils.load_json(path)
+    tr_client = futures_tr_client.FuturesTradingClient(**api)
+    pending = PendingOrder(symbols, tr_client)
+    wallet_ = Wallet(5, tr_client)
+    exe_message = ExecutionMessage(symbols)
+    
+    obj = TradingAsyncLoop(kline_cycle, execution_ws, real_time, pending, wallet_, exe_message)
     os.system("clear")
     asyncio.run(obj.start())

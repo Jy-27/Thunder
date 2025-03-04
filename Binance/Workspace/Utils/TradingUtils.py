@@ -9,6 +9,7 @@ import subprocess
 
 import os
 import sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -36,15 +37,15 @@ ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 init_account_balance = ins_futures_client.fetch_account_balance()
 init_exchange_info = ins_futures_market.fetch_exchange_info()
 init_brackets_data = {
-    symbol: 
-        ins_futures_client.fetch_leverage_brackets(symbol)
+    symbol: ins_futures_client.fetch_leverage_brackets(symbol)
     for symbol in SystemConfig.Streaming.symbols
 }
 
+
 class Validator:
     ### 함수 동작을 위한 내함수
-    @classmethod
-    def args_position(cls, position: Union[int, str]) -> Union[int, str]:
+    @staticmethod
+    def args_position(position: Union[int, str]) -> Union[int, str]:
         """
         입력된 position값의 유효성을 검토한다.
 
@@ -75,8 +76,8 @@ class Validator:
             raise ValueError(f"position은 int 또는 str만 입력 가능: {type(position)}")
         return position
 
-    @classmethod
-    def args_leverage(cls, leverage: int) -> int:
+    @staticmethod
+    def args_leverage(leverage: int) -> int:
         """
         입력된 leverage값의 유효성을 검토한다.
 
@@ -103,8 +104,8 @@ class Validator:
             )
         return leverage
 
-    @classmethod
-    def args_direction_of_order(cls, validate_position: Union[int, str]) -> int:
+    @staticmethod
+    def args_direction_of_order(validate_position: Union[int, str]) -> int:
         """
         Binance Futures 계산에 쓰일 direction_of_order 값을 계산한다.
         Long position은 1, Short Position은 -1값을 반환한다.
@@ -131,15 +132,16 @@ class Validator:
         else:
             return -1
 
-    @classmethod
-    def contains(cls, item, collection):
+    @staticmethod
+    def contains(item, collection):
         return item in collection
 
     # def funds_sufficient(balance:)
 
+
 class Calculator:
-    @classmethod
-    def imr(cls, leverage: int) -> float:  # 🚀
+    @staticmethod
+    def imr(leverage: int) -> float:  # 🚀
         """
         IMR(Initial Margin Ratio) 초기 증거금 비율을 계산한다.
 
@@ -162,9 +164,8 @@ class Calculator:
         return 1 / validate_leverage
 
     # 초기 마진값 산출
-    @classmethod
+    @staticmethod
     def initial_margin(
-        cls,
         position_size: float,
         entry_price: float,
         imr: float,
@@ -196,9 +197,8 @@ class Calculator:
         return float(position_size * entry_price * imr)
 
     # 손익금 산출
-    @classmethod
+    @staticmethod
     def net_pnl(
-        cls,
         position: Union[int, str],
         entry_price: float,
         exit_price: float,
@@ -238,9 +238,8 @@ class Calculator:
             return float((entry_price - exit_price) * position_size)
 
     # 미실현 손익금 산출
-    @classmethod
+    @staticmethod
     def unrealized_pnl(
-        cls,
         entry_price: float,
         mark_price: float,
         position_size: float,
@@ -265,9 +264,8 @@ class Calculator:
         return float(position_size * direction_of_order * (mark_price - entry_price))
 
     # 수익률 산출 (PNL 기준)
-    @classmethod
+    @staticmethod
     def roi_by_pnl(
-        cls,
         initial_margin: float,
         pnl: float,
     ) -> float:
@@ -300,9 +298,8 @@ class Calculator:
         return pnl / initial_margin
 
     # 수익률 산출 (가격 기준)
-    @classmethod
+    @staticmethod
     def roi_by_price(
-        cls,
         entry_price: float,
         exit_price: float,
         position: Union[int, str],
@@ -342,9 +339,8 @@ class Calculator:
         return side * ((1 - (exit_price / entry_price)) / imr)
 
     # 손익률 기준 목표금액 산출
-    @classmethod
+    @staticmethod
     def target_price(
-        cls,
         entry_price: float,
         target_roi: float,
         leverage: int,
@@ -382,9 +378,8 @@ class Calculator:
             return entry_price * (1 - (target_roi / leverage))
 
     # 가용 마진금액
-    @classmethod
+    @staticmethod
     def available_margin(
-        cls,
         net_collateral: float,
         open_order_losses: float,
         initial_margins: float,
@@ -414,9 +409,8 @@ class Calculator:
         return max(0, net_collateral - open_order_losses - initial_margins)
 
     # 최소 Position Size 산출
-    @classmethod    
+    @staticmethod
     def min_position_size(
-        cls,
         mark_price: float,
         min_qty: float,
         step_size: float,
@@ -427,9 +421,8 @@ class Calculator:
         return max(min_size, min_qty)
 
     # 최대 Position Size 산출
-    @classmethod    
+    @staticmethod
     def max_position_size(
-        cls,
         mark_price: float,
         leverage: int,
         step_size: float,
@@ -442,9 +435,9 @@ class Calculator:
 
 class Extractor:
     # API availableBalance 필터 및 반환
-    @classmethod
+    @staticmethod
     def available_balance(
-        cls, account_data: ins_futures_client.fetch_account_balance
+        account_data: ins_futures_client.fetch_account_balance,
     ) -> float:
         """
         Futures 계좌의 예수금을 필터한다.
@@ -453,23 +446,21 @@ class Extractor:
         return float(result)
 
     # API totalWalletBalance 필터 및 반환
-    @classmethod
+    @staticmethod
     def total_wallet_balance(
-        cls, account_data: ins_futures_client.fetch_account_balance
+        account_data: ins_futures_client.fetch_account_balance,
     ) -> float:
         result = account_data["totalWalletBalance"]
         return float(result)
 
     # API 최대 레버리지값 필터 및 반환
-    @classmethod
-    def max_leverage(
-        cls, brackets_data: ins_futures_client.fetch_leverage_brackets
-    ) -> int:
+    @staticmethod
+    def max_leverage(brackets_data: ins_futures_client.fetch_leverage_brackets) -> int:
         leverage = brackets_data[0]["brackets"][0]["initialLeverage"]
         return int(leverage)
 
-    @classmethod
-    def refine_exchange_data(cls, 
+    @staticmethod
+    def refine_exchange_data(
         symbol: str, exchange_data: ins_futures_market.fetch_exchange_info
     ) -> dict:  # 🚀
         """
@@ -559,9 +550,8 @@ class Extractor:
         }  # 가격제한 정밀도(소수점)
 
     # 거래가능한 symbol 리스트 필터 및 반환
-    @classmethod
-    def trading_symbols(
-        cls, exchange_data:dict) -> List[str]:
+    @staticmethod
+    def trading_symbols(exchange_data: dict) -> List[str]:
         """
         마켓에서 거래가능한 symbol 리스트를 필터 및 반환한다.
 
@@ -572,13 +562,16 @@ class Extractor:
         Returns:
             List: symbol 리스트
         """
-        status = 'TRADING'
-        return [data['symbol'] for data in exchange_data['symbols'] if data['status'] == status]
+        status = "TRADING"
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
 
     # 거래불가한 symbol 리스트 필터 및 반환
-    @classmethod
-    def settling_symbols(
-        cls, exchange_data:dict) -> List[str]:
+    @staticmethod
+    def settling_symbols(exchange_data: dict) -> List[str]:
         """
         마켓에서 일시적 거래중단(정산진행중) symbol 리스트르르 필터 및 반환한다.
 
@@ -588,11 +581,15 @@ class Extractor:
         Returns:
             List: symbol 리스트
         """
-        status = 'SETTLING'
-        return [data['symbol'] for data in exchange_data['symbols'] if data['status'] == status]
-        
-    @classmethod
-    def all_symbols(cls, exchange_data:dict) -> List:
+        status = "SETTLING"
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
+
+    @staticmethod
+    def all_symbols(exchange_data: dict) -> List:
         """
         마켓에 거래중인 전체 symbol리스트를 필터 및 반환한다.
 
@@ -602,10 +599,10 @@ class Extractor:
         Returns:
             List: symbol 리스트
         """
-        return [data['symbol'] for data in exchange_data['symbols']]
+        return [data["symbol"] for data in exchange_data["symbols"]]
 
-    @classmethod
-    def pending_symbols(cls, exchange_data:dict) -> List:
+    @staticmethod
+    def pending_symbols(exchange_data: dict) -> List:
         """
         마켓에 거래 보류중인 symbol리스트를 필터 및 반환한다.
 
@@ -615,11 +612,15 @@ class Extractor:
         Returns:
             List: symbol 리스트
         """
-        status = 'PENDING_TRADING'
-        return [data['symbol'] for data in exchange_data['symbols'] if data['status'] == status]
+        status = "PENDING_TRADING"
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
 
-    @classmethod
-    def break_symbols(cls, exchange_data:dict) -> List:
+    @staticmethod
+    def break_symbols(exchange_data: dict) -> List:
         """
         거래 중단된 symbol리스트를 필터 및 반환한다.
 
@@ -630,11 +631,15 @@ class Extractor:
             List: symbol 리스트
         """
         status = "BREAK"
-        return [data['symbol'] for data in exchange_data['symbols'] if data['status'] == status]
+        return [
+            data["symbol"]
+            for data in exchange_data["symbols"]
+            if data["status"] == status
+        ]
 
     # 지정 symbol값에 대한 포지션 정보를 반환한다.
-    @classmethod
-    def position_detail(cls, symbol: str, account_data: Dict) -> Dict:
+    @staticmethod
+    def position_detail(symbol: str, account_data: Dict) -> Dict:
         """
         지정한 symbol값의 포지션 정보값을 반환한다.
 
@@ -666,9 +671,9 @@ class Extractor:
             data for data in account_data["positions"] if data["symbol"] == symbol
         )
         return position_data
-    
-    @classmethod
-    def symbol_detail(cls, symbol:str, exchange_data:dict):
+
+    @staticmethod
+    def symbol_detail(symbol: str, exchange_data: dict):
         """
         symbol에 대한 상세 정보를 필터 및 반환한다.
 
@@ -679,11 +684,13 @@ class Extractor:
         Returns:
             Dict: 상세 내역 필터
         """
-        return next(data for data in exchange_data['symbols'] if data['symbol'] == symbol)
+        return next(
+            data for data in exchange_data["symbols"] if data["symbol"] == symbol
+        )
 
     # 보유중인 포지션 정보 전체를 반환한다.
-    @classmethod
-    def current_positions(cls,
+    @staticmethod
+    def current_positions(
         account_data: ins_futures_client.fetch_account_balance,
     ) -> Dict:  # 🚀
         """
@@ -750,8 +757,8 @@ class Extractor:
                     result[symbol][key] = value
         return result
 
-    @classmethod
-    def format_websocket(cls, message:dict) -> tuple:
+    @staticmethod
+    def format_websocket(message: dict) -> tuple:
         """
         market websocket message에서 symbol, interval, kline data를 추출한다.
 
@@ -765,11 +772,11 @@ class Extractor:
         kline_data = main_data["k"]
         symbol = kline_data["s"]
         interval = kline_data["i"]
-        
+
         return symbol, interval
 
-    @classmethod
-    def format_kline_data(cls, real_time_data) -> List[Union[int, float]]:
+    @staticmethod
+    def format_kline_data(real_time_data) -> List[Union[int, float]]:
         """
         kline 웹소켓 수신데이터를 kline history data에 맞게 재정렬한다.
 
@@ -779,132 +786,135 @@ class Extractor:
         Returns:
             List: kline data
         """
-        data = real_time_data['data']
-        kline_data = data['k']
-        return [kline_data["t"],
-                kline_data["o"],
-                kline_data["h"],
-                kline_data["l"],
-                kline_data["c"],
-                kline_data["v"],
-                kline_data["T"],
-                kline_data["q"],
-                kline_data["n"],
-                kline_data["V"],
-                kline_data["Q"],
-                kline_data["B"]]
+        data = real_time_data["data"]
+        kline_data = data["k"]
+        return [
+            kline_data["t"],
+            kline_data["o"],
+            kline_data["h"],
+            kline_data["l"],
+            kline_data["c"],
+            kline_data["v"],
+            kline_data["T"],
+            kline_data["q"],
+            kline_data["n"],
+            kline_data["V"],
+            kline_data["Q"],
+            kline_data["B"],
+        ]
+
 
 class System:
-    @classmethod
-    def os(cls) -> Dict:
+    @staticmethod
+    def os() -> Dict:
+        """운영체제 정보 반환"""
         os_type = platform.system()
         os_version = platform.version()
         os_detail = platform.platform()
-        return {"Type":os_type,
-                "Version":os_version,
-                "Detail":os_detail}
+        return {"Type": os_type, "Version": os_version, "Detail": os_detail}
 
-    @classmethod
-    def process_id(cls) -> dict:
+    @staticmethod
+    def process_id() -> dict:
+        """현재 프로세스 및 부모 프로세스 ID 반환"""
         current_p_id = os.getpid()
         parent_p_id = os.getppid()
-        return {"CurrentID":current_p_id,
-                "ParentID":parent_p_id}
+        return {"CurrentID": current_p_id, "ParentID": parent_p_id}
 
-    @classmethod
-    def cpu(cls):
+    @staticmethod
+    def cpu() -> Dict:
+        """CPU 정보 반환"""
         processor = platform.processor()
-        login_core = psutil.cpu_count(True)
-        physical_core = psutil.cpu_count(False)
-        freq
-        return {"Processor":processor,
-                "LoginCore":login_core,
-                "PhysicalCore":physical_core}
-
-    @classmethod
-    def memory(cls) -> Dict:
-        memory_info = psutil.virtual_memory()
-        total = memory_info.total
-        used = memory_info.used
-        available = memory_info.available
-        used_percent = memory_info.percent
-        return {"Total":total,
-                "Used":used,
-                "Available":available,
-                "UsedPercent":used_percent,
-                "Unit":"byte"}
-
-    @classmethod
-    def disk(cls) -> Dict:
-        disk_info = psutil.disk_usage('/')
-        total = disk_info.total
-        used = disk_info.used
-        free = disk_info.free
-        used_percent = disk_info.percent
-        return {"Total":total,
-                "Used":used,
-                "Available":free,
-                "UsedPercent":used_percent,
-                "Unit":"byte"}
-    
-    @classmethod
-    def network_status(cls):
-        net_info = psutil.net_io_counters()
-        sent = net_info.bytes_sent
-        receiverd = net_info.bytes_recv
+        login_core = psutil.cpu_count(logical=True)
+        physical_core = psutil.cpu_count(logical=False)
+        freq = psutil.cpu_freq().max if psutil.cpu_freq() else None
         return {
-            "Sent":sent,
-            "Receiverd":receiverd,
-            "Unit":"byte"}
-    
-    @classmethod
-    def execute_command(cls, command: str) -> Tuple[int, str]:
+            "Processor": processor,
+            "LoginCore": login_core,
+            "PhysicalCore": physical_core,
+            "MaxFrequencyMHz": freq,
+        }
+
+    @staticmethod
+    def memory() -> Dict:
+        """메모리 사용량 반환"""
+        memory_info = psutil.virtual_memory()
+        return {
+            "Total": memory_info.total,
+            "Used": memory_info.used,
+            "Available": memory_info.available,
+            "UsedPercent": memory_info.percent,
+            "Unit": "byte",
+        }
+
+    @staticmethod
+    def disk() -> Dict:
+        """디스크 사용량 반환"""
+        disk_info = psutil.disk_usage("/")
+        return {
+            "Total": disk_info.total,
+            "Used": disk_info.used,
+            "Available": disk_info.free,
+            "UsedPercent": disk_info.percent,
+            "Unit": "byte",
+        }
+
+    @staticmethod
+    def network_status() -> Dict:
+        """네트워크 송수신량 반환"""
+        net_info = psutil.net_io_counters()
+        return {
+            "Sent": net_info.bytes_sent,
+            "Received": net_info.bytes_recv,
+            "Unit": "byte",
+        }
+
+    @staticmethod
+    def execute_command(command: str) -> Tuple[int, str]:
         """
         시스템 명령어 실행
         :param command: 실행할 명령어 (예: 'ls', 'pwd', 'echo hello')
         :return: (리턴 코드, 실행 결과 문자열)
         """
         try:
-            result = subprocess.run(
-                command, shell=True, text=True, capture_output=True
-            )
+            result = subprocess.run(command, shell=True, text=True, capture_output=True)
             return result.returncode, result.stdout.strip()
         except Exception as error:
-            return -1, str
+            return -1, str(error)
+
 
 class Selector:
     # instance 래핑
     ## 본 class는 폐기 검토함.
-    @classmethod
-    def account_balance(cls, test_mode: bool):
+    @staticmethod
+    def account_balance(test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.account_balance()
         else:
             return ins_futures_client.fetch_account_balance()
 
-    @classmethod
-    def exchange_info(cls, test_mode: bool):
+    @staticmethod
+    def exchange_info(test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.exchange_info()
         else:
             return ins_futures_market.fetch_exchange_info()
 
-    @classmethod
-    def brackets_data(cls, symbol:str, test_mode: bool):
+    @staticmethod
+    def brackets_data(symbol: str, test_mode: bool):
         if test_mode:
             return FakeSignalGenerator.brackets(symbol)
         else:
             return ins_futures_client.fetch_leverage_brackets(symbol)
 
-    @classmethod
-    def set_leverage(cls, symbol: str, leverage: int, test_mode: bool):
+    @staticmethod
+    def set_leverage(symbol: str, leverage: int, test_mode: bool):
         if test_mode:
             return
         else:
             return ins_futures_client.send_leverage(symbol, leverage)
 
-    @classmethod
-    def order_signal(cls, test_mode: bool, **kwargs):
+    @staticmethod
+    def order_signal(test_mode: bool, **kwargs):
         if test_mode:
             return FakeSignalGenerator.order_signal(**kwargs)
         else:
@@ -912,38 +922,39 @@ class Selector:
 
 
 class FakeSignalGenerator:
-    @classmethod
-    def account_balance(cls):
+    @staticmethod
+    def account_balance():
         return init_account_balance
 
-    @classmethod
-    def exchange_info(cls):
+    @staticmethod
+    def exchange_info():
         return init_exchange_info
 
-    @classmethod
-    def brackets(cls, symbol:str):
+    @staticmethod
+    def brackets(symbol: str):
         return init_brackets_data[symbol]
 
-    @classmethod
-    def order_signal(cls, **kwargs): ...
-    
-class Convertor:
-    @classmethod
-    def ws_message(cls, s:str, t:int, T:int):
-        ...
-        
+    @staticmethod
+    def order_signal(**kwargs): ...
 
-import asyncio        
+
+class Convertor:
+    @staticmethod
+    def ws_message(s: str, t: int, T: int): ...
+
+
+import asyncio
 import multiprocessing
 
+
 class Convertor:
-    @classmethod
-    async def queue_async_to_mp(cls, async_q:asyncio.Queue, mp_q:multiprocessing.Queue):
-        data =await async_q.get()
+    @staticmethod
+    async def queue_async_to_mp(async_q: asyncio.Queue, mp_q: multiprocessing.Queue):
+        data = await async_q.get()
         mp_q.put(data)
-    
-    @classmethod
-    async def queue_mp_to_async(cls, mp_q: multiprocessing.Queue, async_q: asyncio.Queue):
+
+    @staticmethod
+    async def queue_mp_to_async(mp_q: multiprocessing.Queue, async_q: asyncio.Queue):
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
             data = await loop.run_in_executor(pool, mp_q.get)  # 블로킹 방지

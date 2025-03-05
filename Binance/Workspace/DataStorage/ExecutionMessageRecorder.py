@@ -5,17 +5,18 @@ home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 from Workspace.DataStorage.NodeStorage import MainStorage, SubStorage
+import SystemConfig
 
-class ExecutionMessage:
+class ExecutionMessageRecorder:
     """
     Execution Websoket Last Message를 저장한다.
     저장된 데이터를 활용하여 현재 포지션 정보를 획득한다.
     레버리지 정보는 알 수 없다.
     """
-    def __init__(self, symbols:List):
-        self.symbols = symbols
+    def __init__(self):
+        self.symbols = SystemConfig.Streaming.symbols
         self.event_types = ["TRADE_LITE", "ORDER_TRADE_UPDATE", "ACCOUNT_UPDATE", ]
-        self.storage = MainStorage(symbols, SubStorage(self.event_types))
+        self.storage = MainStorage(SystemConfig.Streaming.symbols, SubStorage(self.event_types))
     
     def set_data(self, message:Dict):
         data_type = message["e"]

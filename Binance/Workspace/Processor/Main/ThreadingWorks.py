@@ -5,25 +5,30 @@ from typing import List, Dict, Final
 import time
 import os
 import sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 from SystemConfig import Streaming
 
-from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher as futures_mk_fetcher
+from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import (
+    FuturesMarketFetcher as futures_mk_fetcher,
+)
 from Workspace.DataStorage.DataStorage import SymbolStorage as storage
 import Utils.TradingUtils as tr_utils
 import Utils.BaseUtils as base_utils
 
+
 class ThreadingWorks:
-    max_worker:Final[int] = 3
-    interval_cycle:Final[int] = 1
+    max_worker: Final[int] = 3
+    interval_cycle: Final[int] = 1
+
     def __init__(
         self,
-        history_storage:storage,
-        market_fetcher:futures_mk_fetcher,
-        kline_limit:int,
-        workers:int=3,
+        history_storage: storage,
+        market_fetcher: futures_mk_fetcher,
+        kline_limit: int,
+        workers: int = 3,
     ):
         self.history_storage = history_storage  # kline data 저장용
         self.market_fetcher = market_fetcher  # kline data 수신용
@@ -49,8 +54,6 @@ class ThreadingWorks:
         data = self.market_fetcher.fetch_klines_limit(symbol, interval, limit)
         self.history_storage.update_data(symbol, *(interval, data))
         return data
-
-
 
     def _threading_kline_update(self, symbols: List, intervals: List, limit: int):
         """
@@ -94,14 +97,18 @@ class ThreadingWorks:
         """
         멀티쓰레딩 실행 함수 (오류 발생 시 즉시 프로그램 종료).
         """
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.workers
+        ) as executor:
             futures = [
                 executor.submit(self.run_threading_kline_cycle, self.interval_cycle),
-                executor.submit(self.another_threading_function)  # 추가 함수 실행 가능
+                executor.submit(self.another_threading_function),  # 추가 함수 실행 가능
             ]
 
             # 첫 번째 예외 발생 시 즉시 반환
-            concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_EXCEPTION)
+            concurrent.futures.wait(
+                futures, return_when=concurrent.futures.FIRST_EXCEPTION
+            )
 
             # 개별 future의 예외 확인 후 프로그램 강제 종료
             for future in futures:

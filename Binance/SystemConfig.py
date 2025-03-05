@@ -1,3 +1,4 @@
+import Workspace.Utils.BaseUtils as base_utils
 import os
 
 from typing import Final
@@ -26,11 +27,13 @@ class Streaming:
     kline_limit: int = 480  # MAX 1,000
 
 
+
 home = os.path.expanduser("~")
 main_path = os.path.join(home, "github")
-
 
 class Path:
     bianace = os.path.join(main_path, "API-KEY", "binance.json")
     telegram = os.path.join(main_path, "API-KEY", "telegram.json")
     project = os.path.join(main_path, "Thunder", "Binance")
+
+

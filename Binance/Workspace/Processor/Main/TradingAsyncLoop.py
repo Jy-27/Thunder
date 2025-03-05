@@ -3,50 +3,46 @@
 
 import asyncio
 import json
-#nest injection
 import os, sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-import Workspace.Processor.Receiver.KlineCycle as KlineCycle
 import Workspace.Utils.TradingUtils as tr_utils
+from SystemConfig import container
 
-#DependencyCreate
-from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher
-from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket
 
-#DepedencyInjection
 from Workspace.DataStorage.NodeStorage import MainStorage, SubStorage
 from Workspace.Processor.Receiver.KlineCycle import KlineCycle
-from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket
+from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import (
+    FuturesExecutionWebsocket,
+)
 from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClient
-
 from Workspace.Processor.Order.PendingOrder import PendingOrder
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.DataStorage.ExecutionMessage import ExecutionMessage
 
 class TradingAsyncLoop:
-    def __init__(self, kline_cycle:KlineCycle, execution_ws: FuturesExecutionWebsocket, real_time:MainStorage, pending_order:PendingOrder, wallet:Wallet, exe_message:ExecutionMessage):#, event_to_wallet:asyncio.Event):
-        #DependencyCreate
-        self.ins_kline_cycle = kline_cycle
+    def __init__(self):
+        self.ins_kline_cycle = KlineCycle()
 
-        self.pending_order = pending_order
-        self.wallet = wallet
-        self.exe_message = exe_message
+        self.pending_order = PendingOrder()
+        self.wallet = wallet(10)
+        self.exe_message = container.execution_message
 
         # kline attr
         self.symbols = self.ins_kline_cycle.symbols
         self.intervals = self.ins_kline_cycle.intervals
         self.storage_history = self.ins_kline_cycle.storage
 
-        self.ins_market_ws = FuturesMarketWebsocket(self.symbols)
-        self.ins_execution_ws = execution_ws
+        self.ins_market_ws = container.futures_market_ws
+        self.ins_execution_ws = container.futures_execution_ws
 
-        self.storage_real_time = real_time
+        self.storage_real_time = container.storage_real_data
         self.queue = asyncio.Queue()
 
     async def run_market_websocket(self):
-        await self.ins_market_ws.open_connection(self.intervals)
+        await self.ins_market_ws.open_kline_connection(self.intervals)
         print(f"  🔗 Websocket(Market) Connect!!")
         while True:
             message = await self.ins_market_ws.receive_message()
@@ -73,7 +69,7 @@ class TradingAsyncLoop:
             await self.wallet.update_balance()
             self.pending_order.update_order(message)
             self.exe_message.set_data(message)
-    
+
     async def start(self):
         task_1 = asyncio.create_task(self.ins_kline_cycle.start())
         task_2 = asyncio.create_task(self.run_market_websocket())
@@ -82,39 +78,15 @@ class TradingAsyncLoop:
 
         await asyncio.gather(task_1, task_2, task_3, task_4)
 
+
 if __name__ == "__main__":
     import SystemConfig
-    import Workspace.Utils.BaseUtils as base_utils
-    import Workspace.Services.PrivateAPI.Messaging.TelegramClient as telegram_client
-    import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_tr_client
-    import os
-    from Workspace.Processor.Wallet.Wallet import Wallet
-    from Workspace.DataStorage.ExecutionMessage import ExecutionMessage
-
-    symbols = SystemConfig.Streaming.symbols
-    intervals = SystemConfig.Streaming.intervals
-    path_binance_api = SystemConfig.Path.bianace
-    path_telegram_api = SystemConfig.Path.telegram
-        
-    binance_api = base_utils.load_json(path_binance_api)
-    teltegram_api = base_utils.load_json(path_telegram_api)
-
-    convert_to_intervals = [f"interval_{i}" for i in intervals]
-    sub_storage = SubStorage(convert_to_intervals)
-    history = MainStorage(symbols, sub_storage)
     
-    kline_cycle = KlineCycle(symbols, intervals, history)
-    execution_ws = FuturesExecutionWebsocket(**binance_api)
-    real_time = MainStorage(symbols, sub_storage)
-    telegram_client = TelegramClient(**teltegram_api)
+    k_cycle = KlineCycle()
+    pending_order = PendingOrder(SystemConfig.Streaming.symbols,
+                                 container.futures_trading_client)
+    wallet = Wallet(5, container.futures_trading_client)
     
-    path = SystemConfig.Path.bianace
-    api = base_utils.load_json(path)
-    tr_client = futures_tr_client.FuturesTradingClient(**api)
-    pending = PendingOrder(symbols, tr_client)
-    wallet_ = Wallet(5, tr_client)
-    exe_message = ExecutionMessage(symbols)
-    
-    obj = TradingAsyncLoop(kline_cycle, execution_ws, real_time, pending, wallet_, exe_message)
+    obj = TradingAsyncLoop()
     os.system("clear")
     asyncio.run(obj.start())

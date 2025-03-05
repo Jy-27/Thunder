@@ -1,5 +1,5 @@
-import requests
-import json
+import aiohttp
+import asyncio
 from typing import Dict
 
 class TelegramClient:
@@ -12,7 +12,7 @@ class TelegramClient:
         self.token = kwargs["token"]
         self.chat_id = kwargs["chat_id"]
     
-    def send_message(self, message):
+    async def send_message(self, message: str) -> Dict:
         """
         ⭕️ 메시지를 텔레그램으로 발송한다.
 
@@ -24,17 +24,18 @@ class TelegramClient:
             "chat_id": self.chat_id,
             "text": message,
         }
-        response = requests.post(url, data=payload)
-        return response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=payload) as response:
+                return await response.json()
 
-    def send_message_with_log(self, message):
+    async def send_message_with_log(self, message: str) -> None:
         """
         ⭕️ 메시지를 텔레그램으로 발송 및 출력한다.
 
         Args:
             message : 발송하려는 메시지
         """
-        self.send_message(message)
+        await self.send_message(message)
         print(message)
 
 if __name__ == "__main__":

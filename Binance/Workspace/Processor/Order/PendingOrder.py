@@ -6,13 +6,13 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 import Workspace.DataStorage.NodeStorage as storage
 import Workspace.Utils.TradingUtils as tr_utils
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_tr_client
-
+import SystemConfig
 
 
 
 class PendingOrder:
-    def __init__(self, symbols:List[str], trading_client:futures_tr_client):
-        self.symbols = symbols
+    def __init__(self, trading_client):
+        self.symbols = SystemConfig.Streaming.symbols
         self.pending_type = ["IS_HOLDING", "LIMIT", "TAKE_PROFIT", "TAKE_PROFIT_MARKET", "STOP_MARKET"]
         self.event_type = ["TRADE", "NEW", "CANCEL", "EXPIRED"]
         self.storage = storage.MainStorage(self.symbols, storage.SubStorage(self.pending_type))

@@ -938,3 +938,24 @@ def bytes_to_kb(bytes_value) -> float:
         float: Kilo Byte
     """
     return round(bytes_value / 1024, 2)  # KB 변환
+
+
+async def sleep_next_minute(minutes: int = 1, buffer_time_sec: float = 0) -> datetime:
+    """
+    ⏱️ 지정한 시간(분)의 정각까지 비동기식으로 대기한다.
+
+    Args:
+        minutes (int, optional): 대기 시간
+        buffer_time_sec (float, optional): 추가 대기 시간
+
+    Returns:
+        datetime: _description_
+    """
+    seconds_per_minute = 60
+    sleep_seconds = seconds_per_minute * minutes
+    current_time = datetime.now()
+    ms_second = current_time.microsecond / 1_000_000
+    elapsed_seconds = current_time.second + ms_second
+    diff_second = sleep_seconds - elapsed_seconds
+    await asyncio.sleep(max(1, diff_second + buffer_time_sec))
+    return datetime.now()

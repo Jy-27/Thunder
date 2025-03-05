@@ -3,32 +3,39 @@ import aiohttp
 from typing import List
 
 import os, sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 # 힌트용
 from multiprocessing import Queue as mp_q
 from Workspace.DataStorage.NodeStorage import MainStorage as storage
-from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket as futures_mk_ws
-from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket as futures_exe_ws
-from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_tr_client
+from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import (
+    FuturesMarketWebsocket as futures_mk_ws,
+)
+from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import (
+    FuturesExecutionWebsocket as futures_exe_ws,
+)
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import (
+    FuturesTradingClient as futures_tr_client,
+)
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClient
 from Workspace.Processor.Order.PendingOrder import PendingOrder
+
+
 class AsyncioWorks:
     def __init__(
         self,
         storage_real_time: storage,
-        storage_history:storage,
-
-        stream:List,
-        
+        storage_history: storage,
+        stream: List,
         ins_market_ws: futures_mk_ws,
         ins_execution_ws: futures_exe_ws,
         ins_wallet: Wallet,
-        ins_futures_tr_client:futures_tr_client,
-        ins_telegram_client:TelegramClient,
-        ins_pending_order:PendingOrder
+        ins_futures_tr_client: futures_tr_client,
+        ins_telegram_client: TelegramClient,
+        ins_pending_order: PendingOrder,
     ):
         # self.queue_ws_execution_to_wallet = asyncio.Queue()
         self.queue_ws_execution_to_real_storage = asyncio.Queue()
@@ -85,7 +92,7 @@ class AsyncioWorks:
             ws_message = await self.ins_market_ws.receive_data()
             # print(ws_message)
             await self.queue_ws_execution_to_real_storage.put(ws_message)
-            
+
     async def run_real_storage_update(self):
         """
         🚀 Market Websocket 수신 데이터를 이용하여 실시간 저장소를 업데이트한다.
@@ -93,9 +100,9 @@ class AsyncioWorks:
         print(f"  🚀 실시간 저장소 업데이트 시작.")
         while True:
             ws_message = await self.queue_ws_execution_to_real_storage.get()
-            kline_data = data['k']
-            symbol = kline_data['s']
-            interval = kline_data['i']
+            kline_data = data["k"]
+            symbol = kline_data["s"]
+            interval = kline_data["i"]
             self.storage_real_time.set_data(symbol, interval, ws_message)
             await self.queue_ws_execution_to_real_storage.task_done()
 
@@ -113,7 +120,7 @@ class AsyncioWorks:
         while True:
             await self.evnet_to_wallet.wait()
             await self.ins_wallet.update_balance()
-            await self.evnet_to_wallet.clear()        
+            await self.evnet_to_wallet.clear()
 
     async def run_status_message(self):
         print(f"  🚀 상태 메시지 발신 시작.")
@@ -135,6 +142,7 @@ class AsyncioWorks:
 
         await asyncio.gather(t1, t2, t3, t4, t5, t6, t7)
 
+
 if __name__ == "__main__":
     import Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket as futures_exe_ws
     import Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket as futures_mk_ws
@@ -142,29 +150,30 @@ if __name__ == "__main__":
     import Workspace.DataStorage.DataStorage as storage
     import SystemConfig
     import Workspace.Utils.BaseUtils as base_utils
-    
+
     import os, sys
+
     home_path = os.path.expanduser("~")
     sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-    
+
     ### storage
     main_fields = SystemConfig.Streaming.symbols
     sub_fields = SystemConfig.Streaming.intervals
-    
+
     sub_storage = storage.SubStorage(sub_fields)
     stroage_history = storage.MainStroage(main_fields, sub_storage)
     storage_real_time = storage.MainStroage(main_fields, sub_storage)
-    
-    ### API 
+
+    ### API
     binance_api_path = SystemConfig.Path.bianace
     telegram_api_path = SystemConfig.Path.telegram
-    
+
     binance_api_key = base_utils.load_json(binance_api_path)
     telegram_api_key = base_utils.load_json(telegram_api_path)
-    
+
     symbols = SystemConfig.Streaming.symbols
     intervals = SystemConfig.Streaming.intervals
-    
+
     ### ins
     futures_mk_ws = futures_mk_ws.FuturesMarketWebsocket(main_fields)
     futures_exe_ws = futures_exe_ws.FuturesExecutionWebsocket(**binance_api_key)
@@ -173,15 +182,17 @@ if __name__ == "__main__":
     telegram = TelegramClient(**telegram_api_key)
     pending_o = pending_order.PendingOrder(symbols, futures_tr_client_)
     ### start
-    
-    obj = AsyncioWorks(storage_real_time,
-                    stroage_history,
-                    intervals,
-                    futures_mk_ws,
-                    futures_exe_ws,
-                    wallet,
-                    futures_tr_client_,
-                    telegram,
-                    pending_o)
+
+    obj = AsyncioWorks(
+        storage_real_time,
+        stroage_history,
+        intervals,
+        futures_mk_ws,
+        futures_exe_ws,
+        wallet,
+        futures_tr_client_,
+        telegram,
+        pending_o,
+    )
 
     asyncio.run(obj.start())

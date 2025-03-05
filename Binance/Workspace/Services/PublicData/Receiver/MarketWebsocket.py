@@ -3,6 +3,7 @@ import json
 import asyncio
 from typing import List, Optional
 
+
 class MarketWebsocket:
     """
     웹소켓 실행을 위한 기본 클래스
@@ -30,7 +31,7 @@ class MarketWebsocket:
         )
         return f"{self.base_url}/stream?streams={stream_path}"  # ✅ Binance의 올바른 WebSocket URL
 
-    async def open_connection(self, intervals: List[str]):
+    async def open_kline_connection(self, intervals: List[str]):
         """
         🐣 'kline' 스트림 설정
         """
@@ -38,7 +39,27 @@ class MarketWebsocket:
         self.stream_type = "kline"
         self.interval_streams = [f"{self.stream_type}_{i}" for i in intervals]
         stream_url = self._build_stream_url(self.interval_streams)
-        self.websocket = await self.session.ws_connect(stream_url)  # ✅ WebSocket 연결 유지
+        self.websocket = await self.session.ws_connect(
+            stream_url
+        )  # ✅ WebSocket 연결 유지
+
+    async def open_stream_connection(self, stream_type: str):
+        """
+        🐣 'kline'이 아닌 일반 WebSocket 스트림 설정
+
+        Args:
+            stream_type (str): 스트림 타입
+                - ticker: 개별 심볼에 대한 전체 티커 정보 제공
+                - trade: 개별 거래 정보 제공
+                - miniTicker: 심볼별 간소화된 티커 정보 제공
+                - depth: 주문서 정보 제공
+                - 24hrTicker: 24시간 동안 롤링 통계 정보 제공
+                - aggTrade: 집계된 거래 정보 제공
+        """
+        self.session = aiohttp.ClientSession()  # ✅ 세션을 별도로 유지
+        self.stream_type = [stream_type]
+        url = self._build_stream_url(self.stream_type)
+        self.websocket = await self.session.ws_connect(url)
 
     async def receive_message(self):
         """
@@ -46,7 +67,7 @@ class MarketWebsocket:
         """
         if self.websocket is None:
             raise ConnectionError("🔴 WebSocket이 연결되지 않음!")
-        
+
         message = await self.websocket.receive()
 
         if message.type == aiohttp.WSMsgType.TEXT:
@@ -63,10 +84,12 @@ class MarketWebsocket:
             await self.session.close()
         print("🔴 WebSocket 연결 종료")
 
+
 # ✅ 실행 코드
 if __name__ == "__main__":
     import os
     import sys
+
     home_path = os.path.expanduser("~")
     sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
     import SystemConfig
@@ -86,7 +109,9 @@ if __name__ == "__main__":
         try:
             for _ in range(3):
                 data = await ws_receiver.receive_message()
-                print(json.dumps(data, indent=2, ensure_ascii=False))  # ✅ JSON 포맷 출력
+                print(
+                    json.dumps(data, indent=2, ensure_ascii=False)
+                )  # ✅ JSON 포맷 출력
         except Exception as e:
             print(f"⚠️ 오류 발생: {e}")
 

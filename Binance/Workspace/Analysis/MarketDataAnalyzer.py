@@ -1,11 +1,9 @@
 ### 초기설정
-
 import asyncio
 import numpy as np
 from pprint import pprint
 from typing import Dict, List, Final, Optional
 from copy import copy
-
 
 import os, sys
 home_path = os.path.expanduser("~")

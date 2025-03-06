@@ -7,9 +7,7 @@ import platform
 import socket
 import subprocess
 
-import os
-import sys
-
+import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -803,6 +801,82 @@ class Extractor:
             kline_data["B"],
         ]
 
+    @staticmethod
+    def unpack_message(message:Dict) -> Tuple:
+        """
+        Packager class의 pack_message처리된 데이터를 unpack처리 한다.
+
+        Args:
+            message (Dict): kline data
+
+        Returns:
+            Tuple: main_key, sub_key, data
+        """
+        for symbol, value in message.items():
+            for interval, data in value.items():
+                ...
+        return symbol, interval, data
+
+class Convertor:
+    @staticmethod
+    def agg_trade_message(message:Dict) -> Tuple:
+        """
+        Websocket stream(aggTrade) 데이터를 storage에 저장하기 용이하도록 재구성한다.
+        반환되는 값은 매수자 관점이다.(Notes참조)
+
+        Args:
+            message (Dict): websocket stream(aggTrade) data
+
+        Returns:
+            Tuple: symbo, execution_type, data
+            
+        Notes:
+            ‼️ 중요
+            Taker: 시장가 주문(Makrket)주문 -> 유동성 소비
+            Maker: 지정가 주문(Limit)주문 -> 유동성 공급
+            
+            관점의 차이. 주의요망.
+            M(매수자 관점)): True(매수자 Maker) / False(매수자 Taker)
+            m(매도자 관점)): True(매도자 Taker) / False(매도자 Maker)
+        """
+        select_data = message["data"]
+        symbol = select_data["s"]
+        m_field = select_data["M"]
+        if m_field:
+            execution_type = "maker"
+        else:
+            execution_type = "taker"
+        
+        data = [select_data["E"], select_data["p"], select_data["q"]]
+        
+        return symbol, execution_type, data
+
+    @staticmethod
+    def orderbook_depth_message(message:Dict) -> Tuple:
+        seletc_data = message["data"]
+        bids_data = [seletc_data['E']]
+        asks_data = [seletc_data["E"]]
+        
+        
+        return event_timestamp, bids, asks
+
+class Packager:
+    @staticmethod
+    def pack_kline_fetcher_message(main_key, sub_key, data) -> Dict:
+        """
+        websocket 또는 기타 방식의 데이터를 Dict형태로 변환하여 이름표를 추가한다.
+        Queue와 같은 데이터 전송시 본래의 데이터에 symbol, interval 값 미기입시 해당값을 저장한다.
+
+        Returns:
+            Dict: symbol(main_key), interval(sub_key)값 추가된 Dict
+        """
+        return {main_key: {sub_key:data}}
+
+    def pack_kline_websocket_message(data) -> Dict:
+        symbol = data['data']['s']
+        interval = data['data']['k']['i']
+        return {symbol: {interval:Extractor.format_kline_data(data)}}
+        
 
 class System:
     @staticmethod
@@ -936,26 +1010,3 @@ class FakeSignalGenerator:
 
     @staticmethod
     def order_signal(**kwargs): ...
-
-
-class Convertor:
-    @staticmethod
-    def ws_message(s: str, t: int, T: int): ...
-
-
-import asyncio
-import multiprocessing
-
-
-class Convertor:
-    @staticmethod
-    async def queue_async_to_mp(async_q: asyncio.Queue, mp_q: multiprocessing.Queue):
-        data = await async_q.get()
-        mp_q.put(data)
-
-    @staticmethod
-    async def queue_mp_to_async(mp_q: multiprocessing.Queue, async_q: asyncio.Queue):
-        loop = asyncio.get_running_loop()
-        with ThreadPoolExecutor() as pool:
-            data = await loop.run_in_executor(pool, mp_q.get)  # 블로킹 방지
-        await async_q.put(data)

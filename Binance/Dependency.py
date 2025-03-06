@@ -1,9 +1,9 @@
 import SystemConfig
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
 from Workspace.Services.PrivateAPI.Messaging.TelegramClient import TelegramClient
-from Workspace.DataStorage.NodeStorage import SubStorage, MainStorage
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import FuturesExecutionWebsocket
-from Workspace.DataStorage.ExecutionMessageRecorder import ExecutionMessageRecorder
+from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
+from Workspace.DataStorage.DataCollector.ExecutionStorage import ExecutionStorage
 from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher
 from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket
 from Workspace.Processor.Order.PendingOrder import PendingOrder
@@ -28,7 +28,7 @@ class DependencyContainer:
         self.storage_real_time = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
         self.storage_history = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
         
-        self.execution_message_recorder = ExecutionMessageRecorder()
+        self.execution_message_recorder = ExecutionStorage()
         self.futures_market_fetcher = FuturesMarketFetcher()
         self.futures_market_websocket = FuturesMarketWebsocket(SystemConfig.Streaming.symbols)
 

@@ -27,9 +27,9 @@ class StreamReceiverWebsocket:
         self.queue = queue
     
     async def start(self):
-        print(f"  ⏳ 웹소켓({self.stream_type}) 연결중.")
+        print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")
         await self.futures_mk_ws.open_stream_connection(self.stream_type)
-        print(f"  🔗 웹소켓({self.stream_type}) 연결 성공.")
+        print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
         print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
         while True:
             message = await self.futures_mk_ws.receive_message()

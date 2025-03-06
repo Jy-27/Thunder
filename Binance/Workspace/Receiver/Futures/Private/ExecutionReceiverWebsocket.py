@@ -18,12 +18,12 @@ class ExecutionReceiverWebsocket:
         self.stream_type = "Execution"
         
     async def start(self):
-        print(f"  ⏳ 웹소켓({self.stream_type}) 연결중.")
+        print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")
         await self.futures_execution_websocket.open_connection()
-        print(f"  🔗 웹소켓({self.stream_type}) 연결 성공.")
+        print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
         print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
         while True:
-            message = str(await self.futures_execution_websocket.receive_message())
+            message = await self.futures_execution_websocket.receive_message()
             await self.queue.put(message)
             
 if __name__ == "__main__":

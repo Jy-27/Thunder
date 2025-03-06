@@ -3,7 +3,7 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-import Workspace.DataStorage.NodeStorage as storage
+import Workspace.DataStorage.DataCollector.NodeStorage as storage
 import Workspace.Utils.TradingUtils as tr_utils
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_tr_client
 import SystemConfig
@@ -18,14 +18,14 @@ class PendingOrder:
         self.storage = storage.MainStorage(self.symbols, storage.SubStorage(self.pending_type))
         self.trading_client = trading_client
 
-        self.init_update()
+        # self.init_update()
             
-    def init_update(self):
-        account_data = self.trading_client.fetch_account_balance()
+    async def init_update(self):
+        account_data = await self.trading_client.fetch_account_balance()
         current_position = tr_utils.Extractor.current_positions(account_data)
         
         for symbol in self.symbols:
-            order_status = self.trading_client.fetch_order_status(symbol)
+            order_status = await self.trading_client.fetch_order_status(symbol)
             if order_status:
                 for status in order_status:
                     order_type = status["type"]

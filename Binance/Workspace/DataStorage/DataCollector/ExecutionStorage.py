@@ -4,10 +4,10 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-from Workspace.DataStorage.NodeStorage import MainStorage, SubStorage
+from Workspace.DataStorage.DataCollector.NodeStorage import MainStorage, SubStorage
 import SystemConfig
 
-class ExecutionMessageRecorder:
+class ExecutionStorage:
     """
     Execution Websoket Last Message를 저장한다.
     저장된 데이터를 활용하여 현재 포지션 정보를 획득한다.
@@ -26,7 +26,11 @@ class ExecutionMessageRecorder:
             symbol = message["o"]["s"]
         elif data_type == "ACCOUNT_UPDATE":
             symbol = message['a']['P'][0]['s']
-        self.storage.set_data(symbol, data_type, message)
+        
+        if symbol in self.symbols:    
+            self.storage.set_data(symbol, data_type, message)
+            print(message)
+            print(data_type)
         
     def get_data(self, symbol:str, event_type:str):
         return self.storage.get_data(symbol, event_type)

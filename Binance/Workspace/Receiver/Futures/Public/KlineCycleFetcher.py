@@ -7,7 +7,9 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher
 import Workspace.DataStorage.DependencyContainer as storage_container
 import Workspace.Utils.BaseUtils as base_utils
+import Workspace.Utils.TradingUtils as tr_utils
 from SystemConfig import Streaming
+
 
 class KlineCycleFetcher:
     def __init__(self, queue:asyncio.Queue, limit:int=480):
@@ -22,12 +24,12 @@ class KlineCycleFetcher:
         await asyncio.gather(*tasks)
 
     async def fetch_and_enqueue(self, symbol:str, interval:str):
-        fetch_data = await self.ins_futures_mk_fetcher.fetch_klines_limit(symbol, interval, self.limit)
-        result = {symbol:{interval:fetch_data}}
-        await self.queue.put(result)
+        data = await self.ins_futures_mk_fetcher.fetch_klines_limit(symbol, interval, self.limit)
+        pack_data = tr_utils.Packager.pack_kline_fetcher_message(symbol, interval, data)
+        await self.queue.put(pack_data)
 
     async def start(self):
-        print(f"  ⏳ kline data 전체 신중")    
+        print(f"  ⏳ kline data 전체 수신중")    
         await self.init_update()
         print(f"  ✅ kline data 수신 완료.")
         print(f"  🚀 KlineCycleFetcher 시작")

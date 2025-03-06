@@ -226,14 +226,14 @@ class MainStorage:
         """
         return list(self.__slots__)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self, main_field:str) -> Dict:
         """
-        📤 MainStorage와 SubStorage 전체 필드정보를 Dictionary타입으로 구성하여 반환한다.
+        📤 MainStorage와 SubStorage 지정 필드정보를 Dictionary타입으로 구성하여 반환한다.
 
         Returns:
             Dict: 필드 저장 데이터
         """
-        return {field: getattr(self, field).to_dict() for field in self.__slots__}
+        return getattr(self, main_field).to_dict()
 
     def __str__(self):
         """
@@ -252,9 +252,10 @@ if __name__ == "__main__":
 
     home_path = os.path.expanduser("~")
     sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-
+    import asyncio
     import SystemConfig
-
+    import Workspace.Receiver.Futures.Public.KlineCycleFetcher as kline_cycle
+    import time
     sub_fields_intervals = [f"interval_{i}" for i in SystemConfig.Streaming.intervals]
     sub_fields_order_type = ["MARKET", "LIMIT", "TAKE_PROFIT", "STOP_MARKET", "TAKE_PROFIT_MARKET"]
     
@@ -268,6 +269,22 @@ if __name__ == "__main__":
     main_fields = SystemConfig.Streaming.symbols
     main_storage = MainStorage(main_fields, sub_storage)
 
+    dummy_queue = asyncio.Queue()
+    obj = kline_cycle.KlineCycleFetcher(dummy_queue)
+    
+    async def main():
+        print(f"  🚀 kline_data 수신 시작")
+        start_time = time.time()
+        for symbol in SystemConfig.Streaming.symbols:
+            for interval in SystemConfig.Streaming.intervals:
+                await obj.fetch_and_enqueue(symbol, interval)
+                data = await dummy_queue.get()
+                conver_to_interval = f"interval_{interval}"
+                main_storage.set_data(symbol, conver_to_interval, data)
+        end_time = time.time()
+        print(f"  ✅ kline_data 수신 완료")
+        diff_time = end_time - start_time
+        print(f"  ⏱️ 소요시간: {diff_time:,.2f} sec")
+
+    asyncio.run(main())
     # ✅ 데이터 확인
-    to_dict = main_storage.to_dict()
-    pprint(to_dict)

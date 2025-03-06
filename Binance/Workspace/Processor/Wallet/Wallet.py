@@ -23,20 +23,19 @@ class Wallet:
         """
         🐣 API에서 계좌 잔고를 가져와 Wallet 정보를 업데이트하는 함수
         """
-        data = await asyncio.to_thread(self.futures_tr_client.fetch_account_balance)
+        data = await self.futures_tr_client.fetch_account_balance()
 
         self.total_balance = float(data["totalMarginBalance"])
         self.margin_balance = float(data["totalInitialMargin"])
         self.free_balance = float(data["availableBalance"])
         self.lock_balance = float(data["totalOpenOrderInitialMargin"])
         self.unrealized_pnl_balance = float(data["totalUnrealizedProfit"])
+        if self.init_balance is None:
+            self.init_balance = self.total_balance
         self.pnl_balance = self.total_balance - self.init_balance
-
         # ZeroDivisionError 방지
         self.pnl_ratio = self.pnl_balance / self.init_balance if self.pnl_balance != 0 else 0
         
-        if self.init_balance is None:
-            self.init_balance = self.total_balance
     
     def get_balance(self, key: str) -> float:
         """
@@ -84,13 +83,12 @@ if __name__ == "__main__":
     import SystemConfig
     import Workspace.Utils.BaseUtils as base_utils
     import asyncio
-    import Dependency
-    
+    # import Dependency
     
     api_path = SystemConfig.Path.bianace
     api = base_utils.load_json(api_path)
     ins_futures_tr_client = futures_tr_client(**api)
     
-    obj = Wallet(Dependency.container.futures_trading_client)#5, ins_futures_tr_client)
+    obj = Wallet(ins_futures_tr_client)
     asyncio.run(obj.update_balance())
     print(obj)

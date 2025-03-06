@@ -2,7 +2,7 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "GitHub", "Thunder", "Binance"))
 
-from Workspace.DataStorage.NodeStorage import SubStorage, MainStorage
+from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
 import SystemConfig
 
 class WebsocketMessage:

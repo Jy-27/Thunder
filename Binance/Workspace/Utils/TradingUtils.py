@@ -32,10 +32,10 @@ ins_futures_market = futures_market.FuturesMarketFetcher()
 ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 
 ### 백테스트용 base data
-init_account_balance = ins_futures_client.fetch_account_balance()
-init_exchange_info = ins_futures_market.fetch_exchange_info()
+init_account_balance = asyncio.run(ins_futures_client.fetch_account_balance())
+init_exchange_info = asyncio.run(ins_futures_market.fetch_exchange_info())
 init_brackets_data = {
-    symbol: ins_futures_client.fetch_leverage_brackets(symbol)
+    symbol: asyncio.run(ins_futures_client.fetch_leverage_brackets(symbol))
     for symbol in SystemConfig.Streaming.symbols
 }
 
@@ -836,17 +836,16 @@ class Convertor:
             Maker: 지정가 주문(Limit)주문 -> 유동성 공급
             
             관점의 차이. 주의요망.
-            M(매수자 관점)): True(매수자 Maker) / False(매수자 Taker)
-            m(매도자 관점)): True(매도자 Taker) / False(매도자 Maker)
+            m(매수자 관점)): True(매도자 Taker) / False(매도자 Maker)
         """
         select_data = message["data"]
         symbol = select_data["s"]
-        m_field = select_data["M"]
+        m_field = select_data["m"]
         if m_field:
             execution_type = "maker"
         else:
             execution_type = "taker"
-        
+
         data = [select_data["E"], select_data["p"], select_data["q"]]
         
         return symbol, execution_type, data

@@ -17,6 +17,7 @@ from Workspace.Receiver.Futures.Private.ExecutionReceiverWebsocket import (
 )
 
 import Workspace.Utils.TradingUtils as tr_utils
+import Workspace.Utils.BaseUtils as base_utils
 # 의존성 주입
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.Processor.Order.PendingOrder import PendingOrder
@@ -24,22 +25,30 @@ from Workspace.DataStorage.DataCollector.NodeStorage import MainStorage
 from Workspace.DataStorage.DataCollector.aggTradeStorage import aggTradeStorage
 from Workspace.DataStorage.DataCollector.DepthStorage import DepthStorage
 from Workspace.DataStorage.DataCollector.ExecutionStorage import ExecutionStorage
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
+from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
+import SystemConfig
+
+path_api = SystemConfig.Path.bianace
+api_binance = base_utils.load_json(path_api)
+
+tr_client = FuturesTradingClient(**api_binance)
+obj_wallet = Wallet(tr_client)
+obj_pending_order = PendingOrder(tr_client)
+convert_to_interval = [f"interval_{i}"for i in SystemConfig.Streaming.intervals]
+sub_storage = SubStorage(convert_to_interval)
+storage_history = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
+storage_real_time = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
+storage_aggTrade = aggTradeStorage()
+storage_depth = DepthStorage()
+storage_execution = ExecutionStorage()
 
 
 class ReceiverStorageManager:
     """
     ✨ 데이터 수신 비동기식 함수들을 전부 무한 loop로 실행하고 수신된 데이터를 각 storage에 저장한다.
     """
-    def __init__(
-        self,
-        wallet: Wallet,
-        pending_order: PendingOrder,
-        storage_history: MainStorage,
-        storage_real_time: MainStorage,
-        storage_aggTrade: aggTradeStorage,
-        storage_depth: DepthStorage,
-        storage_execution: ExecutionStorage,
-    ):
+    def __init__(self):
         self.queue_kline_fetcher = asyncio.Queue()
         self.queue_kline_ws = asyncio.Queue()
         self.queue_aggTrade_ws = asyncio.Queue()
@@ -55,8 +64,8 @@ class ReceiverStorageManager:
         self.execution_receiver_ws = ExecutionReceiverWebsocket(self.queue_execution_ws)
 
         # 현재 상태 저장(업데이트)
-        self.injection_wallet = wallet
-        self.injection_pending_order = pending_order
+        self.injection_wallet = obj_wallet
+        self.injection_pending_order = obj_pending_order
         self.storage_execution = storage_execution
 
         #분석 자료 저장(업데이트))
@@ -71,6 +80,7 @@ class ReceiverStorageManager:
         """
         while True:
             pack_data = await self.queue_kline_fetcher.get()
+            # print(pack_data)
             symbol, interval, data = tr_utils.Extractor.unpack_message(pack_data)
             conver_to_interval = f"interval_{interval}"
             self.storage_history.set_data(symbol, conver_to_interval, data)
@@ -86,6 +96,7 @@ class ReceiverStorageManager:
             conver_to_interval = f"interval_{interval}"
             self.storage_real_time.set_data(symbol, conver_to_interval, data)
             self.queue_kline_ws.task_done()
+            
 
     async def _queue_aggTrade_ws(self):
         """
@@ -93,6 +104,7 @@ class ReceiverStorageManager:
         """
         while True:
             data = await self.queue_aggTrade_ws.get()
+            # print(data)
             self.stroage_aggTrade.add_data(data)
             self.queue_aggTrade_ws.task_done()
 
@@ -102,6 +114,7 @@ class ReceiverStorageManager:
         """
         while True:
             data = await self.queue_depth_ws.get()
+            # print(data)
             self.storage_depth.add_data(data)
             self.queue_depth_ws.task_done()
 
@@ -113,6 +126,7 @@ class ReceiverStorageManager:
         await self.injection_pending_order.init_update()
         while True:
             data = await self.queue_execution_ws.get()
+            # print(data)
             self.storage_execution.set_data(data)
             self.queue_execution_ws.task_done()
             await self.injection_wallet.update_balance()
@@ -136,35 +150,6 @@ class ReceiverStorageManager:
         ]
         await asyncio.gather(*tasks)
 
-
 if __name__ == "__main__":
-    # import Dependency
-    import Workspace.Processor.Order.PendingOrder as pending_order
-    import Workspace.Processor.Wallet.Wallet as wallet
-    import SystemConfig
-    import Workspace.Utils.BaseUtils as base_utils
-    from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
-    from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
-    
-    intervals = SystemConfig.Streaming.intervals
-    conver_to_intervals = [f"interval_{i}" for i in intervals]
-    symbols = SystemConfig.Streaming.symbols
-    
-    sub_storage = SubStorage(conver_to_intervals)
-    aggTrade_ = aggTradeStorage()
-    history_ = MainStorage(symbols, sub_storage)
-    real_time_ = MainStorage(symbols, sub_storage)
-    
-    path = SystemConfig.Path.bianace
-    api = base_utils.load_json(path)
-    tr_client_ = FuturesTradingClient(**api)
-    
-    pending_ = pending_order.PendingOrder(tr_client_)
-    wallet_ = wallet.Wallet(tr_client_)
-    depth_ = DepthStorage()
-    execution_ = ExecutionStorage()
-
-    obj = ReceiverStorageManager(
-        wallet_, pending_, history_, real_time_, aggTrade_, depth_, execution_
-    )
+    obj = ReceiverStorageManager()
     asyncio.run(obj.start())

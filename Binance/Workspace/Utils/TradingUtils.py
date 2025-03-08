@@ -32,13 +32,17 @@ ins_futures_market = futures_market.FuturesMarketFetcher()
 ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 
 ### 백테스트용 base data
-init_account_balance = asyncio.run(ins_futures_client.fetch_account_balance())
-init_exchange_info = asyncio.run(ins_futures_market.fetch_exchange_info())
-init_brackets_data = {
-    symbol: asyncio.run(ins_futures_client.fetch_leverage_brackets(symbol))
-    for symbol in SystemConfig.Streaming.symbols
-}
 
+async def init_data():
+    global init_account_balance, init_exchange_info, init_brackets_data
+    init_account_balance = await ins_futures_client.fetch_account_balance()
+    init_exchange_info = await ins_futures_market.fetch_exchange_info()
+    init_brackets_data = {
+        symbol: await ins_futures_client.fetch_leverage_brackets(symbol)
+        for symbol in SystemConfig.Streaming.symbols
+    }
+
+asyncio.run(init_data())
 
 class Validator:
     ### 함수 동작을 위한 내함수

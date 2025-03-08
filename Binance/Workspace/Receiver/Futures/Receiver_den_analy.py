@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict
 
 import os, sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -18,15 +19,19 @@ from Workspace.Receiver.Futures.Private.ExecutionReceiverWebsocket import (
 
 import Workspace.Utils.TradingUtils as tr_utils
 import Workspace.Utils.BaseUtils as base_utils
+
 # 의존성 주입
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.Processor.Order.PendingOrder import PendingOrder
-from Workspace.DataStorage.DataCollector.NodeStorage import MainStorage
 from Workspace.DataStorage.DataCollector.aggTradeStorage import aggTradeStorage
 from Workspace.DataStorage.DataCollector.DepthStorage import DepthStorage
 from Workspace.DataStorage.DataCollector.ExecutionStorage import ExecutionStorage
-from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import (
+    FuturesTradingClient,
+)
 from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
+
+import Workspace.DataStorage.DataCollector.StorageCollection as storage
 import multiprocessing
 import SystemConfig
 
@@ -35,17 +40,17 @@ import SystemConfig
 from Workspace.Analysis.AnalysisManager import TradingAnalysis
 
 
-
 path_api = SystemConfig.Path.bianace
 api_binance = base_utils.load_json(path_api)
 
 tr_client = FuturesTradingClient(**api_binance)
 obj_wallet = Wallet(tr_client)
 obj_pending_order = PendingOrder(tr_client)
-convert_to_interval = [f"interval_{i}"for i in SystemConfig.Streaming.intervals]
+convert_to_interval = [f"interval_{i}" for i in SystemConfig.Streaming.intervals]
 sub_storage = SubStorage(convert_to_interval)
-storage_history = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
-storage_real_time = MainStorage(SystemConfig.Streaming.symbols, sub_storage)
+
+storage_history = storage.KlineHistoryStorage().stroage
+storage_real_time = storage.KlineRealTimeStorage().stroage
 storage_aggTrade = aggTradeStorage()
 storage_depth = DepthStorage()
 storage_execution = ExecutionStorage()
@@ -55,6 +60,7 @@ class ReceiverStorageManager:
     """
     ✨ 데이터 수신 비동기식 함수들을 전부 무한 loop로 실행하고 수신된 데이터를 각 storage에 저장한다.
     """
+
     def __init__(self):
         self.queue_kline_fetcher = asyncio.Queue()
         self.queue_kline_ws = asyncio.Queue()
@@ -75,15 +81,20 @@ class ReceiverStorageManager:
         self.injection_pending_order = obj_pending_order
         self.storage_execution = storage_execution
 
-        #분석 자료 저장(업데이트))
+        # 분석 자료 저장(업데이트))
         self.storage_history = storage_history
         self.storage_real_time = storage_real_time
         self.stroage_aggTrade = storage_aggTrade
         self.storage_depth = storage_depth
 
-        self.trading_analysis = TradingAnalysis(self.storage_history, self.storage_real_time, self.stroage_aggTrade, self.storage_depth)
+        self.trading_analysis = TradingAnalysis(
+            self.storage_history,
+            self.storage_real_time,
+            self.stroage_aggTrade,
+            self.storage_depth,
+        )
 
-        self.queue_analysis:asyncio.Queue = self.trading_analysis.queue
+        self.queue_analysis: asyncio.Queue = self.trading_analysis.queue
 
     async def _queue_kline_fetcher(self):
         """
@@ -161,6 +172,7 @@ class ReceiverStorageManager:
             self._queue_execution_ws(),
         ]
         await asyncio.gather(*tasks)
+
 
 if __name__ == "__main__":
     obj = ReceiverStorageManager()

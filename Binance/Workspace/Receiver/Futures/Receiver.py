@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict
 
 import os, sys
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -17,6 +18,7 @@ from Workspace.Receiver.Futures.Private.ExecutionReceiverWebsocket import (
 )
 
 import Workspace.Utils.TradingUtils as tr_utils
+
 # 의존성 주입
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.Processor.Order.PendingOrder import PendingOrder
@@ -30,6 +32,7 @@ class ReceiverStorageManager:
     """
     ✨ 데이터 수신 비동기식 함수들을 전부 무한 loop로 실행하고 수신된 데이터를 각 storage에 저장한다.
     """
+
     def __init__(
         self,
         wallet: Wallet,
@@ -59,7 +62,7 @@ class ReceiverStorageManager:
         self.injection_pending_order = pending_order
         self.storage_execution = storage_execution
 
-        #분석 자료 저장(업데이트))
+        # 분석 자료 저장(업데이트))
         self.storage_history = storage_history
         self.storage_real_time = storage_real_time
         self.stroage_aggTrade = storage_aggTrade
@@ -144,21 +147,23 @@ if __name__ == "__main__":
     import SystemConfig
     import Workspace.Utils.BaseUtils as base_utils
     from Workspace.DataStorage.DataCollector.NodeStorage import SubStorage, MainStorage
-    from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
-    
+    from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import (
+        FuturesTradingClient,
+    )
+
     intervals = SystemConfig.Streaming.intervals
     conver_to_intervals = [f"interval_{i}" for i in intervals]
     symbols = SystemConfig.Streaming.symbols
-    
+
     sub_storage = SubStorage(conver_to_intervals)
     aggTrade_ = aggTradeStorage()
     history_ = MainStorage(symbols, sub_storage)
     real_time_ = MainStorage(symbols, sub_storage)
-    
+
     path = SystemConfig.Path.bianace
     api = base_utils.load_json(path)
     tr_client_ = FuturesTradingClient(**api)
-    
+
     pending_ = pending_order.PendingOrder(tr_client_)
     wallet_ = wallet.Wallet(tr_client_)
     depth_ = DepthStorage()

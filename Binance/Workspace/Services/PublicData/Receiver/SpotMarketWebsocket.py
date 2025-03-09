@@ -5,7 +5,7 @@ import aiohttp
 import json
 
 
-class FuturesMarketWebsocket(MarketWebsocket):
+class SpotMarketWebsocket(MarketWebsocket):
     """
     ℹ️ Futures 거래내역 웹소켓이다.
     매개변수의 session은 변할일이 없을것으로 판단되어,
@@ -18,4 +18,4 @@ class FuturesMarketWebsocket(MarketWebsocket):
     """
 
     def __init__(self, symbols: List):
-        super().__init__(base_url="wss://fstream.binance.com", symbols=symbols)
+        super().__init__(base_url="wss://fstream.binance.com::9443", symbols=symbols)

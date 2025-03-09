@@ -1,130 +1,88 @@
+import nest_asyncio
 import asyncio
 import json
-import nest_asyncio
 import websockets
-import pandas as pd
+import numpy as np
 from collections import deque
-from rich.console import Console
-from rich.table import Table
-from rich.live import Live
 
-# Jupyter Notebook 비동기 실행을 위한 설정
 nest_asyncio.apply()
 
-# Binance 웹소켓 URL
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/btcusdt@depth"
+SYMBOL = "trxusdt"
+URL = f"wss://fstream.binance.com/ws/{SYMBOL}@depth10@100ms"
 
-# 최대 저장할 데이터 개수
-MAX_DEPTH_RECORDS = 600
-large_order_threshold = 5  # 대량 주문 감지 임계값 (예: 5 BTC)
+max_len = 300
 
-# 데이터 저장 (매도 호가, 매수 호가)
-order_book = {"asks": deque(maxlen=MAX_DEPTH_RECORDS), "bids": deque(maxlen=MAX_DEPTH_RECORDS)}
+# ✅ 최근 3000개의 데이터만 유지 (누적 분석을 위해 deque 사용)
+depth_data = deque(maxlen=max_len)
 
-# 누적 델타 볼륨
-cumulative_delta_volume = 0
 
-# Rich 콘솔 설정
-console = Console()
 
-def get_sell_buy_walls():
-    """매도벽(Sell Wall)과 매수벽(Buy Wall) 계산"""
-    asks_df = pd.DataFrame(order_book["asks"], columns=["price", "quantity"], dtype=float)
-    bids_df = pd.DataFrame(order_book["bids"], columns=["price", "quantity"], dtype=float)
 
-    # 가장 많은 매도 주문량이 있는 가격(매도벽)
-    sell_wall = asks_df.loc[asks_df["quantity"].idxmax(), "price"]
-    # 가장 많은 매수 주문량이 있는 가격(매수벽)
-    buy_wall = bids_df.loc[bids_df["quantity"].idxmax(), "price"]
+async def process_order_book():
+    async with websockets.connect(URL, ping_interval=10, ping_timeout=30) as ws:
+        while True:
+            data = await ws.recv()
+            order_book = json.loads(data)
 
-    return sell_wall, buy_wall
+            # ✅ 매수·매도 호가를 np.array 변환 (오버헤드 최소화)
+            bid_prices, bid_qtys = np.array(order_book["b"], dtype=float).T
+            ask_prices, ask_qtys = np.array(order_book["a"], dtype=float).T
 
-def generate_table():
-    """실시간 데이터를 기반으로 테이블 생성"""
-    global cumulative_delta_volume
+            # ✅ 기존 데이터에서 이전 주문 정보 가져오기
+            if depth_data:
+                prev_bids = depth_data[-1]["bids"]
+                prev_asks = depth_data[-1]["asks"]
+            else:
+                prev_bids = (np.array([]), np.array([]))
+                prev_asks = (np.array([]), np.array([]))
 
-    if not order_book["asks"] or not order_book["bids"]:
-        return Table()
+            # ✅ 신규 주문 및 취소 주문 계산 함수
+            def calc_order_changes(prev_orders, new_orders):
+                prev_prices, prev_qtys = prev_orders
+                new_prices, new_qtys = new_orders
 
-    asks_df = pd.DataFrame(order_book["asks"], columns=["price", "quantity"], dtype=float)
-    bids_df = pd.DataFrame(order_book["bids"], columns=["price", "quantity"], dtype=float)
+                prev_dict = {p: q for p, q in zip(prev_prices, prev_qtys)}
+                new_dict = {p: q for p, q in zip(new_prices, new_qtys)}
 
-    # 주문량 가중 평균 가격 (VWAP) 계산
-    vwap_ask = (asks_df["price"] * asks_df["quantity"]).sum() / asks_df["quantity"].sum()
-    vwap_bid = (bids_df["price"] * bids_df["quantity"]).sum() / bids_df["quantity"].sum()
+                # 신규 주문: 새로운 가격이 생기거나, 기존 가격에서 수량 증가
+                new_orders = {p: q for p, q in new_dict.items() if p not in prev_dict or new_dict[p] > prev_dict[p]}
+                new_order_value = sum(p * q for p, q in new_orders.items())
 
-    # 최우선 매도/매수 호가 스프레드 계산
-    best_ask = asks_df.iloc[0]["price"]
-    best_bid = bids_df.iloc[0]["price"]
-    spread = best_ask - best_bid
-    spread_ratio = (spread / best_ask) * 100  # 스프레드 비율 (%)
+                # 취소 주문: 기존에 있었지만 수량이 0이 되었거나 감소한 경우
+                canceled_orders = {p: q for p, q in prev_dict.items() if p not in new_dict or new_dict[p] < prev_dict[p]}
+                canceled_order_value = sum(p * q for p, q in canceled_orders.items())
 
-    # 매도벽 & 매수벽 계산
-    sell_wall, buy_wall = get_sell_buy_walls()
-    spread_wall = sell_wall - buy_wall  # 매도벽-매수벽 스프레드
+                return new_order_value, canceled_order_value
 
-    # 매도/매수 호가 총량 계산
-    total_ask_volume = asks_df["quantity"].sum()
-    total_bid_volume = bids_df["quantity"].sum()
+            # ✅ 신규 주문 및 취소 주문 금액 계산
+            bid_new_value, bid_canceled_value = calc_order_changes(prev_bids, (bid_prices, bid_qtys))
+            ask_new_value, ask_canceled_value = calc_order_changes(prev_asks, (ask_prices, ask_qtys))
 
-    # 불균형 비율 (Imbalance) 계산
-    imbalance = (total_bid_volume - total_ask_volume) / (total_bid_volume + total_ask_volume)
+            # ✅ depth_data에 최신 데이터 추가 (pop 사용하지 않음, list(deque) 활용)
+            depth_data.append({"bids": (bid_prices, bid_qtys), "asks": (ask_prices, ask_qtys)})
 
-    # 대량 매수/매도 주문 감지
-    large_buy_orders = bids_df[bids_df["quantity"] > large_order_threshold]
-    large_sell_orders = asks_df[asks_df["quantity"] > large_order_threshold]
-    large_buy_detected = not large_buy_orders.empty
-    large_sell_detected = not large_sell_orders.empty
+            # ✅ 누적된 데이터 활용 (list(deque) 변환)
+            all_data = list(depth_data)
 
-    # 누적 델타 볼륨 (매수 총량 - 매도 총량)
-    delta_volume = total_bid_volume - total_ask_volume
-    cumulative_delta_volume += delta_volume
+            # ✅ 전체 누적 데이터에서 총 주문 변화량 계산
+            total_bid_new = sum(calc_order_changes(all_data[i-1]["bids"], all_data[i]["bids"])[0] for i in range(1, len(all_data)))
+            total_bid_canceled = sum(calc_order_changes(all_data[i-1]["bids"], all_data[i]["bids"])[1] for i in range(1, len(all_data)))
+            total_ask_new = sum(calc_order_changes(all_data[i-1]["asks"], all_data[i]["asks"])[0] for i in range(1, len(all_data)))
+            total_ask_canceled = sum(calc_order_changes(all_data[i-1]["asks"], all_data[i]["asks"])[1] for i in range(1, len(all_data)))
 
-    # 테이블 생성
-    table = Table(title="📊 Order Book Analysis", show_header=True, header_style="bold cyan")
-    table.add_column("Metric", style="dim", width=30)
-    table.add_column("Value", justify="right", width=20)
+            # ✅ 실시간 및 누적 데이터 출력
+            print("\n📌 [100ms 업데이트] Futures Depth 변경 내역")
+            print(f"  🟢 실시간 신규 매수 주문: {bid_new_value:.2f} USDT")
+            print(f"  🔴 실시간 취소 매수 주문: {bid_canceled_value:.2f} USDT")
+            print(f"  🟢 실시간 신규 매도 주문: {ask_new_value:.2f} USDT")
+            print(f"  🔴 실시간 취소 매도 주문: {ask_canceled_value:.2f} USDT")
 
-    table.add_row("VWAP Ask", f"{vwap_ask:,.2f}")
-    table.add_row("VWAP Bid", f"{vwap_bid:,.2f}")
-    table.add_row("Spread (Best Ask - Best Bid)", f"{spread:,.2f}")
-    table.add_row("Spread Ratio (%)", f"{spread_ratio:.4f}")
-    table.add_row("Sell Wall Price", f"{sell_wall:,.2f}")
-    table.add_row("Buy Wall Price", f"{buy_wall:,.2f}")
-    table.add_row("Spread (Sell Wall - Buy Wall)", f"{spread_wall:,.2f}")
-    table.add_row("Imbalance", f"{imbalance:.4f}")
-    table.add_row("Cumulative Delta Volume", f"{cumulative_delta_volume:,.2f}")
+            print(f"\n📊 [누적 데이터] (최근 {max_len}개 기준)")
+            print(f"  🟢 누적 신규 매수 주문 총액: {total_bid_new:,.2f} USDT")
+            print(f"  🔴 누적 취소 매수 주문 총액: {total_bid_canceled:,.2f} USDT")
+            print(f"  🟢 누적 신규 매도 주문 총액: {total_ask_new:,.2f} USDT")
+            print(f"  🔴 누적 취소 매도 주문 총액: {total_ask_canceled:,.2f} USDT")
 
-    # 이벤트 감지 추가
-    if large_buy_detected:
-        table.add_row("🚀 Large Buy Orders", f"{len(large_buy_orders)} orders", style="bold green")
-    if large_sell_detected:
-        table.add_row("⚠️ Large Sell Orders", f"{len(large_sell_orders)} orders", style="bold red")
+            await asyncio.sleep(0.1)  # ✅ 100ms 간격 유지
 
-    return table
-
-async def process_message(msg, live):
-    """수신된 WebSocket 메시지를 처리하고 UI 갱신"""
-    data = json.loads(msg)
-
-    asks = data.get("a", [])  # 매도 호가
-    bids = data.get("b", [])  # 매수 호가
-
-    if asks:
-        order_book["asks"].extend(asks)
-    if bids:
-        order_book["bids"].extend(bids)
-
-    # 화면 갱신
-    live.update(generate_table())
-
-async def binance_websocket():
-    """Binance 웹소켓 연결 및 실시간 데이터 수신"""
-    with Live(generate_table(), console=console, refresh_per_second=1) as live:
-        async with websockets.connect(BINANCE_WS_URL) as ws:
-            while True:
-                msg = await ws.recv()
-                await process_message(msg, live)
-
-# 비동기 실행
-asyncio.run(binance_websocket())
+asyncio.run(process_order_book())

@@ -34,6 +34,17 @@ class StreamReceiverWebsocket:
         while True:
             message = await self.futures_mk_ws.receive_message()
             await self.queue.put(message)
+            self.depth_print(message)
+            
+    def depth_print(self, message):
+        data_type = message["stream"].split("@")[1]
+        if data_type == "depth":
+            data = message["data"]
+            symbol = data['s']
+            if symbol == "BTCUSDT":
+                ask_ = data["a"][0]
+                bid_ = data["b"][-1]
+                print(f"{ask_} / {bid_}")
 
 if __name__ == "__main__":
     q_ = asyncio.Queue()

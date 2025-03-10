@@ -23,7 +23,7 @@ import Workspace.Utils.BaseUtils as base_utils
 # 의존성 주입
 from Workspace.Processor.Wallet.Wallet import Wallet
 from Workspace.Processor.Order.PendingOrder import PendingOrder
-from Workspace.DataStorage.DataCollector.aggTradeStorage import aggTradeStorage
+from Workspace.DataStorage.DataCollector.aggTradeStorage import aggTradeStorage, AggTradeDeque
 from Workspace.DataStorage.DataCollector.DepthStorage import DepthStorage
 from Workspace.DataStorage.DataCollector.ExecutionStorage import ExecutionStorage
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import (
@@ -51,7 +51,7 @@ sub_storage = SubStorage(convert_to_interval)
 
 storage_history = storage.KlineHistoryStorage().stroage
 storage_real_time = storage.KlineRealTimeStorage().stroage
-storage_aggTrade = aggTradeStorage()
+storage_aggTrade = AggTradeDeque()
 storage_depth = DepthStorage()
 storage_execution = ExecutionStorage()
 
@@ -127,7 +127,7 @@ class ReceiverStorageManager:
         while True:
             data = await self.queue_aggTrade_ws.get()
             # print(data)
-            self.stroage_aggTrade.add_data(data)
+            self.stroage_aggTrade.update(data)
             self.queue_aggTrade_ws.task_done()
 
     async def _queue_depth_ws(self):

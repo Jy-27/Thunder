@@ -17,12 +17,11 @@ from Workspace.DataStorage.DataCollector.ExecutionStorage import ExecutionStorag
 
 import SystemConfig
 
-def process_analysis(symbol, kline_data, trade_taker, trade_maker, depth):
+def process_analysis(symbol, kline_data, agg_trade, depth):
     """멀티프로세싱으로 실행될 데이터 분석 함수"""
     return (f"{symbol}: 분석 완료\n"
             f"kline size: {len(kline_data)}\n"
-            f"taker size: {len(trade_taker)}\n"
-            f"maker size: {len(trade_maker)}\n"
+            f"agg_trade size: {len(agg_trade)}\n"
             f"depth size: {len(depth)}\n")         
             # ✅ Queue를 사용하지 않고, 결과를 직접 반환
 
@@ -70,11 +69,10 @@ class TradingAnalysis:
         real_time = self.storage_real_time.to_dict(symbol)
         history = self.storage_history.to_dict(symbol)
         kline_data = KlineDataUpdater.update_minute_kline(real_time, history)
-        trade_taker = self.storage_aggTrade.get_all_data(symbol, "taker")
-        trade_maker = self.storage_aggTrade.get_all_data(symbol, "maker")
+        agg_trade = self.storage_aggTrade.get_all_data()
         depth = self.storage_depth.get_all_data(symbol)
         # ✅ queue를 전달하지 않고 순수 데이터만 반환
-        return symbol, kline_data, trade_taker, trade_maker, depth
+        return symbol, kline_data, agg_trade, depth
 
     async def analysis_async(self):
         """비동기 루프에서 멀티프로세싱 분석 실행"""
@@ -93,7 +91,7 @@ class TradingAnalysis:
         """비동기적으로 큐에서 데이터를 처리하는 함수"""
         while True:
             result = await self.queue.get()
-            print(result)
+            # print(result)
             # print(f"📥 결과 처리: {result}")
             self.queue.task_done()
 
@@ -108,5 +106,5 @@ class TradingAnalysis:
         while True:
             await base_utils.sleep_next_minute(self.time_cycle)
             # await asyncio.sleep(20)
-            print(datetime.datetime.now())
+            # print(datetime.datetime.now())
             await self.analysis_async()

@@ -61,7 +61,33 @@ class aggTradeStorage:
             return data
         else:
             return None
-        
+
+from collections import deque
+
+class AggTradeDeque:
+    __slots__ = ("latest_data", "deque")
+
+    def __init__(self, maxlen: int = 300):
+        self.latest_data = None
+        self.deque = deque(maxlen=maxlen)
+
+    def update(self, data):
+        """데이터 업데이트 및 deque에 추가"""
+        self.latest_data = data
+        self.deque.append(data)
+
+    def get_latest_data(self):
+        """가장 최근 데이터를 반환"""
+        return self.latest_data
+
+    def get_all_data(self):
+        """deque의 모든 데이터를 반환"""
+        return list(self.deque)
+
+    def __repr__(self):
+        return f"AggTradeDeque(latest_data={self.latest_data}, deque_length={len(self.deque)})"
+
+
 if __name__ == "__main__":
     from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket
     from SystemConfig import Streaming

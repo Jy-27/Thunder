@@ -70,6 +70,7 @@ class MarketFetcher:
         interval: str,
         start_ms_timestamp: int,
         end_ms_timestamp: int,
+        limit: int = 1000
     ) -> List[List[Union[int, str]]]:
         """
         조회할 데이터의 기간을 지정하여 캔들 스틱 데이터(OHLCV)를 조회 및 반환한다.
@@ -79,6 +80,7 @@ class MarketFetcher:
             "startTime": start_ms_timestamp,
             "endTime": end_ms_timestamp,
             "interval": interval,
+            "limit":limit
         }
         return await self._retrieve_api_data("klines", params=params)
 

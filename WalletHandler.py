@@ -22,7 +22,7 @@ class WalletManager(OpenTradeLog):
     반복적인 API를 피하기 위하여 wallet정보를 별도 관리한다.
     실제 거래시 슬리피지와 같은 계산하기 어려운 항목들은 exit_fee로 합산한다.
     """
-    def _init_(self, current_timestamp:int, initial_balance: float = 1_000, start_ago_hr: int = 24):
+    def __init__(self, current_timestamp:int, initial_balance: float = 1_000, start_ago_hr: int = 24):
         self.trade_history: List[TradingLog] = []
         self.closed_positions: List[List[int]] = []
         self.open_positions: List[List[int]] = []
@@ -661,7 +661,7 @@ class WalletManager(OpenTradeLog):
 
 
 # CODE TEST
-if _name_ == "_main_":
+if __name__ == "__main__":
     
     import asyncio
     import nest_asyncio

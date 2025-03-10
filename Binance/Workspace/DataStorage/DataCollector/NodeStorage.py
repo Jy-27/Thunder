@@ -109,14 +109,14 @@ class SubStorage:
         """
         return {field: getattr(self, field) for field in self.__slots__}
 
-    def __str__(self):
-        """
-        🖨️ 전체적인 필드에 대한 정보를 출력한다.
+    # def __str__(self):
+    #     """
+    #     🖨️ 전체적인 필드에 대한 정보를 출력한다.
 
-        Returns:
-            str: 전체 필드 출력
-        """
-        return str(self.to_dict())
+    #     Returns:
+    #         str: 전체 필드 출력
+    #     """
+    #     return str(self.to_dict())
 
     def __len__(self):
         """

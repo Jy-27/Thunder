@@ -11,7 +11,6 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-
 import Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher as futures_market
 import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
 import SystemConfig

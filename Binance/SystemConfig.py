@@ -22,7 +22,7 @@ class Streaming:
         "1w",
         "1M",
     ]
-    symbols = "BTCUSDT"#, "TRXUSDT", "ETHUSDT", "XRPUSDT"]#, "SOLUSDT", "BNBUSDT"]
+    symbols = ["BTCUSDT"]#, "TRXUSDT", "ETHUSDT", "XRPUSDT"]#, "SOLUSDT", "BNBUSDT"]
     intervals = ["3m", "5m"]#, "15m", "30m"]#, "4h", "1d"]
     kline_limit: int = 480  # MAX 1,000
 

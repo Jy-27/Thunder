@@ -1,13 +1,12 @@
-from typing import Union, Final, Tuple, List, Dict, Optional
 import asyncio
 import os
-import sys
-import psutil
 import platform
-import socket
 import subprocess
+import sys
+from typing import Union, Tuple, List, Dict
 
-import os, sys
+import psutil
+
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -32,6 +31,7 @@ ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 
 ### 백테스트용 base data
 
+
 async def init_data():
     global init_account_balance, init_exchange_info, init_brackets_data
     init_account_balance = await ins_futures_client.fetch_account_balance()
@@ -41,7 +41,9 @@ async def init_data():
         for symbol in SystemConfig.Streaming.symbols
     }
 
+
 asyncio.run(init_data())
+
 
 class Validator:
     ### 함수 동작을 위한 내함수
@@ -76,6 +78,12 @@ class Validator:
         else:
             raise ValueError(f"position은 int 또는 str만 입력 가능: {type(position)}")
         return position
+
+    @staticmethod
+    def args_margin_type(margin_type: str):
+        margin_types = ["ISOLATED", "CROSSED"]
+        if margin_type not in margin_types:
+            raise ValueError(f"margin type 입력 오류: {margin_type}")
 
     @staticmethod
     def args_leverage(leverage: int) -> int:
@@ -805,7 +813,7 @@ class Extractor:
         ]
 
     @staticmethod
-    def unpack_message(message:Dict) -> Tuple:
+    def unpack_message(message: Dict) -> Tuple:
         """
         Packager class의 pack_message처리된 데이터를 unpack처리 한다.
 
@@ -820,9 +828,10 @@ class Extractor:
                 ...
         return symbol, interval, data
 
+
 class Convertor:
     @staticmethod
-    def agg_trade_message(message:Dict) -> Tuple:
+    def agg_trade_message(message: Dict) -> Tuple:
         """
         Websocket stream(aggTrade) 데이터를 storage에 저장하기 용이하도록 재구성한다.
         반환되는 값은 매수자 관점이다.(Notes참조)
@@ -832,12 +841,12 @@ class Convertor:
 
         Returns:
             Tuple: symbo, execution_type, data
-            
+
         Notes:
             ‼️ 중요
             Taker: 시장가 주문(Makrket)주문 -> 유동성 소비
             Maker: 지정가 주문(Limit)주문 -> 유동성 공급
-            
+
             관점의 차이. 주의요망.
             m(매수자 관점)): True(매도자 Taker) / False(매도자 Maker)
         """
@@ -850,17 +859,17 @@ class Convertor:
             execution_type = "taker"
 
         data = [select_data["E"], select_data["p"], select_data["q"]]
-        
+
         return symbol, execution_type, data
 
     @staticmethod
-    def orderbook_depth_message(message:Dict) -> Tuple:
+    def orderbook_depth_message(message: Dict) -> Tuple:
         seletc_data = message["data"]
-        bids_data = [seletc_data['E']]
+        bids_data = [seletc_data["E"]]
         asks_data = [seletc_data["E"]]
-        
-        
+
         return event_timestamp, bids, asks
+
 
 class Packager:
     @staticmethod
@@ -872,13 +881,13 @@ class Packager:
         Returns:
             Dict: symbol(main_key), interval(sub_key)값 추가된 Dict
         """
-        return {main_key: {sub_key:data}}
+        return {main_key: {sub_key: data}}
 
     def pack_kline_websocket_message(data) -> Dict:
-        symbol = data['data']['s']
-        interval = data['data']['k']['i']
-        return {symbol: {interval:Extractor.format_kline_data(data)}}
-        
+        symbol = data["data"]["s"]
+        interval = data["data"]["k"]["i"]
+        return {symbol: {interval: Extractor.format_kline_data(data)}}
+
 
 class System:
     @staticmethod

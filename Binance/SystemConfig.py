@@ -37,3 +37,6 @@ class Path:
     project = os.path.join(main_path, "Thunder", "Binance")
 
 
+class Position:
+    leverage:int = 5
+    margin_type:str = "ISOLATED"

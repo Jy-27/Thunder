@@ -60,9 +60,20 @@ class TradingAnalysis:
         self.storage_aggTrade = storage_aggTrade
         self.storage_depth = storage_depth
         self.symbols = SystemConfig.Streaming.symbols
+        self.intervals = SystemConfig.Streaming.intervals
+        self.convert_to_intervals = [f"interval_{i}" for i in self.intervals]
 
-        # ✅ asyncio.Queue 생성 (비동기적으로 데이터 처리)
         self.queue = asyncio.Queue()
+
+        self.ma_sam = {}
+
+    def ma_sma(self):
+        KlineDataUpdater._merge_kline(self.storage_real_time, self.storage_history)
+        
+
+
+
+
 
     def get_dataset(self, symbol: str) -> Tuple[str, dict, list, list, list]:
         """프로세싱할 데이터를 가져오는 함수"""

@@ -102,7 +102,6 @@ class ReceiverStorageManager:
         """
         while True:
             pack_data = await self.queue_kline_fetcher.get()
-            # print(pack_data)
             symbol, interval, data = tr_utils.Extractor.unpack_message(pack_data)
             conver_to_interval = f"interval_{interval}"
             self.storage_history.set_data(symbol, conver_to_interval, data)

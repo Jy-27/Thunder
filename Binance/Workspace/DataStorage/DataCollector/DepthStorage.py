@@ -21,9 +21,9 @@ class DepthStorage:
     """
     __slots__ = tuple(Streaming.symbols)
  
-    def __init__(self):
+    def __init__(self, deque_len: int=300):
         for attr in self.__slots__:
-            setattr(self, attr, deque())
+            setattr(self, attr, deque(maxlen=deque_len))
     
     def __validate_attr(self, attr_name:str):
         """

@@ -80,11 +80,6 @@ def detect_ask_wall(orderbook) -> tuple:
 
     return max_idx, price, volume, total_value
 
-
-
-
-
-
 def short_sma(values:Dict, periods:List):
     conver_to_array = np.array(values, float)
     close_prices = conver_to_array[:, 4]

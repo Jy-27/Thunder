@@ -409,7 +409,7 @@ class FactoryManager:
         base_data = convert_to_data[self.symbol[0]][self.base_interval]
         base_indices = self.generate_indices_arange(self.base_interval, base_data)
         for i in self.intervals:
-            indices_data = self.generate_indices_by_interval(base_indices, i, 1)
+            indices_data = self.generate_indices_by_interval(base_indices, i, 7)
             
             self.storage_indices.set_data(i, indices_data)
         if is_save:
@@ -419,24 +419,22 @@ class FactoryManager:
 if __name__ == "__main__":
     start_date = "2025-01-01"  # 09:00:00'
     end_date = "2025-01-30"  # 08:59:59'
-    intervals = SystemConfig.Streaming.intervals
+    # intervals = SystemConfig.Streaming.intervals
     symbols = ["BTCUSDT"]  # , 'ETHUSDT']
     ins = FactoryManager(start_date, end_date)
     closing, indices = asyncio.run(ins.start())
     # closing, indices = ins.storage_load()
-    
-    
-    data_emty = False
-    index = 0
-    while not data_emty:
-    # while True:
-        try:
-            for i in ins.intervals:
-                indices_data = indices.get_data(i, index)
-                sync_data = closing.get_data(i, indices_data)
-                print(f"  {i} - {indices_data[-1]}")
-            index += 1
-        except:
-            data_emty = True
+
+    # data_emty = False
+    # index = 0
+    # while not data_emty:
+    # # while True:
+    #     try:
+    #         for i in ins.intervals:
+    #             indices_data = indices.get_data(i, index)
+    #             sync_data = closing.get_data(i, indices_data)
+    #         index += 1
+    #     except:
+    #         data_emty = True
     
     print(f" ✅ 작업종료")

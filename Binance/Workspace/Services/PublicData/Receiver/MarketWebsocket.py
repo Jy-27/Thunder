@@ -53,7 +53,6 @@ class MarketWebsocket:
                 - trade: 개별 거래 정보 제공
                 - miniTicker: 심볼별 간소화된 티커 정보 제공
                 - depth: 주문서 정보 제공
-                - 24hrTicker: 24시간 동안 롤링 통계 정보 제공
                 - aggTrade: 집계된 거래 정보 제공
         """
         self.session = aiohttp.ClientSession()  # ✅ 세션을 별도로 유지
@@ -82,7 +81,7 @@ class MarketWebsocket:
             await self.websocket.close()
         if self.session:
             await self.session.close()
-        print("🔴 WebSocket 연결 종료")
+        # print("🔴 WebSocket 연결 종료")
 
 
 # ✅ 실행 코드

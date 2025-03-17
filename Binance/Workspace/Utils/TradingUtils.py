@@ -30,8 +30,6 @@ ins_futures_market = futures_market.FuturesMarketFetcher()
 ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
 
 ### 백테스트용 base data
-
-
 async def init_data():
     global init_account_balance, init_exchange_info, init_brackets_data
     init_account_balance = await ins_futures_client.fetch_account_balance()
@@ -40,7 +38,6 @@ async def init_data():
         symbol: await ins_futures_client.fetch_leverage_brackets(symbol)
         for symbol in SystemConfig.Streaming.symbols
     }
-
 
 asyncio.run(init_data())
 

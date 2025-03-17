@@ -190,6 +190,7 @@ class MainStorage:
             if hasattr(main_data, sub_field):
                 main_data.set_data(sub_field, data)
             else:
+                print(getattr(self, main_field).__slots__)
                 raise ValueError(f"sub field 입력 오류: {sub_field}")
         else:
             raise ValueError(f"main field 입력 오류: {main_field}")

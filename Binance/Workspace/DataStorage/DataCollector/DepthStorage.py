@@ -95,6 +95,25 @@ class DepthStorage:
         else:
             return None
         
-        
+if __name__ == "__main__":
+    from Workspace.Receiver.Futures.Public.StreamReceiverWebsocket import StreamReceiverWebsocket
+    import asyncio
+    stream_type = "Depth"
+    q_ = asyncio.Queue()
+    
+    ws_receiver = StreamReceiverWebsocket(stream_type, q_)
+    
+    async def run_receiver():
+        await ws_receiver.futures_mk_ws.open_stream_connection(stream_type)
+        for _ in range(50):
+            message = await ws_receiver.futures_mk_ws.receive_message()
+            await ws_receiver.queue.put(message)
+            print(message)
+        await ws_receiver.futures_mk_ws.close_connection()
 
-        
+
+    asyncio.run(run_receiver())
+
+    
+    
+    

@@ -1,21 +1,25 @@
 import asyncio
+import os
+import sys
 
-import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import FuturesMarketWebsocket as futures_mk_ws
+from Workspace.Services.PublicData.Receiver.FuturesMarketWebsocket import (
+    FuturesMarketWebsocket as futures_mk_ws,
+)
 from SystemConfig import Streaming
 import Workspace.Utils.TradingUtils as tr_utils
 
+
 class KlineReceiverWebsocket:
-    def __init__(self, queue:asyncio.Queue, loop_status:asyncio.Event):
+    def __init__(self, queue: asyncio.Queue, loop_status: asyncio.Event):
         self.symbols = Streaming.symbols
         self.intervals = Streaming.intervals
         self.futures_mk_ws = futures_mk_ws(self.symbols)
         self.queue = queue
         self.loop_status = loop_status
-    
+
     async def start(self):
         print(f"  ⏳ KlineReceiverWebsocket 연결중.")
         await self.futures_mk_ws.open_kline_connection(self.intervals)
@@ -27,7 +31,8 @@ class KlineReceiverWebsocket:
             await self.queue.put(pack_data)
         print(f"  ⁉️ KlineReceiverWebsocket Loop 종료됨")
         await self.futures_mk_ws.close_connection()
-        prinf(f"  ⛓️‍💥 KlineReceiverWebsocket 연결 해제")
+        print(f"  ⛓️‍💥 KlineReceiverWebsocket 연결 해제")
+
 
 if __name__ == "__main__":
     q_ = asyncio.Queue()

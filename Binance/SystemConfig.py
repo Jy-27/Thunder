@@ -27,6 +27,13 @@ class Streaming:
     kline_limit: int = 480  # MAX 1,000
     orderbook_limit: int = 50
     orderbook_timesleep: int = 1
+    
+    max_lengh_ticker = 300
+    max_lengh_trade = 300
+    max_lengh_minTicker = 300 
+    max_lengh_depth = 300
+    max_lengh_aggTrade = 300
+    max_lengh_orderbook = 300
 
 
 

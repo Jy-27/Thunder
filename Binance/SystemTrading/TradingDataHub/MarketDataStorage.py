@@ -6,10 +6,10 @@ from typing import Dict
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
+from SystemConfig import Streaming
 from SystemTrading.TradingDataHub.ReceiverDataStorage.StorageDeque import StorageDeque
 import SystemTrading.TradingDataHub.ReceiverDataStorage.StorageNodeManager as node_storage
 import Workspace.Utils.TradingUtils as tr_utils
-
 
 class RecevierDataStorage:
     """
@@ -28,9 +28,8 @@ class RecevierDataStorage:
         queue_execution_ws: asyncio.Queue,
         queue_kline_fetcher: asyncio.Queue,
         queue_orderbook_fetcher: asyncio.Queue,
-        event_loop_status: asyncio.Event,
-        max_lengh: int = 300,
-    ):
+        event_loop_status: asyncio.Event):
+        
         self.queue_ticker = queue_ticker
         self.queue_trade = queue_trade
         self.queue_minTicker = queue_minTicker
@@ -41,17 +40,16 @@ class RecevierDataStorage:
         self.queue_kline_fetcher = queue_kline_fetcher
         self.queue_orderbook_fetcher = queue_orderbook_fetcher
         self.event_loop_status = event_loop_status
-        self.max_lengh = max_lengh
 
-        self.stroage_ticker = StorageDeque(self.max_lengh)
-        self.storage_trade = StorageDeque(self.max_lengh)
-        self.storage_minTicker = StorageDeque(self.max_lengh)
-        self.storage_depth = StorageDeque(self.max_lengh)
-        self.storage_aggTrade = StorageDeque(self.max_lengh)
+        self.stroage_ticker = StorageDeque(Streaming.max_lengh_ticker)
+        self.storage_trade = StorageDeque(Streaming.max_lengh_trade)
+        self.storage_minTicker = StorageDeque(Streaming.max_lengh_minTicker)
+        self.storage_depth = StorageDeque(Streaming.max_lengh_depth)
+        self.storage_aggTrade = StorageDeque(Streaming.max_lengh_aggTrade)
         self.storage_kline_ws = node_storage.storage_kline_real
         self.storage_execution_ws = node_storage.storage_execution_ws
         self.storage_kline_fetcher = node_storage.storage_kline_history
-        self.storage_orderbook_fetcher = StorageDeque(self.max_lengh)
+        self.storage_orderbook_fetcher = StorageDeque(Streaming.max_lengh_orderbook)
 
     async def ticker_update(self):
         """

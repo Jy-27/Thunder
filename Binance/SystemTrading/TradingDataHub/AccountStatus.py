@@ -6,6 +6,7 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 import Workspace.Utils.BaseUtils as base_utils
 
+import SystemConfig
 from SystemTrading.TradingDataHub.TradingStatus.AccountBalanceStatus import AccountBalanceStatus
 from SystemTrading.TradingDataHub.TradingStatus.OrderStatus import OrderStatus
 from SystemTrading.TradingDataHub.TradingStatus.PositionsStatus import PositionsStatus
@@ -36,13 +37,20 @@ class AccountStatus:
         while not self.event_loop_start.is_set():
             message = await self.queue_account_balance.get()
             
+            ### DEBUG ###
+            # print(message)
+            
             self.ins_positions_status.clear()
             
             convert_to_account = base_utils.convert_dict_to_literal(message)
             self.ins_account_balance_status.set_data(**convert_to_account)
             
             for positions in message["positions"]:
-                conver_to_position = base_utils.convert_dict_to_literal(position)
+                symbol = positions["symbol"]
+                if symbol not in SystemConfig.Streaming.symbols:
+                    continue
+                conver_to_position = base_utils.convert_dict_to_literal(positions)
+                
                 self.ins_positions_status.set_data(conver_to_position)
             self.queue_account_balance.task_done()
         print(f"  ⁉️ wallet 정보 저장소 종료됨.")
@@ -57,7 +65,7 @@ class AccountStatus:
             for order in message:
                 convert_to_order = base_utils.convert_dict_to_literal(order)
                 self.ins_order_status.set_data(convert_to_order)
-            
+                print(convert_to_order)
             self.queue_order_status.task_done()
         print(f"  ⁉️  미치결 주문 정보 저장소 종료됨.")
 

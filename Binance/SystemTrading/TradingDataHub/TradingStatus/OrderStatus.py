@@ -64,6 +64,9 @@ class SymbolStorage:
         order_type = data['type']
         setattr(self, order_type, TypeStoreage())
         getattr(self, order_type).set_data(**data)
+        
+        ### DEBUG ###
+        print(getattr(self, order_type))
     
     def get_data(self, order_type:str):
         return getattr(self, order_type)

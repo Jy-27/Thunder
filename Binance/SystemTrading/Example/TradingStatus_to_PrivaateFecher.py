@@ -19,17 +19,27 @@ events = tuple(events)
 ins_status = AccountStatus(*queues, events[1])
 ins_private_fetcher = PrivateFetcher(*queues, *events)
 
+async def set_event():
+    while True:
+        await asyncio.sleep(5)
+        events[0].set()
+        print("  🚀 SET 실행!!")
+
 async def run_storage():
     while True:
+        print("\n")
         print(ins_status.ins_account_balance_status)
         print(ins_status.ins_order_status)
         print(ins_status.ins_positions_status)
         await asyncio.sleep(5)
 
 async def main():
-    tasks = [asyncio.create_task(run_storage()),
-             asyncio.create_task(ins_status.start()),
-             asyncio.create_task(ins_private_fetcher.start())]
+    tasks = [
+        asyncio.create_task(set_event()),
+        # asyncio.create_task(run_storage()),
+        asyncio.create_task(ins_status.start()),
+        asyncio.create_task(ins_private_fetcher.start())
+        ]
     await asyncio.gather(*tasks)
     
 if __name__ == "__main__":

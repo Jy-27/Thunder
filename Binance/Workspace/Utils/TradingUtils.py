@@ -860,6 +860,23 @@ class Convertor:
         return symbol, execution_type, data
 
     @staticmethod
+    def account_balance_status(balance:Dict) -> Dict:
+        """
+        fetch_account_balance() 함수로 수신한 데이터의 계좌 상태관련 정보만 추출하여 
+        Dictionary로 재구성 및 반환한다.
+
+        Args:
+            balance (Dict): fetch_account_balance 함수 반환값
+
+        Returns:
+            Dict: account_balance의 계좌 상태 관련 정보
+        """
+        return {
+            key: utils.convert_to_literal(value)
+            for key, value in list(balance.items())[:-2]
+        }
+
+    @staticmethod
     def orderbook_depth_message(message: Dict) -> Tuple:
         seletc_data = message["data"]
         bids_data = [seletc_data["E"]]

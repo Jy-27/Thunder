@@ -33,7 +33,7 @@ class AccountStatus:
 
     async def update_wallet_and_positions(self):
         print(f"  🚀  wallet & positions 정보 저장소 실행.")
-        while not self.event_loop_status.is_set():
+        while not self.event_loop_start.is_set():
             message = await self.queue_account_balance.get()
             
             self.ins_positions_status.clear()
@@ -49,7 +49,7 @@ class AccountStatus:
         
     async def update_order_status(self):
         print(f"  🚀  미치결 주문 정보 저장소 실행.")
-        while not self.event_loop_status.is_set():
+        while not self.event_loop_start.is_set():
             message = await self.queue_order_status.get()
             
             self.ins_order_status.clear()
@@ -64,9 +64,8 @@ class AccountStatus:
         
     async def start(self):
         tasks = [
-            asyncio.create_task(self.update_wallet()),
+            asyncio.create_task(self.update_wallet_and_positions()),
             asyncio.create_task(self.update_order_status()),
-            asyncio.create_task(self.update_positions())
         ]
         await asyncio.gather(*tasks)
         

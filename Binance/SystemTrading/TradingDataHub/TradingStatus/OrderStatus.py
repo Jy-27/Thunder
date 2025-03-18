@@ -1,4 +1,5 @@
 from SystemConfig import Streaming
+from typing import Dict
 
 symbols = Streaming.symbols
 order_types = ("STOP_MARKET", "TAKE_PROFIT_MARKET", "LIMIT")
@@ -43,6 +44,9 @@ class OrderStatus:
                 continue
             result[attr] = getattr(self, attr).to_dict()
         return result
+
+    def __repr__(self):
+        return str(self.to_dict())
 
 class SymbolStorage:
     """

@@ -54,4 +54,3 @@ class TickDataAnalyzer:
     def tick_interval(timestamps):
         """평균 틱 간격 계산"""
         return np.mean(np.diff(timestamps))
-

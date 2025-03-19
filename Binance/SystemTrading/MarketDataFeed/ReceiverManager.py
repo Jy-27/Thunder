@@ -33,7 +33,7 @@ class ReceiverManager:
         queue_kline_fetcher: asyncio.Queue,
         queue_orderbook_fetcher: asyncio.Queue,
         event_executuion_ws: asyncio.Event,
-        event_loop_status: asyncio.Event,
+        event_stop_loop: asyncio.Event,
     ):
 
         self.queue_ticker = queue_ticker
@@ -45,35 +45,36 @@ class ReceiverManager:
         self.queue_execution_ws = queue_execution_ws
         self.queue_kline_fetcher = queue_kline_fetcher
         self.queue_orderbook_fetcher = queue_orderbook_fetcher
+        
         self.event_executuion_ws = event_executuion_ws
-        self.event_loop_status = event_loop_status
+        self.event_stop_loop = event_stop_loop
 
         self.ws_ticker = StreamReceiverWebsocket(
-            "ticker", self.queue_ticker, self.event_loop_status
+            "ticker", self.queue_ticker, self.event_stop_loop
         )
         self.ws_trade = StreamReceiverWebsocket(
-            "trade", self.queue_trade, self.event_loop_status
+            "trade", self.queue_trade, self.event_stop_loop
         )
         self.ws_minTicker = StreamReceiverWebsocket(
-            "minTicker", self.queue_minTicker, self.event_loop_status
+            "minTicker", self.queue_minTicker, self.event_stop_loop
         )
         self.ws_depth = StreamReceiverWebsocket(
-            "depth", self.queue_depth, self.event_loop_status
+            "depth", self.queue_depth, self.event_stop_loop
         )
         self.ws_aggTrade = StreamReceiverWebsocket(
-            "aggTrade", self.queue_aggTrade, self.event_loop_status
+            "aggTrade", self.queue_aggTrade, self.event_stop_loop
         )
         self.ws_kline = KlineReceiverWebsocket(
-            self.queue_kline_ws, self.event_loop_status
+            self.queue_kline_ws, self.event_stop_loop
         )
         self.ws_execution = ExecutionReceiverWebsocket(
-            self.queue_execution_ws, self.event_executuion_ws, self.event_loop_status
+            self.queue_execution_ws, self.event_executuion_ws, self.event_stop_loop
         )
         self.fetcher_kline = KlineCycleFetcher(
-            self.queue_kline_fetcher, self.event_loop_status
+            self.queue_kline_fetcher, self.event_stop_loop
         )
         self.fetcher_orderbook = OrderbookCycleFechter(
-            self.queue_orderbook_fetcher, self.event_loop_status
+            self.queue_orderbook_fetcher, self.event_stop_loop
         )
 
     async def start(self):
@@ -97,7 +98,7 @@ if __name__ == "__main__":
         queues.append(asyncio.Queue())
     queues = tuple(queues)
     event_executuion = asyncio.Event()
-    event_loop_status = asyncio.Event()
+    event_stop_loop = asyncio.Event()
 
-    instance = ReceiverManager(*queues, event_executuion, event_loop_status)
+    instance = ReceiverManager(*queues, event_executuion, event_stop_loop)
     asyncio.run(instance.start())

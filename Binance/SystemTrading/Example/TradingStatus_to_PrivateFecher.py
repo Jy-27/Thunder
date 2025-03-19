@@ -43,4 +43,9 @@ async def main():
     await asyncio.gather(*tasks)
     
 if __name__ == "__main__":
+    """
+    Websocket(execution)신호 발생시 account_position(REST)정보를 수신 후 각 스토리지에 업데이트한다.
+    
+    Websocket(execution)신호는 가상으로 발생시킨다.
+    """
     asyncio.run(main())

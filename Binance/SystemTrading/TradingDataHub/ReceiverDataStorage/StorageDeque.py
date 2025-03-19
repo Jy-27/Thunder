@@ -89,7 +89,7 @@ class StorageDeque:
         Returns:
             str: 속성값 정보
         """
-        return str(self.convert_to_dict())
+        return str(self.to_dict())
 
 if __name__ == "__main__":
     storage_1 = StorageAggTrade(300)

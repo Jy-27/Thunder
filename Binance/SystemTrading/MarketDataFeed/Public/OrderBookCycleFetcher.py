@@ -15,7 +15,7 @@ class OrderbookCycleFechter:
     def __init__(
         self,
         queue: asyncio.Queue,
-        loop_status: asyncio.Event,
+        event_stop_loop: asyncio.Event,
         limit: int = Streaming.orderbook_limit,
         timesleep: int = Streaming.orderbook_timesleep,
     ):
@@ -24,7 +24,7 @@ class OrderbookCycleFechter:
         self.ins_futures_mk_fetcher = FuturesMarketFetcher()
         self.limit = limit
         self.timesleep = timesleep
-        self.loop_status = loop_status
+        self.event_stop_loop = event_stop_loop
 
     async def fetch_and_queue(self, symbol: str):
         data = await self.ins_futures_mk_fetcher.fetch_order_book(symbol, self.limit)
@@ -33,7 +33,7 @@ class OrderbookCycleFechter:
 
     async def start(self):
         print(f"  🚀 OrderBook 수신 시작")
-        while not self.loop_status.is_set():
+        while not self.event_stop_loop.is_set():
             tasks = []
             for symbol in self.symbols:
                 task = asyncio.create_task(self.fetch_and_queue(symbol))

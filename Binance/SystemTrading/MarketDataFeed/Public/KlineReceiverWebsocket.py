@@ -13,19 +13,19 @@ import Workspace.Utils.TradingUtils as tr_utils
 
 
 class KlineReceiverWebsocket:
-    def __init__(self, queue: asyncio.Queue, loop_status: asyncio.Event):
+    def __init__(self, queue: asyncio.Queue, event_stop_loop: asyncio.Event):
         self.symbols = Streaming.symbols
         self.intervals = Streaming.intervals
         self.futures_mk_ws = futures_mk_ws(self.symbols)
         self.queue = queue
-        self.loop_status = loop_status
+        self.event_stop_loop = event_stop_loop
 
     async def start(self):
         print(f"  ⏳ KlineReceiverWebsocket 연결중.")
         await self.futures_mk_ws.open_kline_connection(self.intervals)
         print(f"  🔗 KlineReceiverWebsocket 연결 성공.")
         print(f"  🚀 KlineReceiverWebsocket 시작")
-        while not self.loop_status.is_set():
+        while not self.event_stop_loop.is_set():
             message = await self.futures_mk_ws.receive_message()
             pack_data = tr_utils.Packager.pack_kline_websocket_message(message)
             await self.queue.put(pack_data)

@@ -15,14 +15,14 @@ from SystemConfig import Streaming
 
 class KlineCycleFetcher:
     def __init__(
-        self, queue: asyncio.Queue, loop_status: asyncio.Event, limit: int = 480
+        self, queue: asyncio.Queue, event_stop_loop: asyncio.Event, limit: int = 480
     ):
         self.symbols = Streaming.symbols
         self.intervals = Streaming.intervals
         self.queue = queue
         self.ins_futures_mk_fetcher = FuturesMarketFetcher()
         self.limit = limit
-        self.loop_status = loop_status
+        self.event_stop_loop = event_stop_loop
 
     async def init_update(self):
         tasks = [
@@ -44,7 +44,7 @@ class KlineCycleFetcher:
         await self.init_update()
         print(f"  ✅ kline data 수신 완료.")
         print(f"  🚀 KlineCycleFetcher 시작")
-        while not self.loop_status.is_set():
+        while not self.event_stop_loop.is_set():
             valid_intervals = [
                 interval
                 for interval in self.intervals

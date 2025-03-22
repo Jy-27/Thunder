@@ -7,9 +7,6 @@ import Workspace.DataStorage.NodeStorage as storage
 import Workspace.Utils.TradingUtils as tr_utils
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_tr_client
 
-
-
-
 class PendingOrder:
     def __init__(self, symbols:List[str], trading_client:futures_tr_client):
         self.symbols = symbols

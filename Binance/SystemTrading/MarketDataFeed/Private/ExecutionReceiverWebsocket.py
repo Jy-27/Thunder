@@ -23,7 +23,7 @@ class ExecutionReceiverWebsocket:
         self.queue = queue
         self.event_fired = event_fired
         self.stream_type = "Execution"
-        self.event_stop_loop = event_stop_loop
+        self.event_stop_loop = event_stop_loop#(asyncio.execution_ws로 사용됨.)
 
     async def start(self):
         print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")

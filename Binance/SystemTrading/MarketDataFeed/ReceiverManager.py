@@ -32,7 +32,7 @@ class ReceiverManager:
         queue_execution_ws: asyncio.Queue,
         queue_kline_fetcher: asyncio.Queue,
         queue_orderbook_fetcher: asyncio.Queue,
-        event_executuion_ws: asyncio.Event,
+        event_execution_ws: asyncio.Event,
         event_stop_loop: asyncio.Event,
     ):
 
@@ -46,7 +46,7 @@ class ReceiverManager:
         self.queue_kline_fetcher = queue_kline_fetcher
         self.queue_orderbook_fetcher = queue_orderbook_fetcher
         
-        self.event_executuion_ws = event_executuion_ws
+        self.event_execution_ws = event_execution_ws
         self.event_stop_loop = event_stop_loop
 
         self.ws_ticker = StreamReceiverWebsocket(
@@ -68,7 +68,7 @@ class ReceiverManager:
             self.queue_kline_ws, self.event_stop_loop
         )
         self.ws_execution = ExecutionReceiverWebsocket(
-            self.queue_execution_ws, self.event_executuion_ws, self.event_stop_loop
+            self.queue_execution_ws, self.event_execution_ws, self.event_stop_loop
         )
         self.fetcher_kline = KlineCycleFetcher(
             self.queue_kline_fetcher, self.event_stop_loop
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     for _ in range(9):
         queues.append(asyncio.Queue())
     queues = tuple(queues)
-    event_executuion = asyncio.Event()
+    event_execution = asyncio.Event()
     event_stop_loop = asyncio.Event()
 
-    instance = ReceiverManager(*queues, event_executuion, event_stop_loop)
+    instance = ReceiverManager(*queues, event_execution, event_stop_loop)
     asyncio.run(instance.start())

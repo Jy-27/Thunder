@@ -46,6 +46,8 @@ class ReceiverDataStorage:
         self.event_stop_loop = event_stop_loop
         self.event_start_exponential = event_start_exponential
 
+
+
         self.stroage_ticker = StorageDeque(Streaming.max_lengh_ticker)
         self.storage_trade = StorageDeque(Streaming.max_lengh_trade)
         self.storage_minTicker = StorageDeque(Streaming.max_lengh_minTicker)
@@ -189,13 +191,13 @@ class ReceiverDataStorage:
         """
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_stop_loop.is_set():
-            await self.event_start_calculation.wait()  # 이벤트 대기 (비동기)
+            await self.event_start_exponential.wait()  # 이벤트 대기 (비동기)
             storages = [
                 getattr(self, attr) for attr in self.__dict__
                 if attr.startswith("storage")  # "storage"로 시작하는 속성만 포함
                 ]
             await self.queue_send_all_storage.put(storages)  # 비동기 큐에 추가
-            self.event_start_calculation.clear()
+            self.event_start_exponential.clear()
         print(f"  ✋ storage 데이터 발신 중지")
         
 
@@ -220,7 +222,10 @@ if __name__ == "__main__":
     for _ in range(10):
         queues.append(asyncio.Queue())
     queues = tuple(queues)
-    event = asyncio.Event()
+    events =[]
+    for _ in range(2):
+        events.append(asyncio.Event())
+    events = tuple(events)
 
-    instance = ReceiverDataStorage(*queues, event)
+    instance = ReceiverDataStorage(*queues, *events)
     asyncio.run(instance.start())

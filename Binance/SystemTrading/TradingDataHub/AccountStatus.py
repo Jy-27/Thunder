@@ -11,6 +11,7 @@ from SystemTrading.TradingDataHub.TradingStatus.AccountBalanceStatus import Acco
 from SystemTrading.TradingDataHub.TradingStatus.OrderStatus import OrderStatus
 from SystemTrading.TradingDataHub.TradingStatus.PositionsStatus import PositionsStatus
 
+
 queues = []
 for _ in range(2):
     queues.append(asyncio.Queue())
@@ -20,13 +21,14 @@ event = asyncio.Event()
 class AccountStatus:
     def __init__(
         self,
-        queue_account_balance: asyncio.Queue,
-        queue_order_status: asyncio.Queue,
-        event_loop_start: asyncio.Event,
-    ):
-        self.queue_account_balance = queue_account_balance
-        self.queue_order_status = queue_order_status
-        self.event_loop_start = event_loop_start
+        queue_send_account_status: asyncio.Queue,
+        queue_send_order_status: asyncio.Queue,
+        event_stop_loop: asyncio.Event,
+        event_start_account_update: asyncio.Event):
+        self.queue_send_account_status = queue_send_account_status
+        self.queue_send_order_status = queue_send_order_status
+        self.event_stop_loop = event_stop_loop
+        self.event_start_account_update = event_start_account_update
 
         self.ins_account_balance_status = AccountBalanceStatus()
         self.ins_order_status = OrderStatus()
@@ -34,11 +36,19 @@ class AccountStatus:
 
     async def update_wallet_and_positions(self):
         print(f"  🚀  wallet & positions 정보 저장소 실행.")
-        while not self.event_loop_start.is_set():
-            message = await self.queue_account_balance.get()
+        while not self.event_stop_loop.is_set():
+            self.event_start_account_update.wait()
             
-            ### DEBUG ###
-            # print(message)
+            ### LOGINC ###
+            """
+            이벤트 신호를 활성화 한다.
+            fetcher로 데이터 수신한다.
+            데이터를 분류한다.
+            이벤트 신호 수신시 데이터 fetcher처리함.
+            queue를 put처리한다.
+            event.clear 처리
+            """
+            message = await self.queue_send_account_status.get()
             
             self.ins_positions_status.clear()
             
@@ -52,13 +62,23 @@ class AccountStatus:
                 conver_to_position = base_utils.convert_dict_to_literal(positions)
                 
                 self.ins_positions_status.set_data(conver_to_position)
-            self.queue_account_balance.task_done()
+            self.queue_send_account_status.task_done()
         print(f"  ⁉️ wallet 정보 저장소 종료됨.")
         
     async def update_order_status(self):
         print(f"  🚀  미치결 주문 정보 저장소 실행.")
-        while not self.event_loop_start.is_set():
-            message = await self.queue_order_status.get()
+        while not self.event_stop_loop.is_set():
+            ### LOGINC ###
+            """
+            이벤트 신호를 활성화 한다.
+            fetcher로 데이터 수신한다.
+            데이터를 분류한다.
+            이벤트 신호 수신시 데이터 fetcher처리함.
+            queue를 put처리한다.
+            event.clear 처리
+            """
+            
+            message = await self.queue_send_order_status.get()
             
             self.ins_order_status.clear()
             
@@ -66,7 +86,7 @@ class AccountStatus:
                 convert_to_order = base_utils.convert_dict_to_literal(order)
                 self.ins_order_status.set_data(convert_to_order)
                 print(convert_to_order)
-            self.queue_order_status.task_done()
+            self.queue_send_order_status.task_done()
         print(f"  ⁉️  미치결 주문 정보 저장소 종료됨.")
 
         

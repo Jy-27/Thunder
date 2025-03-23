@@ -6,10 +6,12 @@ from typing import Dict
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
+
 from SystemConfig import Streaming
-from SystemTrading.TradingDataHub.ReceiverDataStorage.StorageDeque import StorageDeque
 import SystemTrading.TradingDataHub.ReceiverDataStorage.StorageNodeManager as node_storage
 import Workspace.Utils.TradingUtils as tr_utils
+from Workspace.DataStorage.StorageDeque import StorageDeque
+
 
 class ReceiverDataStorage:
     """
@@ -30,8 +32,9 @@ class ReceiverDataStorage:
         queue_orderbook_fetcher: asyncio.Queue,
         queue_send_all_storage: asyncio.Queue,
         event_stop_loop: asyncio.Event,
-        event_start_exponential: asyncio.Event):
-        
+        event_request_receiver_data: asyncio.Event,
+    ):
+
         self.queue_ticker = queue_ticker
         self.queue_trade = queue_trade
         self.queue_minTicker = queue_minTicker
@@ -42,11 +45,9 @@ class ReceiverDataStorage:
         self.queue_kline_fetcher = queue_kline_fetcher
         self.queue_orderbook_fetcher = queue_orderbook_fetcher
         self.queue_send_all_storage = queue_send_all_storage
-        
+
         self.event_stop_loop = event_stop_loop
-        self.event_start_exponential = event_start_exponential
-
-
+        self.event_request_receiver_data = event_request_receiver_data
 
         self.stroage_ticker = StorageDeque(Streaming.max_lengh_ticker)
         self.storage_trade = StorageDeque(Streaming.max_lengh_trade)
@@ -191,15 +192,15 @@ class ReceiverDataStorage:
         """
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_stop_loop.is_set():
-            await self.event_start_exponential.wait()  # 이벤트 대기 (비동기)
+            await self.event_request_receiver_data.wait()  # 이벤트 대기 (비동기)
             storages = [
-                getattr(self, attr) for attr in self.__dict__
+                getattr(self, attr)
+                for attr in self.__dict__
                 if attr.startswith("storage")  # "storage"로 시작하는 속성만 포함
-                ]
+            ]
             await self.queue_send_all_storage.put(storages)  # 비동기 큐에 추가
-            self.event_start_exponential.clear()
+            self.event_request_receiver_data.clear()
         print(f"  ✋ storage 데이터 발신 중지")
-        
 
     async def start(self):
         tasks = [
@@ -212,20 +213,66 @@ class ReceiverDataStorage:
             asyncio.create_task(self.execution_ws_update()),
             asyncio.create_task(self.kline_fetcher_update()),
             asyncio.create_task(self.orderbook_fetcher_update()),
-            asyncio.create_task(self.send_all_storage_to_queue())
+            asyncio.create_task(self.send_all_storage_to_queue()),
         ]
         await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
+    queues_list = [
+        "queue_ticker",
+        "queue_trade",
+        "queue_minTicker",
+        "queue_depth",
+        "queue_aggTrade",
+        "queue_kline_ws",
+        "queue_execution_ws",
+        "queue_kline_fetcher",
+        "queue_orderbook_fetcher",
+        "queue_fetch_all_storage",
+        "queue_send_exponential",
+        "queue_fetch_exponential",
+        "queue_send_analysis",
+        "queue_fetch_analysis",
+        "queue_fetch_analysis",
+        "queue_send_analysis",
+        "queue_send_trading_status",
+        "queue_fetch_trading_status",
+    ]
+    events_list = [
+        "event_stop_loop",
+        "event_timer_start",
+        "event_start_exponential",
+        "event_done_exeponential",
+        "event_request_receiver_data",
+        "event_start_analysis",
+        "event_done_analysis",
+        "event_request_computed_results",
+        "event_start_orders",
+        "event_done_orders",
+        "event_request_status",
+        "event_start_monitor",
+        "event_done_monitor",
+        "event_request_message",
+        "event_start_message",
+        "event_done_message",
+    ]
+
+    # kwargs = {}
+    # for q_ in queues_list:
+    #     kwargs[q_] = asyncio.Queue()
+    # for e_ in events_list:
+    #     kwargs[e_] = asyncio.Event()
+
     queues = []
     for _ in range(10):
         queues.append(asyncio.Queue())
     queues = tuple(queues)
-    events =[]
+    events = []
     for _ in range(2):
         events.append(asyncio.Event())
     events = tuple(events)
 
     instance = ReceiverDataStorage(*queues, *events)
+    # instance = ReceiverDataStorage(**kwargs)
     asyncio.run(instance.start())

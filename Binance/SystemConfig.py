@@ -49,3 +49,44 @@ class Path:
 class Position:
     leverage:int = 5
     margin_type:str = "ISOLATED"
+    
+class Info:
+    
+    queues_list = [
+        "queue_ticker",
+        "queue_trade",
+        "queue_minTicker",
+        "queue_depth",
+        "queue_aggTrade",
+        "queue_kline_ws",
+        "queue_execution_ws",
+        "queue_kline_fetcher",
+        "queue_orderbook_fetcher",
+        "queue_fetch_all_storage",
+        "queue_send_exponential",
+        "queue_fetch_exponential",
+        "queue_send_analysis",
+        "queue_fetch_analysis",
+        "queue_fetch_analysis",
+        "queue_send_analysis",
+        "queue_send_trading_status",
+        "queue_fetch_trading_status",
+    ]
+    events_list = [
+        "event_stop_loop",
+        "event_timer_start",
+        "event_start_exponential",
+        "event_done_exeponential",
+        "event_request_receiver_data",
+        "event_start_analysis",
+        "event_done_analysis",
+        "event_request_computed_results",
+        "event_start_orders",
+        "event_done_orders",
+        "event_request_status",
+        "event_start_monitor",
+        "event_done_monitor",
+        "event_request_message",
+        "event_start_message",
+        "event_done_message",
+    ]

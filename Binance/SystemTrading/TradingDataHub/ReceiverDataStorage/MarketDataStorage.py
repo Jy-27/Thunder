@@ -30,7 +30,8 @@ class ReceiverDataStorage:
         queue_execution_ws: asyncio.Queue,
         queue_kline_fetcher: asyncio.Queue,
         queue_orderbook_fetcher: asyncio.Queue,
-        queue_send_all_storage: asyncio.Queue,
+        queue_request_storage: asyncio.Queue,
+        queue_response_storage: asyncio.Queue,
         event_stop_loop: asyncio.Event,
         event_request_receiver_data: asyncio.Event,
     ):
@@ -44,10 +45,10 @@ class ReceiverDataStorage:
         self.queue_execution_ws = queue_execution_ws
         self.queue_kline_fetcher = queue_kline_fetcher
         self.queue_orderbook_fetcher = queue_orderbook_fetcher
-        self.queue_send_all_storage = queue_send_all_storage
+        self.queue_request_storage = queue_request_storage
+        self.queue_response_storage = queue_response_storage
 
         self.event_stop_loop = event_stop_loop
-        self.event_request_receiver_data = event_request_receiver_data
 
         self.stroage_ticker = StorageDeque(Streaming.max_lengh_ticker)
         self.storage_trade = StorageDeque(Streaming.max_lengh_trade)
@@ -186,20 +187,41 @@ class ReceiverDataStorage:
             self.queue_orderbook_fetcher.task_done()
         print(f"  ✋ orderbook storage 중지")
 
-    async def send_all_storage_to_queue(self):
+    # async def send_all_storage_to_queue(self):
+    #     """
+    #     calculate함수에서 신호 수신시 스토리지 데이터를 전부 queue에 담아서 보낸다.
+    #     """
+    #     print(f"  📬 storage 데이터 발신 실행")
+    #     while not self.event_stop_loop.is_set():
+    #         await self.event_request_receiver_data.wait()  # 이벤트 대기 (비동기)
+    #         storages = [
+    #             getattr(self, attr)
+    #             for attr in self.__dict__
+    #             if attr.startswith("storage")  # "storage"로 시작하는 속성만 포함
+    #         ]
+    #         await self.queue_request_storage.put(storages)  # 비동기 큐에 추가
+    #         self.event_request_receiver_data.clear()
+    #     print(f"  ✋ storage 데이터 발신 중지")
+
+    async def reply_storage(self):
         """
         calculate함수에서 신호 수신시 스토리지 데이터를 전부 queue에 담아서 보낸다.
         """
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_stop_loop.is_set():
-            await self.event_request_receiver_data.wait()  # 이벤트 대기 (비동기)
-            storages = [
-                getattr(self, attr)
-                for attr in self.__dict__
-                if attr.startswith("storage")  # "storage"로 시작하는 속성만 포함
-            ]
-            await self.queue_send_all_storage.put(storages)  # 비동기 큐에 추가
-            self.event_request_receiver_data.clear()
+            message = await self.queue_request_storage.get()
+            storage_type = message["type"]
+            attr = message["attr"]
+            if storage_type == "deque":
+                field = message["field"]
+                data = getattr(self, attr).get_data(field)
+                self.queue_fetch_storage.put(data)
+            elif storage_type == "node":
+                main_field = message["main_field"]
+                sub_field = message["sub_field"]
+                data = getattr(self, attr).get_data(main_field, sub_field)
+                self.queue_response_storage.put(data)
+            self.queue_request_storage.task_done()
         print(f"  ✋ storage 데이터 발신 중지")
 
     async def start(self):

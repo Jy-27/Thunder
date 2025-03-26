@@ -9,11 +9,11 @@ from SystemTrading.MarketDataFeed.ReceiverManager import ReceiverManager
 from SystemTrading.TradingDataHub.MarketDataStorage import ReceiverDataStorage
 
 queues = []
-for i in range(10):
+for i in range(11):
     queues.append(asyncio.Queue())
 queues = tuple(queues)
 events = []
-for i in range(2):
+for i in range(13):
     events.append(asyncio.Event())
 
 async def stop_timer(time:int=5):
@@ -22,7 +22,7 @@ async def stop_timer(time:int=5):
     events[0].set()
 
 async def main():
-    ins_receiver = ReceiverManager(*queues, events[0])
+    ins_receiver = ReceiverManager(*queues, *events)
     ins_storage = ReceiverDataStorage(*queues, *events)
     tasks = [
         asyncio.create_task(stop_timer()),

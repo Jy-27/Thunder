@@ -28,24 +28,26 @@ class PrivateFetcher:
     """
     def __init__(
         self,
-        queue_account_balance: asyncio.Queue,
-        queue_order_status: asyncio.Queue,
-        event_start_signal: asyncio.Event,
-        event_loop_start: asyncio.Event,
-    ):
-        self.queue_account_balance = queue_account_balance
-        self.queue_order_status = queue_order_status
-        self.event_start_signal = event_start_signal
-        self.event_loop_start = event_loop_start
+        queue_fetch_account_balance:asyncio.Queue,
+        queue_fetch_orderbook:asyncio.Queue,
+        event_trigger_private:asyncio.Event,
+        event_trigger_stop_loop: asyncio.Event,
+        event_fired_loop_status:asyncio.Event):
+        
+        self.queue_fetch_account_balance = queue_fetch_account_balance
+        self.queue_fetch_orderbook = queue_fetch_orderbook
+        self.event_trigger_private = event_trigger_private
+        self.event_trigger_stop_loop = event_trigger_stop_loop
+        self.event_fired_loop_status = event_fired_loop_status
 
     async def fetch_account_balance(self):
         data = await ins_futures_tr_client.fetch_account_balance()
-        await self.queue_account_balance.put(data)
+        await self.queue_fetch_account_balance.put(data)
         return data
 
     async def fetch_order_status(self, symbol: str):
         data = await ins_futures_tr_client.fetch_order_status(symbol)
-        await self.queue_order_status.put(data)
+        await self.queue_fetch_orderbook.put(data)
         return data
 
     async def fetch_all_order_statuses(self):
@@ -54,19 +56,15 @@ class PrivateFetcher:
         ]
         await asyncio.gather(*tasks)
 
-    async def debug(self):
-        balance_data = await self.fetch_account_balance()
-        order_data = await self.fetch_order_status("BTCUSDT")
-        return balance_data, order_data
-
     async def start(self):
         print(f"  🚀 PrivateFetcher 시작.")
-        while not self.event_loop_start.is_set():
-            await self.event_start_signal.wait()
+        while not self.event_trigger_stop_loop.is_set():
+            await self.event_trigger_private.wait()
             await self.fetch_account_balance()
             await self.fetch_all_order_statuses()
-            self.event_start_signal.clear()
+            self.event_trigger_private.clear()
         print(f"  ⁉️ PrivateFetcher 중단.")
+        self.event_fired_loop_status.set()
 
 
 if __name__ == "__main__":

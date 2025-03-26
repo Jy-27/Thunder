@@ -30,7 +30,7 @@ class Streaming:
     
     max_lengh_ticker = 300
     max_lengh_trade = 300
-    max_lengh_minTicker = 300 
+    max_lengh_miniTicker = 300 
     max_lengh_depth = 300
     max_lengh_aggTrade = 300
     max_lengh_orderbook = 300
@@ -51,42 +51,48 @@ class Position:
     margin_type:str = "ISOLATED"
     
 class Info:
-    
-    queues_list = [
-        "queue_ticker",
-        "queue_trade",
-        "queue_minTicker",
-        "queue_depth",
-        "queue_aggTrade",
-        "queue_kline_ws",
-        "queue_execution_ws",
-        "queue_kline_fetcher",
-        "queue_orderbook_fetcher",
-        "queue_fetch_all_storage",
-        "queue_send_exponential",
-        "queue_fetch_exponential",
-        "queue_send_analysis",
-        "queue_fetch_analysis",
-        "queue_fetch_analysis",
-        "queue_send_analysis",
-        "queue_send_trading_status",
-        "queue_fetch_trading_status",
+    # 데이터 단방향 전송용
+    transmission_queues = [
+        "queue_feed_ticker_ws",
+        "queue_feed_trade_ws",
+        "queue_feed_miniTicker_ws",
+        "queue_feed_depth_ws",
+        "queue_feed_aggTrade_ws",
+        "queue_feed_kline_ws",
+        "queue_feed_execution_ws",
+        "queue_fetch_kline",
+        "queue_fetch_orderbook",
+        "queue_fetch_account_balance",
+        "queue_fetch_order_status"]
+
+    # 자료 요청용
+    args_queues = [
+        "queue_request_exponential",
+        "queue_response_exponential",
+        "queue_request_wallet",
+        "queue_response_wallet"
     ]
-    events_list = [
-        "event_stop_loop",
-        "event_timer_start",
-        "event_start_exponential",
-        "event_done_exeponential",
-        "event_request_receiver_data",
-        "event_start_analysis",
-        "event_done_analysis",
-        "event_request_computed_results",
-        "event_start_orders",
-        "event_done_orders",
-        "event_request_status",
-        "event_start_monitor",
-        "event_done_monitor",
-        "event_request_message",
-        "event_start_message",
-        "event_done_message",
+
+    # 중앙 이벤트 컨트롤로가 발신 일경우,
+    trigger_event = [
+        "event_trigger_stop_loop",
+        "event_trigger_private"]
+
+    # 중앙 이벤트 컨트롤로가 수신일경우,
+    fired_event_signal = [
+        "event_fired_execution_ws"
     ]
+
+    # stop loop 종료 확인신호
+    fired_event_stop = [
+        "event_fired_ticker_loop",
+        "event_fired_trade_loop",
+        "event_fired_miniTicker_loop",
+        "event_fired_depth_loop",
+        "event_fired_aggTrade_loop",
+        "event_fired_kline_loop",
+        "event_fired_execution_loop",
+        "event_fired_f_kline_loop",
+        "event_fired_orderbook_loop",
+        "event_fired_private_loop"
+        ]

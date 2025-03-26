@@ -15,14 +15,19 @@ from SystemConfig import Streaming
 
 class KlineCycleFetcher:
     def __init__(
-        self, queue: asyncio.Queue, event_stop_loop: asyncio.Event, limit: int = 480
+        self,
+        queue_fetch: asyncio.Queue,
+        event_trigger_stop_loop: asyncio.Event,
+        event_fired_loop_status:asyncio.Event,
+        limit: int = 480
     ):
         self.symbols = Streaming.symbols
         self.intervals = Streaming.intervals
-        self.queue = queue
+        self.queue_fetch = queue_fetch
         self.ins_futures_mk_fetcher = FuturesMarketFetcher()
         self.limit = limit
-        self.event_stop_loop = event_stop_loop
+        self.event_trigger_stop_loop = event_trigger_stop_loop
+        self.event_fired_loop_status = event_fired_loop_status
 
     async def init_update(self):
         tasks = [
@@ -37,14 +42,14 @@ class KlineCycleFetcher:
             symbol, interval, self.limit
         )
         pack_data = tr_utils.Packager.pack_kline_fetcher_message(symbol, interval, data)
-        await self.queue.put(pack_data)
+        await self.queue_fetch.put(pack_data)
 
     async def start(self):
         print(f"  ⏳ kline data 전체 수신중")
         await self.init_update()
         print(f"  ✅ kline data 수신 완료.")
         print(f"  🚀 KlineCycleFetcher 시작")
-        while not self.event_stop_loop.is_set():
+        while not self.event_trigger_stop_loop.is_set():
             valid_intervals = [
                 interval
                 for interval in self.intervals
@@ -59,6 +64,7 @@ class KlineCycleFetcher:
                 await asyncio.gather(*tasks)
             await base_utils.sleep_next_minute(minutes=1, buffer_time_sec=0.5)
         print(f"  ⁉️ KlineCycleFetcher Loop 종료됨")
+        self.event_fired_loop_status.set()
 
 
 if __name__ == "__main__":

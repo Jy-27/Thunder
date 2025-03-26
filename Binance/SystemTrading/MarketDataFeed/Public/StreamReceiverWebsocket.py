@@ -26,25 +26,31 @@ class StreamReceiverWebsocket:
     """
 
     def __init__(
-        self, stream_type: str, queue: asyncio.Queue, event_stop_loop: asyncio.Event
-    ):
+        self,
+        stream_type: str,
+        queue_feed: asyncio.Queue,
+        event_trigger_stop_loop: asyncio.Event,
+        event_fired_loop_status: asyncio.Event
+        ):
         self.symbols = Streaming.symbols
         self.stream_type = stream_type
         self.futures_mk_ws = futures_mk_ws(self.symbols)
-        self.queue = queue
-        self.event_stop_loop = event_stop_loop
+        self.queue_feed = queue_feed
+        self.event_trigger_stop_loop = event_trigger_stop_loop
+        self.event_fired_loop_status = event_fired_loop_status
 
     async def start(self):
         print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")
         await self.futures_mk_ws.open_stream_connection(self.stream_type)
         print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
         print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
-        while not self.event_stop_loop.is_set():
+        while not self.event_trigger_stop_loop.is_set():
             message = await self.futures_mk_ws.receive_message()
-            await self.queue.put(message)
+            await self.queue_feed.put(message)
         print(f"  ⁉️ ReceiverWebsocket({self.stream_type}) Loop 종료됨")
         await self.futures_mk_ws.close_connection()
         print(f"  ⛓️‍💥 ReceiverWebsocket({self.stream_type}) 연결 해제")
+        self.event_fired_loop_status.set()
 
 
 if __name__ == "__main__":

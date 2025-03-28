@@ -33,14 +33,23 @@ class ExecutionReceiverWebsocket:
         await self.futures_execution_websocket.open_connection()
         print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
         print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
+
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.futures_execution_websocket.receive_message()
-            await self.queue_feed.put(message)
-            self.event_fired.set()
+            try:
+                message = await asyncio.wait_for(
+                    self.futures_execution_websocket.receive_message(), timeout=1
+                )
+                await self.queue_feed.put(message)
+                print(message)
+                self.event_fired.set()
+            except asyncio.TimeoutError:
+                continue  # stop_loop 이벤트 확인용 타임슬롯
+
         print(f"  ⁉️ ReceiverWebsocket({self.stream_type}) Loop 종료됨")
         await self.futures_execution_websocket.close_connection()
         print(f"  ⛓️‍💥 ReceiverWebsocket({self.stream_type}) 연결 해제")
         self.event_fired_loop_status.set()
+
 
 if __name__ == "__main__":
     dummy_message_1_new = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993586598, 'E': 1742993586598, 'o': {'s': 'BTCUSDT', 'c': 'ios_ArfzDKDqp7FLwwpFUqYz', 'S': 'BUY', 'o': 'STOP_MARKET', 'f': 'GTE_GTC', 'q': '0', 'p': '0', 'ap': '0', 'sp': '94326.6', 'x': 'NEW', 'X': 'NEW', 'i': 637084704043, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993586598, 't': 0, 'b': '0', 'a': '0', 'm': False, 'R': True, 'wt': 'CONTRACT_PRICE', 'ot': 'STOP_MARKET', 'ps': 'BOTH', 'cp': True, 'rp': '0', 'pP': True, 'si': 0, 'ss': 0, 'V': 'NONE', 'pm': 'NONE', 'gtd': 0}}

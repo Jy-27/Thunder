@@ -59,12 +59,16 @@ class PrivateFetcher:
     async def start(self):
         print(f"  🚀 PrivateFetcher 시작.")
         while not self.event_trigger_stop_loop.is_set():
-            await self.event_trigger_private.wait()
+            try:
+                await asyncio.wait_for(self.event_trigger_private.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             await self.fetch_account_balance()
             await self.fetch_all_order_statuses()
             self.event_trigger_private.clear()
-        print(f"  ⁉️ PrivateFetcher 중단.")
+        print(f"  ⁉️ PrivateFetcher 종료됨")
         self.event_fired_loop_status.set()
+
 
 
 if __name__ == "__main__":

@@ -38,7 +38,6 @@ class KlineReceiverWebsocket:
         print(f"  ⛓️‍💥 KlineReceiverWebsocket 연결 해제")
         self.event_fired_loop_status.set()
 
-
 if __name__ == "__main__":
     q_ = asyncio.Queue()
     obj = KlineReceiverWebsocket(q_)

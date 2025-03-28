@@ -1,7 +1,6 @@
 import asyncio
 
 import os, sys
-
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
@@ -13,7 +12,6 @@ import SystemConfig
 
 path_api = SystemConfig.Path.bianace
 api_key = base_utils.load_json(path_api)
-
 
 class ExecutionReceiverWebsocket:
     def __init__(
@@ -27,8 +25,8 @@ class ExecutionReceiverWebsocket:
         self.queue_feed = queue_feed
         self.event_fired = event_fired
         self.stream_type = "Execution"
-        self.event_trigger_stop_loop = event_trigger_stop_loop#(asyncio.execution_ws로 사용됨.)
-        self.event_fired_loop_status = event_fired_loop_status
+        self.event_trigger_stop_loop = event_trigger_stop_loop
+        self.event_fired_loop_status = event_fired_loop_status  #신호 수신시 이벤트 신를 생성한다.
 
     async def start(self):
         print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")

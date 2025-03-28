@@ -20,7 +20,17 @@ from SystemTrading.MarketDataFeed.Public.OrderBookCycleFetcher import (
 )
 from SystemTrading.MarketDataFeed.Private.PrivateFetcher import PrivateFetcher
 
+
 class ReceiverManager:
+    """
+    Market의 공개/비공개 데이터를 수신한다. 주료 웹소켓, 개인 계좌 정보, 거래내역 등 내역을 수신하여
+    각 항목에 맞는 Queue에 반영하여 전송한다. Websocket Execution의 경우 주문 발생시에만 데이터가 수신되므로
+    수신 발생시 Event신호를 활성화 하여 중앙 이벤트 처리 시스템에서 상황을 인식할 수 있도록 한다.
+    
+    Notes:
+        매개변수 순서를 반드시 보장해야한다. 순서는 SystemConfig.py값을 참조할 것.
+    """
+
     def __init__(
         self,
         queue_feed_ticker_ws: asyncio.Queue,
@@ -32,14 +42,11 @@ class ReceiverManager:
         queue_feed_execution_ws: asyncio.Queue,
         queue_fetch_kline: asyncio.Queue,
         queue_fetch_orderbook: asyncio.Queue,
-        queue_fetch_account_balance:asyncio.Queue,
-        queue_fetch_order_status:asyncio.Queue,
-        
-        event_trigger_stop_loop: asyncio.Event, # set 신호 발생시 while을 일괄 종료한다.
-        event_trigger_private: asyncio.Event,   # set 신호 발생시 PrivateFetcher를 실행한다.
-        
+        queue_fetch_account_balance: asyncio.Queue,
+        queue_fetch_order_status: asyncio.Queue,
+        event_trigger_stop_loop: asyncio.Event,  # set 신호 발생시 while을 일괄 종료한다.
+        event_trigger_private: asyncio.Event,  # set 신호 발생시 PrivateFetcher를 실행한다.
         event_fired_execution_ws: asyncio.Event,
-        
         event_fired_ticker_loop: asyncio.Event,
         event_fired_trade_loop: asyncio.Event,
         event_fired_miniTicker_loop: asyncio.Event,
@@ -66,9 +73,9 @@ class ReceiverManager:
 
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_trigger_private = event_trigger_private
-        
+
         self.event_fired_execution_ws = event_fired_execution_ws
-        
+
         self.event_fired_ticker_loop = event_fired_ticker_loop
         self.event_fired_trade_loop = event_fired_trade_loop
         self.event_fired_miniTicker_loop = event_fired_miniTicker_loop
@@ -76,56 +83,92 @@ class ReceiverManager:
         self.event_fired_aggTrade_loop = event_fired_aggTrade_loop
         self.event_fired_kline_loop = event_fired_kline_loop
         self.event_fired_execution_loop = event_fired_execution_loop
-        self.event_fired_f_kline_loop =  event_fired_f_kline_loop 
+        self.event_fired_f_kline_loop = event_fired_f_kline_loop
         self.event_fired_orderbook_loop = event_fired_orderbook_loop
-        self.event_fired_private_loop =  event_fired_private_loop 
-        
+        self.event_fired_private_loop = event_fired_private_loop
+
         self.ws_ticker = StreamReceiverWebsocket(
-            "ticker", self.queue_feed_ticker_ws, self.event_trigger_stop_loop, self.event_fired_ticker_loop
+            "ticker",
+            self.queue_feed_ticker_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_ticker_loop,
         )
         self.ws_trade = StreamReceiverWebsocket(
-            "trade", self.queue_feed_trade_ws, self.event_trigger_stop_loop, self.event_fired_trade_loop
+            "trade",
+            self.queue_feed_trade_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_trade_loop,
         )
         self.ws_miniTicker = StreamReceiverWebsocket(
-            "miniTicker", self.queue_feed_miniTicker_ws, self.event_trigger_stop_loop, self.event_fired_miniTicker_loop
+            "miniTicker",
+            self.queue_feed_miniTicker_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_miniTicker_loop,
         )
         self.ws_depth = StreamReceiverWebsocket(
-            "depth", self.queue_feed_depth_ws, self.event_trigger_stop_loop, self.event_fired_depth_loop
+            "depth",
+            self.queue_feed_depth_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_depth_loop,
         )
         self.ws_aggTrade = StreamReceiverWebsocket(
-            "aggTrade", self.queue_feed_aggTrade_ws, self.event_trigger_stop_loop, self.event_fired_aggTrade_loop
+            "aggTrade",
+            self.queue_feed_aggTrade_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_aggTrade_loop,
         )
         self.ws_kline = KlineReceiverWebsocket(
-            self.queue_feed_kline_ws, self.event_trigger_stop_loop, self.event_fired_kline_loop
+            self.queue_feed_kline_ws,
+            self.event_trigger_stop_loop,
+            self.event_fired_kline_loop,
         )
         self.ws_execution = ExecutionReceiverWebsocket(
-            self.queue_feed_execution_ws, self.event_fired_execution_ws, self.event_trigger_stop_loop, self.event_fired_execution_loop
+            self.queue_feed_execution_ws,
+            self.event_fired_execution_ws,  # 이벤트 중앙처리 시스템을 향함. 해당 이벤트 발생시 wallet 정보를 업데이트함.
+            self.event_trigger_stop_loop,
+            self.event_fired_execution_loop,    
         )
         self.fetcher_kline = KlineCycleFetcher(
-            self.queue_fetch_kline, self.event_trigger_stop_loop, self.event_fired_f_kline_loop
+            self.queue_fetch_kline,
+            self.event_trigger_stop_loop,
+            self.event_fired_f_kline_loop,
         )
         self.fetcher_orderbook = OrderbookCycleFechter(
-            self.queue_fetch_orderbook, self.event_trigger_stop_loop, self.event_fired_orderbook_loop
+            self.queue_fetch_orderbook,
+            self.event_trigger_stop_loop,
+            self.event_fired_orderbook_loop,
         )
-        self.fetcher_private = PrivateFetcher(self.queue_fetch_account_balance,
-                                              self.queue_fetch_orderbook,
-                                              self.event_fired_execution_ws,
-                                              self.event_trigger_stop_loop,
-                                              self.event_fired_execution_loop)
+        self.fetcher_private = PrivateFetcher(
+            self.queue_fetch_account_balance,
+            self.queue_fetch_orderbook,
+            self.event_trigger_private,  # self.event_fired_execution_
+            self.event_trigger_stop_loop,
+            self.event_fired_private_loop,
+        )
+
+    async def stop_timer(self):
+        await asyncio.sleep(10)
+        print(f"  Stop Signal!!!")
+        self.event_fired_private_loop.set()
+        self.event_trigger_stop_loop.set()
+
     async def start(self):
         tasks = [
-            asyncio.create_task(self.ws_ticker.start()),
-            asyncio.create_task(self.ws_trade.start()),
-            asyncio.create_task(self.ws_miniTicker.start()),
-            asyncio.create_task(self.ws_depth.start()),
-            asyncio.create_task(self.ws_aggTrade.start()),
-            asyncio.create_task(self.ws_kline.start()),
-            asyncio.create_task(self.ws_execution.start()),
-            asyncio.create_task(self.fetcher_kline.start()),
-            asyncio.create_task(self.fetcher_orderbook.start()),
-            asyncio.create_task(self.fetcher_private.start())
+            asyncio.create_task(self.ws_ticker.start()),#
+            asyncio.create_task(self.ws_trade.start()),#
+            asyncio.create_task(self.ws_miniTicker.start()),#
+            asyncio.create_task(self.ws_depth.start()),#
+            asyncio.create_task(self.ws_aggTrade.start()),#
+            asyncio.create_task(self.ws_kline.start()),##
+            asyncio.create_task(self.ws_execution.start()),#
+            asyncio.create_task(self.fetcher_kline.start()),#
+            asyncio.create_task(self.fetcher_orderbook.start()),#
+            asyncio.create_task(self.fetcher_private.start()),
+            asyncio.create_task(self.stop_timer())
         ]
         await asyncio.gather(*tasks)
+        print(f"  ℹ️ ReceiverManager Loop가 종료되어 수신이 중단됨.")
+
 
 if __name__ == "__main__":
     args = []

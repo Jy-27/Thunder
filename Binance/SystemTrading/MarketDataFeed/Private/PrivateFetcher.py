@@ -29,13 +29,13 @@ class PrivateFetcher:
     def __init__(
         self,
         queue_fetch_account_balance:asyncio.Queue,
-        queue_fetch_orderbook:asyncio.Queue,
+        queue_fetch_order:asyncio.Queue,
         event_trigger_private:asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
         event_fired_loop_status:asyncio.Event):
         
         self.queue_fetch_account_balance = queue_fetch_account_balance
-        self.queue_fetch_orderbook = queue_fetch_orderbook
+        self.queue_fetch_order = queue_fetch_order
         self.event_trigger_private = event_trigger_private
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_fired_loop_status = event_fired_loop_status
@@ -47,12 +47,14 @@ class PrivateFetcher:
 
     async def fetch_order_status(self, symbol: str):
         data = await ins_futures_tr_client.fetch_order_status(symbol)
-        await self.queue_fetch_orderbook.put(data)
+        if data:
+            await self.queue_fetch_order.put(data)
         return data
 
-    async def fetch_all_order_statuses(self):
+    async def tasks(self):
         tasks = [
-            asyncio.create_task(self.fetch_order_status(symbol)) for symbol in symbols
+            *[asyncio.create_task(self.fetch_order_status(symbol)) for symbol in symbols],
+            asyncio.create_task(self.fetch_account_balance())
         ]
         await asyncio.gather(*tasks)
 
@@ -63,8 +65,7 @@ class PrivateFetcher:
                 await asyncio.wait_for(self.event_trigger_private.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            await self.fetch_account_balance()
-            await self.fetch_all_order_statuses()
+            await self.tasks()
             self.event_trigger_private.clear()
         print(f"  ⁉️ PrivateFetcher 종료됨")
         self.event_fired_loop_status.set()
@@ -72,15 +73,57 @@ class PrivateFetcher:
 
 
 if __name__ == "__main__":
-    queues = []
-    for _ in range(2):
-        queues.append(asyncio.Queue())
-    queues = tuple(queues)
+    class RunTest:
+        def __init__(self, t:int = 10):
+            self.t = t
+            self.q_1 = asyncio.Queue()
+            self.q_2 = asyncio.Queue()
+            self.e_1 = asyncio.Event()
+            self.e_2 = asyncio.Event()
+            self.e_3 = asyncio.Event()
+            self.ins_fetcher = PrivateFetcher(self.q_1,
+                                              self.q_2,
+                                              self.e_1,
+                                              self.e_2,
+                                              self.e_3)
+        
+        async def timer(self):
+            print(f"  ⏳ 타이머 시작: {self.t}sec")
+            await asyncio.sleep(self.t)
+            self.e_1.set()
+            print(f"  🚀 event 신호 생성")
+            await asyncio.sleep(2)
+            self.e_2.set()
+            print(f"  ✋ Stop Signal 생성")
+        
+        async def get_account_balance(self):
+            while not self.e_2.is_set():
+                try:
+                    message = await asyncio.wait_for(self.q_1.get(), timeout=0.5)
+                    # print(message)
+                    self.q_1.task_done()
+                except asyncio.TimeoutError:
+                    continue
+            print(f"  ✋ account balance loop stop")
+                
+        async def get_order_status(self):
+            while not self.e_2.is_set():
+                try:
+                    message = await asyncio.wait_for(self.q_2.get(), timeout=0.5)
+                    print(message)
+                    self.q_2.task_done()
+                except asyncio.TimeoutError:
+                    continue
+            print(f"  ✋ account order status stop")
+            
+        async def start(self):
+            tasks = [
+                asyncio.create_task(self.timer()),
+                asyncio.create_task(self.ins_fetcher.start()),
+                asyncio.create_task(self.get_account_balance()),
+                asyncio.create_task(self.get_order_status())
+            ]
+            await asyncio.gather(*tasks)
     
-    events = []
-    for _ in range(2):
-        events.append(asyncio.Event())
-    events = tuple(events)
-
-    obj = PrivateFetcher(*queues, *events)
-    balance, order = asyncio.run(obj.debug())  # ("BTCUSDT"))#, 623593178246))
+    instance = RunTest()
+    asyncio.run(instance.start())

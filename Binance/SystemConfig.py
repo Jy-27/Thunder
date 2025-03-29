@@ -76,11 +76,14 @@ class Info:
     # 중앙 이벤트 컨트롤로가 발신 일경우,
     trigger_event = [
         "event_trigger_stop_loop",
-        "event_trigger_private"]
+        "event_trigger_kline",
+        "event_trigger_orderbook",
+        "event_trigger_private"
+        ]
 
     # 중앙 이벤트 컨트롤로가 수신일경우,
     fired_event_signal = [
-        "event_fired_execution_ws"
+        "event_fired_execution_ws"  #이벤트 발생을 알리고 fetcher를 실행하기 위한 기본 신호로 결정한다.
     ]
 
     # stop loop 종료 확인신호

@@ -49,7 +49,9 @@ class ReceiverManager:
         event_trigger_kline:asyncio.Event,
         event_trigger_orderbook:asyncio.Event,
         event_trigger_private: asyncio.Event,  # set 신호 발생시 PrivateFetcher를 실행한다.
+        
         event_fired_execution_ws: asyncio.Event,
+        
         event_fired_ticker_loop: asyncio.Event,
         event_fired_trade_loop: asyncio.Event,
         event_fired_miniTicker_loop: asyncio.Event,

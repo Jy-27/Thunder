@@ -6,7 +6,6 @@ from typing import Dict
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-
 from SystemConfig import Streaming
 import SystemTrading.TradingDataHub.ReceiverDataStorage.StorageNodeManager as node_storage
 import Workspace.Utils.TradingUtils as tr_utils
@@ -58,15 +57,15 @@ class ReceiverDataStorage:
 
         self.event_trigger_stop_loop = event_trigger_stop_loop
 
-        self.stroage_ticker = StorageDeque(Streaming.max_lengh_ticker)
-        self.storage_trade = StorageDeque(Streaming.max_lengh_trade)
-        self.storage_miniTicker = StorageDeque(Streaming.max_lengh_miniTicker)
-        self.storage_depth = StorageDeque(Streaming.max_lengh_depth)
-        self.storage_aggTrade = StorageDeque(Streaming.max_lengh_aggTrade)
-        self.storage_kline_ws = node_storage.storage_kline_real
-        self.storage_execution_ws = node_storage.storage_execution_ws
-        self.storage_kline_fetcher = node_storage.storage_kline_history
-        self.storage_orderbook_fetcher = StorageDeque(Streaming.max_lengh_orderbook)
+        self.storage_ticker = StorageDeque(Streaming.max_lengh_ticker)#
+        self.storage_trade = StorageDeque(Streaming.max_lengh_trade)#
+        self.storage_miniTicker = StorageDeque(Streaming.max_lengh_miniTicker)#
+        self.storage_depth = StorageDeque(Streaming.max_lengh_depth)#
+        self.storage_aggTrade = StorageDeque(Streaming.max_lengh_aggTrade)#
+        self.storage_kline_ws = node_storage.storage_kline_real#
+        self.storage_execution_ws = node_storage.storage_execution_ws#
+        self.storage_kline_fetcher = node_storage.storage_kline_history#
+        self.storage_orderbook_fetcher = StorageDeque(Streaming.max_lengh_orderbook)#
         self.storage_account_balance = StorageOverwrite([])
         self.storage_order_status = node_storage.storage_execution_ws
 
@@ -76,11 +75,14 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket stream(ticker) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_ticker_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_ticker_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
-            self.stroage_ticker.add_data(symbol, data)
+            self.storage_ticker.add_data(symbol, data)
             self.queue_feed_ticker_ws.task_done()
         print(f"  ✋ ticker storage 중지")
 
@@ -90,7 +92,10 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket stream(trade) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_trade_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_trade_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -104,12 +109,15 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket stream(miniTicker) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_trade_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_miniTicker_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
             self.storage_miniTicker.add_data(symbol, data)
-            self.queue_feed_trade_ws.task_done()
+            self.queue_feed_miniTicker_ws.task_done()
         print(f"  ✋ miniTicker storage 중지")
 
     async def depth_update(self):
@@ -118,12 +126,15 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket stream(depth) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_trade_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_depth_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
             self.storage_depth.add_data(symbol, data)
-            self.queue_feed_trade_ws.task_done()
+            self.queue_feed_depth_ws.task_done()
         print(f"  ✋ depth storage 중지")
 
     async def aggTrade_update(self):
@@ -132,12 +143,15 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket stream(aggTrade) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_trade_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_aggTrade_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
             self.storage_aggTrade.add_data(symbol, data)
-            self.queue_feed_trade_ws.task_done()
+            self.queue_feed_aggTrade_ws.task_done()
         print(f"  ✋ aggTrade storage 중지")
 
     async def kline_ws_update(self):
@@ -146,7 +160,10 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket kline data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            packing_message = await self.queue_feed_kline_ws.get()
+            try:
+                packing_message = await asyncio.wait_for(self.queue_feed_kline_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             symbol, interval, data = tr_utils.Extractor.unpack_message(packing_message)
             convert_to_interval = f"interval_{interval}"
             self.storage_kline_ws.set_data(symbol, convert_to_interval, data)
@@ -159,7 +176,10 @@ class ReceiverDataStorage:
         """
         print(f"  💾 websocket execution data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_feed_execution_ws.get()
+            try:
+                message = await asyncio.wait_for(self.queue_feed_execution_ws.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             data_type = message["e"]
             if data_type == "TRADE_LITE":
                 symbol = message["s"]
@@ -178,12 +198,15 @@ class ReceiverDataStorage:
         """
         print(f"  💾 kline cycle data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            packing_message = await self.queue_fetch_kline.get()
+            try:
+                packing_message = await asyncio.wait_for(self.queue_fetch_kline.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             symbol, interval, data = tr_utils.Extractor.unpack_message(packing_message)
             convert_to_interval = f"interval_{interval}"
             self.storage_kline_fetcher.set_data(symbol, convert_to_interval, data)
             self.queue_fetch_kline.task_done()
-        print(f"  ✋ kline cycle storage 중지")
+        print(f"  ✋ kline fetcher storage 중지")
 
     async def orderbook_fetcher_update(self):
         """
@@ -191,22 +214,29 @@ class ReceiverDataStorage:
         """
         print(f"  💾 orderbook data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_fetch_orderbook.get()
+            try:
+                message = await asyncio.wait_for(self.queue_fetch_orderbook.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             symbol, data = message
             self.storage_orderbook_fetcher.add_data(symbol, data)
             self.queue_fetch_orderbook.task_done()
-        print(f"  ✋ orderbook storage 중지")
+        print(f"  ✋ orderbook fetcher storage 중지")
 
     async def account_balance_update(self):
         print(f"  💾 account balance 시작")
         field = "account_balance"
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_fetch_account_balance.get()
+            try:
+                message = await asyncio.wait_for(self.queue_fetch_account_balance.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
             self.storage_account_balance.set_data(field, message)
+            # print(self.storage_account_balance.get_data(field))
             self.queue_fetch_account_balance.task_done()
-        print(f"  ✋ account balance storage 중지")
-        
-    
+        print(f"  ✋ account balance fetcher storage 중지")
+
+
     async def order_status_update(self):
         pass
     
@@ -217,7 +247,11 @@ class ReceiverDataStorage:
         """
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_trigger_stop_loop.is_set():
-            message = await self.queue_request_exponential.get()
+            try:
+                message = await asyncio.wait_for(self.queue_request_exponential.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            # message = await self.queue_request_exponential.get()
             attr = message["attr"]
             main_field = message["main_field"]
             sub_field = message["sub_field"]
@@ -246,57 +280,44 @@ class ReceiverDataStorage:
             asyncio.create_task(self.respond_to_data()),
         ]
         await asyncio.gather(*tasks)
-
+        print(f"  ℹ️ MarketDataStorage가 종료되어 저장 중단됨.")
 
 if __name__ == "__main__":
-    queues_list = [
-        "queue_feed_ticker_ws",
-        "queue_feed_trade_ws",
-        "queue_feed_miniTicker_ws",
-        "queue_feed_depth_ws",
-        "queue_feed_aggTrade_ws",
-        "queue_feed_kline_ws",
-        "queue_feed_execution_ws",
-        "queue_fetch_kline",
-        "queue_fetch_orderbook",
-        "queue_fetch_all_storage",
-        "queue_send_exponential",
-        "queue_fetch_exponential",
-        "queue_send_analysis",
-        "queue_fetch_analysis",
-        "queue_fetch_analysis",
-        "queue_send_analysis",
-        "queue_send_trading_status",
-        "queue_fetch_trading_status",
-    ]
-    events_list = [
-        "event_trigger_stop_loop",
-        "event_timer_start",
-        "event_start_exponential",
-        "event_done_exeponential",
-        "event_request_receiver_data",
-        "event_start_analysis",
-        "event_done_analysis",
-        "event_request_computed_results",
-        "event_start_orders",
-        "event_done_orders",
-        "event_request_status",
-        "event_start_monitor",
-        "event_done_monitor",
-        "event_request_message",
-        "event_start_message",
-        "event_done_message",
-    ]
-
-    queues = []
-    for _ in range(10):
-        queues.append(asyncio.Queue())
-    queues = tuple(queues)
-    events = []
-    for _ in range(2):
-        events.append(asyncio.Event())
-    events = tuple(events)
-
-    instance = ReceiverDataStorage(*queues, *events)
-    # instance = ReceiverDataStorage(**kwargs)
-    asyncio.run(instance.start())
+    from SystemTrading.MarketDataFeed.ReceiverManager import ReceiverManager
+    q_1 = []
+    for _ in range(11):
+        q_1.append(asyncio.Queue())
+    q_1 = tuple(q_1)
+    
+    e_1 = []
+    for _ in range(15):
+        e_1.append(asyncio.Event())
+    e_1 = tuple(e_1)
+    
+    q_2 = []
+    for _ in range(4):
+        q_2.append(asyncio.Queue())
+    q_2 = tuple(q_2)
+    
+    ins_receiver = ReceiverManager(*q_1, *e_1)
+    ins_storage = ReceiverDataStorage(*q_1, *q_2, e_1[0])
+    
+    async def stop_timer():
+        await asyncio.sleep(10)
+        e_1[3].set()
+        print(f"  🚀 Private Event 활성화")
+        print(f"  ⏱️ wait for 10 seconds")
+        await asyncio.sleep(10)
+        print(f"  🚀 Active the event")
+        e_1[0].set()
+        
+        
+    async def main():
+        tasks = [
+            asyncio.create_task(stop_timer()),
+            asyncio.create_task(ins_receiver.start()),
+            asyncio.create_task(ins_storage.start())
+        ]
+        await asyncio.gather(*tasks)
+        
+    asyncio.run(main())

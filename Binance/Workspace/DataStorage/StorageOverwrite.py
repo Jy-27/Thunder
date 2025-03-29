@@ -18,8 +18,6 @@ class StorageOverwrite(ReplaceStorage):
     """
     💾 Deque를 활용한 스토리지이며, 기존 데이터를 새로운 값으로 덮어쓰는 방식(Set/Replace)을 사용한다.
     """
-    __slots__ = tuple(fields + ["base_type"])
-
     def __init__(self, base_type: Optional[Any]):
         self.base_type = base_type
         self.clear_all()
@@ -66,7 +64,7 @@ class StorageOverwrite(ReplaceStorage):
         """
         🧹 전체 필드 데이터를 초기화한다.
         """
-        for field in self.__class__.__slots__:
+        for field in self.__dict__:
             if field in fields:
                 setattr(self, field, deepcopy(self.base_type))
 
@@ -77,7 +75,7 @@ class StorageOverwrite(ReplaceStorage):
         Returns:
             List: 필드명 리스트
         """
-        return [field for field in self.__class__.__slots__ if field in fields]
+        return [field for field in self.__dict__]
 
     def to_dict(self) -> Dict:
         """
@@ -87,7 +85,7 @@ class StorageOverwrite(ReplaceStorage):
             Dict: 속성값 데이터
         """
         result = {}
-        for field in self.__class__.__slots__:
+        for field in self.__dict__:
             if field not in fields:
                 continue
             result[field] = getattr(self, field)
@@ -104,8 +102,8 @@ class StorageOverwrite(ReplaceStorage):
         Notes:
             속성에서 symbol이 아닌값은 제외함.
         """
-        message = [f"\n{self.__class__.__name__} Data Lenght info\n"]
-        for attr in self.__class__.__slots__:
+        message = [f"\n{self.__dict__} Data Lenght info\n"]
+        for attr in self.__dict__:
             if attr.endswith("USDT"):
                 data = getattr(self, attr)
                 if data is None:
@@ -129,7 +127,7 @@ class StorageOverwrite(ReplaceStorage):
         📏 속성의 갯수를 출력한다.
         """
         valid_attr = []
-        for slot in self.__class__.__slots__:
+        for slot in self.__dict__:
             if slot.endswith("USDT"):
                 valid_attr.append(slot)
         return len(valid_attr)

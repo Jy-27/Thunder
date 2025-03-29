@@ -47,9 +47,10 @@ class PrivateFetcher:
 
     async def fetch_order_status(self, symbol: str):
         data = await ins_futures_tr_client.fetch_order_status(symbol)
+        packing_message = (symbol, data)
         if data:
-            await self.queue_fetch_order.put(data)
-        return data
+            await self.queue_fetch_order.put(packing_message)
+        return packing_message
 
     async def tasks(self):
         tasks = [
@@ -70,8 +71,6 @@ class PrivateFetcher:
         print(f"  ⁉️ PrivateFetcher 종료됨")
         self.event_fired_loop_status.set()
 
-
-
 if __name__ == "__main__":
     class RunTest:
         def __init__(self, t:int = 10):
@@ -86,7 +85,7 @@ if __name__ == "__main__":
                                               self.e_1,
                                               self.e_2,
                                               self.e_3)
-        
+
         async def timer(self):
             print(f"  ⏳ 타이머 시작: {self.t}sec")
             await asyncio.sleep(self.t)

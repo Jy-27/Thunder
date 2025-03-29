@@ -459,6 +459,27 @@ class Extractor:
         result = account_data["totalWalletBalance"]
         return float(result)
 
+    @staticmethod
+    def total_margin_balance(
+        account_data: ins_futures_client.fetch_account_balance,
+    ) -> float:
+        result = account_data["totalMarginBalance"]
+        return float(result)
+    
+    @staticmethod
+    def total_unrealized_pnl(
+        account_data: ins_futures_client.fetch_account_balance,
+    ) -> float:
+        result = account_data["totalUnrealizedProfit"]
+        return float(result)
+
+    @staticmethod
+    def total_position_init_margin(
+        account_data: ins_futures_client.fetch_account_balance,
+    ) -> float:
+        result = account_data["totalPositionInitialMargin"]
+        return float(result)
+
     # API 최대 레버리지값 필터 및 반환
     @staticmethod
     def max_leverage(brackets_data: ins_futures_client.fetch_leverage_brackets) -> int:

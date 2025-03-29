@@ -24,6 +24,7 @@ class Streaming:
     ]
     symbols = ["BTCUSDT", "TRXUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "BNBUSDT"]
     intervals = ["5m", "30m", "1h", "1d"]#, "4h", "1d"]
+    # intervals = all_intervals
     kline_limit: int = 480  # MAX 1,000
     orderbook_limit: int = 50
     orderbook_timesleep: int = 1

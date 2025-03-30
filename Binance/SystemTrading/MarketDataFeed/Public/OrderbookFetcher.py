@@ -15,12 +15,14 @@ class OrderbookFechter:
         self,
         queue_fetch: asyncio.Queue,
         event_trigger_orderbook: asyncio.Event,
+        event_fired_done_orderbook: asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
         event_fired_loop_status: asyncio.Event,
         limit: int = Streaming.orderbook_limit,
     ):
         self.queue_fetch = queue_fetch
         self.event_trigger_orderbook = event_trigger_orderbook
+        self.event_fired_done_orderbook = event_fired_done_orderbook
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_fired_loop_status = event_fired_loop_status
         self.limit = limit
@@ -59,6 +61,7 @@ class OrderbookFechter:
                 continue
             await self.tasks()
             self.event_trigger_orderbook.clear()
+            self.event_fired_done_orderbook.set()
         print(f"  ⁉️ OrderBook Loop 종료됨.")
         self.event_fired_loop_status.set()
 

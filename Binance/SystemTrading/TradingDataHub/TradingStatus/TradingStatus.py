@@ -21,20 +21,9 @@ class ReceiverDataStorage:
 
     def __init__(
         self,
-        queue_feed_ticker_ws: asyncio.Queue,
-        queue_feed_trade_ws: asyncio.Queue,
-        queue_feed_miniTicker_ws: asyncio.Queue,
-        queue_feed_depth_ws: asyncio.Queue,
-        queue_feed_aggTrade_ws: asyncio.Queue,
-        queue_feed_kline_ws: asyncio.Queue,
-        queue_feed_execution_ws: asyncio.Queue,
-        queue_fetch_kline: asyncio.Queue,
-        queue_fetch_orderbook: asyncio.Queue,
         queue_fetch_account_balance: asyncio.Queue,
         queue_fetch_order_status: asyncio.Queue,
-
-        queue_request_exponential: asyncio.Queue,
-        queue_response_exponential: asyncio.Queue,
+        
         queue_request_wallet: asyncio.Queue,
         queue_response_wallet: asyncio.Queue,
         queue_request_orders: asyncio.Queue,
@@ -42,27 +31,9 @@ class ReceiverDataStorage:
         
         event_trigger_stop_loop: asyncio.Event,
         
-        event_trigger_clear_ticker: asyncio.Event,
-        event_trigger_clear_trade: asyncio.Event,
-        event_trigger_clear_miniTicker: asyncio.Event,
-        event_trigger_clear_depth: asyncio.Event,
-        event_trigger_clear_aggTrade: asyncio.Event,
-        event_trigger_clear_kline_ws: asyncio.Event,
-        event_trigger_clear_execution_ws: asyncio.Event,
-        event_trigger_clear_kline_fetcher: asyncio.Event,
-        event_trigger_clear_orderbook_fetcher: asyncio.Event,
         event_trigger_clear_account_balance: asyncio.Event,
         event_trigger_clear_order_status: asyncio.Event,
         
-        event_fired_clear_ticker: asyncio.Event,
-        event_fired_clear_trade: asyncio.Event,
-        event_fired_clear_miniTicker: asyncio.Event,
-        event_fired_clear_depth: asyncio.Event,
-        event_fired_clear_aggTrade: asyncio.Event,
-        event_fired_clear_kline_ws: asyncio.Event,
-        event_fired_clear_execution_ws: asyncio.Event,
-        event_fired_clear_kline_fetcher: asyncio.Event,
-        event_fired_clear_orderbook_fetcher: asyncio.Event,
         event_fired_clear_account_balance: asyncio.Event,
         event_fired_clear_order_status: asyncio.Event,
     ):
@@ -78,13 +49,11 @@ class ReceiverDataStorage:
         self.queue_fetch_orderbook = queue_fetch_orderbook
         self.queue_fetch_account_balance = queue_fetch_account_balance
         self.queue_fetch_order_status = queue_fetch_order_status
-
+        
         self.queue_request_exponential = queue_request_exponential
         self.queue_response_exponential = queue_response_exponential
         self.queue_request_wallet = queue_request_wallet
         self.queue_response_wallet = queue_response_wallet
-        self.queue_request_orders = queue_request_orders
-        self.queue_response_orders = queue_response_orders
 
         self.event_trigger_stop_loop = event_trigger_stop_loop
 
@@ -99,7 +68,7 @@ class ReceiverDataStorage:
         self.event_trigger_clear_orderbook_fetcher = event_trigger_clear_orderbook_fetcher
         self.event_trigger_clear_account_balance = event_trigger_clear_account_balance
         self.event_trigger_clear_order_status = event_trigger_clear_order_status
-
+        
         self.event_fired_clear_ticker = event_fired_clear_ticker
         self.event_fired_clear_trade = event_fired_clear_trade
         self.event_fired_clear_miniTicker = event_fired_clear_miniTicker
@@ -291,6 +260,7 @@ class ReceiverDataStorage:
             self.queue_fetch_account_balance.task_done()
         print(f"  ✋ account balance fetcher storage 중지")
 
+
     async def order_status_update(self):
         print(f"  💾 order status storage 시작")
         while not self.event_trigger_stop_loop.is_set():
@@ -298,23 +268,22 @@ class ReceiverDataStorage:
                 message = await asyncio.wait_for(self.queue_fetch_order_status.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-
-            for data in message:
-                symbol = data["symbol"]
-                reduceOnly = data["reduceOnly"]
-                origType = data["origType"]
-                
-                if reduceOnly:  # 매도 주문
-                    if origType == "LIMIT": #take profit 대용
-                        sub_field = f"exit_limit"
-                    else:   #stop loss 대용
-                        sub_field = f"exit_trigger"
-                else:   # 매수 주문
-                    if origType == "LIMIT": # limit 매수 대용
-                        sub_field = f"entry_limit"
-                    else:   # 돌파 동일 방향 매수 대용
-                        sub_field = f"entry_trigger"
-                self.storage_orders_status.add_data(symbol, sub_field, data)
+            
+            symbol = message["symbol"]
+            reduceOnly = message["reduceOnly"]
+            origType = message["origType"]
+            
+            if reduceOnly:  # 매도 주문
+                if origType == "LIMIT": #take profit 대용
+                    sub_field = f"exit_limit"
+                else:   #stop loss 대용
+                    sub_field = f"exit_trigger"
+            else:   # 매수 주문
+                if origType == "LIMIT": # limit 매수 대용
+                    sub_field = f"entry_limit"
+                else:   # 돌파 동일 방향 매수 대용
+                    sub_field = f"entry_trigger"
+            self.storage_orders_status.add_data(symbol, sub_field, message)
             self.queue_fetch_order_status.task_done()
         print(f"  ✋ order status storage 중지")
 
@@ -349,7 +318,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_miniTicker.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_miniTicker.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_miniTicker.clear()
             self.event_fired_clear_miniTicker.set()
         print(f"  ✋ storage(miniTicker) cleaner 중지")
@@ -361,7 +330,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_depth.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_depth.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_depth.clear()
             self.event_fired_clear_depth.set()
         print(f"  ✋ storage(depth) cleaner 중지")
@@ -373,7 +342,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_aggTrade.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_aggTrade.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_aggTrade.clear()
             self.event_fired_clear_aggTrade.set()
         print(f"  ✋ storage(aggTrade) cleaner 중지")
@@ -385,7 +354,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_kline_ws.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_kline_ws.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_kline_ws.clear()
             self.event_fired_clear_kline_ws.set()
         print(f"  ✋ storage(kline ws) cleaner 중지")
@@ -397,7 +366,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_execution_ws.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_execution_ws.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_execution_ws.clear()
             self.event_fired_clear_execution_ws.set()
         print(f"  ✋ storage(execution ws) cleaner 중지")
@@ -409,7 +378,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_kline_fetcher.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_kline_fetcher.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_kline_fetcher.clear()
             self.event_fired_clear_kline_fetcher.set()
         print(f"  ✋ storage(kline fetcher) cleaner 중지")
@@ -421,7 +390,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_orderbook_fetcher.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_orderbook_fetcher.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_orderbook_fetcher.clear()
             self.event_fired_clear_orderbook_fetcher.set()
         print(f"  ✋ storage(orderbook fetcher) cleaner 중지")
@@ -433,7 +402,7 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_account_balance.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_account_balance.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_account_balance.clear()
             self.event_fired_clear_account_balance.set()
         print(f"  ✋ storage(account balance) cleaner 중지")
@@ -445,12 +414,12 @@ class ReceiverDataStorage:
                 await asyncio.wait_for(self.event_trigger_clear_order_status.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            self.storage_orders_status.clear_all()
+            self.storage_trade.clear_all()
             self.event_trigger_clear_order_status.clear()
             self.event_fired_clear_order_status.set()
         print(f"  ✋ storage(order status) cleaner 중지")
 
-    async def respond_to_exponential(self):
+    async def respond_to_data(self):
         """
         calculate함수에서 신호 수신시 스토리지 데이터를 전부 queue에 담아서 보낸다.
         """
@@ -460,49 +429,18 @@ class ReceiverDataStorage:
                 message = await asyncio.wait_for(self.queue_request_exponential.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_request_exponential.get()
             attr = message["attr"]
             main_field = message["main_field"]
             sub_field = message["sub_field"]
             if sub_field is None:
                 data = getattr(self, attr).get_data(field)
+                self.queue_fetch_storage.put(data)
             else:
                 data = getattr(self, attr).get_data(main_field, sub_field)
-            self.queue_response_exponential.put(data)
+                self.queue_response_exponential.put(data)
             self.queue_request_exponential.task_done()
-        print(f"  ✋ 연산용 storage 데이터 발신 중지")
-
-    async def respond_to_orders(self):
-        """
-        orders 함수에서 신호 수신시 스토리지 데이터를 전부 queue에 담아서 보낸다.
-        """
-        print(f"  📬 storage 데이터 발신 실행")
-        while not self.event_trigger_stop_loop.is_set():
-            try:
-                message = await asyncio.wait_for(self.queue_request_orders.get(), timeout=1.0)
-            except asyncio.TimeoutError:
-                continue
-            # symbol, order type 필요.
-            data = self.storage_orders_status.get_data(*message)
-            await self.queue_response_orders.put(data)
-            self.queue_request_orders.task_done()
-        print(f"  ✋ 주문용 storage 데이터 발신 중지")
-
-    async def respond_to_wallet(self):
-        """
-        orders 함수에서 신호 수신시 스토리지 데이터를 전부 queue에 담아서 보낸다.
-        """
-        print(f"  📬 storage 데이터 발신 실행")
-        while not self.event_trigger_stop_loop.is_set():
-            try:
-                message = await asyncio.wait_for(self.queue_request_wallet.get(), timeout=1.0)
-                #기본값: "account_balance"
-            except asyncio.TimeoutError:
-                continue
-            await self.queue_response_wallet.put(self.storage_account_balance.get_data(message))
-            self.queue_request_wallet.task_done()
-        print(f"  ✋ 지갑관리용 storage 데이터 발신 중지")
-        
-        
+        print(f"  ✋ storage 데이터 발신 중지")
 
     async def start(self):
         tasks = [
@@ -528,7 +466,7 @@ class ReceiverDataStorage:
             asyncio.create_task(self.orderbook_fetcher_storage_clear()),
             asyncio.create_task(self.account_balance_storage_clear()),
             asyncio.create_task(self.order_status_storage_clear()),
-            asyncio.create_task(self.respond_to_exponential()),
+            asyncio.create_task(self.respond_to_data()),
         ]
         await asyncio.gather(*tasks)
         print(f"  ℹ️ MarketDataStorage가 종료되어 저장 중단됨.")
@@ -547,6 +485,8 @@ if __name__ == "__main__":
     for _ in range(17):
         e_1.append(asyncio.Event())
     e_1 = tuple(e_1)
+    
+    
     
     q_2 = []
     for _ in range(4):

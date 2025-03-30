@@ -71,7 +71,9 @@ class Info:
         "queue_request_exponential",
         "queue_response_exponential",
         "queue_request_wallet",
-        "queue_response_wallet"
+        "queue_response_wallet",
+        "queue_request_orders",
+        "queue_response_orders"
     ]
 
     # 중앙 이벤트 컨트롤로가 발신 일경우,
@@ -82,9 +84,41 @@ class Info:
         "event_trigger_private"
         ]
 
+    storage_clear_event = [
+        "event_trigger_clear_ticker",
+        "event_trigger_clear_trade",
+        "event_trigger_clear_miniTicker",
+        "event_trigger_clear_depth",
+        "event_trigger_clear_aggTrade",
+        "event_trigger_clear_kline_ws",
+        "event_trigger_clear_execution_ws",
+        "event_trigger_clear_kline_fetcher",
+        "event_trigger_clear_orderbook_fetcher",
+        "event_trigger_clear_account_balance",
+        "event_trigger_clear_order_status",
+    ]
+
     # 중앙 이벤트 컨트롤로가 수신일경우,
     fired_event_signal = [
-        "event_fired_execution_ws"  #이벤트 발생을 알리고 fetcher를 실행하기 위한 기본 신호로 결정한다.
+        "event_fired_execution_ws",  #이벤트 발생을 알리고 fetcher를 실행하기 위한 기본 신호로 결정한다.
+        "event_fired_clear_ticker",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_trade",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_miniTicker",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_depth",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_aggTrade",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_kline_ws",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_execution_ws",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_kline_fetcher",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_orderbook_fetcher",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_account_balance",  # storage clear 완료 신호를 발신한다.
+        "event_fired_clear_order_status",  # storage clear 완료 신호를 발신한다.
+    ]
+
+    # 중앙 이벤트 컨트롤러로 신호를 발신하여 데이터 수신 완료됐음을 알린다.
+    fired_event_ = [
+        "event_fired_done_kline",
+        "event_fired_done_orderbook",
+        "event_fired_done_private"
     ]
 
     # stop loop 종료 확인신호

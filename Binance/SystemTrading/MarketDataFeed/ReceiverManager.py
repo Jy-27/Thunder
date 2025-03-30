@@ -44,11 +44,17 @@ class ReceiverManager:
         queue_fetch_orderbook: asyncio.Queue,
         queue_fetch_account_balance: asyncio.Queue,
         queue_fetch_order_status: asyncio.Queue,
+        
         event_trigger_stop_loop: asyncio.Event,  # set 신호 발생시 while을 일괄 종료한다.
+        
         event_trigger_kline: asyncio.Event,
         event_trigger_orderbook: asyncio.Event,
         event_trigger_private: asyncio.Event,  # set 신호 발생시 PrivateFetcher를 실행한다.
+        
         event_fired_execution_ws: asyncio.Event,
+        event_fired_done_kline: asyncio.Event,
+        event_fired_done_orderbook: asyncio.Event,
+        event_fired_done_private: asyncio.Event,
         event_fired_ticker_loop: asyncio.Event,
         event_fired_trade_loop: asyncio.Event,
         event_fired_miniTicker_loop: asyncio.Event,
@@ -79,6 +85,10 @@ class ReceiverManager:
         self.event_trigger_private = event_trigger_private
 
         self.event_fired_execution_ws = event_fired_execution_ws
+
+        self.event_fired_done_kline = event_fired_done_kline
+        self.event_fired_done_orderbook = event_fired_done_orderbook
+        self.event_fired_done_private = event_fired_done_private
 
         self.event_fired_ticker_loop = event_fired_ticker_loop
         self.event_fired_trade_loop = event_fired_trade_loop
@@ -135,12 +145,14 @@ class ReceiverManager:
         self.fetcher_kline = KlineFetcher(
             self.queue_fetch_kline,
             self.event_trigger_kline,
+            self.event_fired_done_kline,
             self.event_trigger_stop_loop,
             self.event_fired_f_kline_loop,
         )
         self.fetcher_orderbook = OrderbookFechter(
             self.queue_fetch_orderbook,
             self.event_trigger_orderbook,
+            self.event_fired_done_orderbook,
             self.event_trigger_stop_loop,
             self.event_fired_orderbook_loop,
         )
@@ -148,6 +160,7 @@ class ReceiverManager:
             self.queue_fetch_account_balance,
             self.queue_fetch_order_status,
             self.event_trigger_private,  # self.event_fired_execution_
+            self.event_fired_done_private,
             self.event_trigger_stop_loop,
             self.event_fired_private_loop,
         )
@@ -167,7 +180,6 @@ class ReceiverManager:
         ]
         await asyncio.gather(*tasks)
         print(f"  ℹ️ ReceiverManager Loop가 종료되어 수신이 중단됨.")
-
 
 if __name__ == "__main__":
     import SystemConfig
@@ -279,20 +291,23 @@ if __name__ == "__main__":
                 except asyncio.TimeoutError:
                     continue
                 wallet_balance = tr_utils.Extractor.total_wallet_balance(q_data)
-                unr_pnl = tr_utils.Extractor.total_unrealized_pnl(q_data)
                 margin_balance = tr_utils.Extractor.total_margin_balance(q_data)
                 init_margin = tr_utils.Extractor.total_position_init_margin(q_data)
-                roi = (unr_pnl / init_margin) * 100
+                unr_pnl = tr_utils.Extractor.total_unrealized_pnl(q_data)
+                if any(x == 0 for x in (unr_pnl, init_margin)):
+                    roi = 0
+                else:
+                    roi = (unr_pnl / init_margin) * 100
                 print(
                     f"      👉🏽 account balance(balance): {wallet_balance:,.2f} USDT"
                 )
-                print(f"      👉🏽 account balance(unrealized): {unr_pnl:,.2f} USDT")
                 print(
                     f"      👉🏽 account balance(margin balance): {margin_balance:,.2f} USDT"
                 )
                 print(
                     f"      👉🏽 account balance(init margin): {init_margin:,.2f} USDT"
                 )
+                print(f"      👉🏽 account balance(unrealized): {unr_pnl:,.2f} USDT")
                 print(f"      👉🏽 account balance(ROI): {roi:,.2f} %")
 
                 positions = tr_utils.Extractor.current_positions(q_data)
@@ -329,7 +344,7 @@ if __name__ == "__main__":
     args = []
     for _ in range(11):
         args.append(asyncio.Queue())
-    for _ in range(15):
+    for _ in range(18):
         args.append(asyncio.Event())
     args = tuple(args)
 

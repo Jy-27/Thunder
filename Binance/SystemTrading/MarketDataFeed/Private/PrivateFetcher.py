@@ -31,12 +31,14 @@ class PrivateFetcher:
         queue_fetch_account_balance:asyncio.Queue,
         queue_fetch_order:asyncio.Queue,
         event_trigger_private:asyncio.Event,
+        event_fired_done_private:asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
         event_fired_loop_status:asyncio.Event):
         
         self.queue_fetch_account_balance = queue_fetch_account_balance
         self.queue_fetch_order = queue_fetch_order
         self.event_trigger_private = event_trigger_private
+        self.event_fired_done_private = event_fired_done_private
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_fired_loop_status = event_fired_loop_status
 
@@ -47,10 +49,9 @@ class PrivateFetcher:
 
     async def fetch_order_status(self, symbol: str):
         data = await ins_futures_tr_client.fetch_order_status(symbol)
-        packing_message = (symbol, data)
         if data:
-            await self.queue_fetch_order.put(packing_message)
-        return packing_message
+            await self.queue_fetch_order.put(data)
+        return data
 
     async def tasks(self):
         tasks = [
@@ -68,6 +69,7 @@ class PrivateFetcher:
                 continue
             await self.tasks()
             self.event_trigger_private.clear()
+            self.event_fired_done_private.set()
         print(f"  ⁉️ PrivateFetcher 종료됨")
         self.event_fired_loop_status.set()
 

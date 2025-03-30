@@ -16,14 +16,16 @@ event_types = [
     "ACCOUNT_UPDATE",
 ]
 
-kline_sub_storage = node_storage.SubStorage(convert_to_intervals)
-execution_sub_storage = node_storage.SubStorage(event_types)
+kline_sub_storage = node_storage.SubStorageOverwrite(convert_to_intervals)
+execution_sub_storage = node_storage.SubStorageOverwrite(event_types)
 
-storage_kline_real = node_storage.MainStorage(symbols, kline_sub_storage)
-storage_kline_history = node_storage.MainStorage(symbols, kline_sub_storage)
-storage_execution_ws = node_storage.MainStorage(symbols, execution_sub_storage)
+storage_kline_real = node_storage.MainStorageOverwrite(symbols, kline_sub_storage)
+storage_kline_history = node_storage.MainStorageOverwrite(symbols, kline_sub_storage)
+storage_execution_ws = node_storage.MainStorageOverwrite(symbols, execution_sub_storage)
 
-if __name__ == "__main__":
-    storage_kline_real = node_storage.MainStorage(symbols, kline_sub_storage)
-    storage_kline_history = node_storage.MainStorage(symbols, kline_sub_storage)
-    storage_execution_ws = node_storage.MainStorage(symbols, execution_sub_storage)
+orders_main_fields = ["entry", "exit"]
+order_sub_fields = ["limit", "trigger"]
+orders_fields = [f"{m}_{s}" for m in orders_main_fields for s in order_sub_fields]
+
+order_sub_storage = node_storage.SubStorageAppend(orders_fields)
+storage_orders = node_storage.MainStorageAppend(symbols, order_sub_storage)

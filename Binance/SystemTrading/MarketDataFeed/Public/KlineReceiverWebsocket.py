@@ -25,17 +25,17 @@ class KlineReceiverWebsocket:
         self.event_fired_loop_status = event_fired_loop_status
 
     async def start(self):
-        print(f"  ⏳ KlineReceiverWebsocket 연결중.")
+        print(f"  KlineReceiverWebsocket: ⏳ Connecting >> Kline")
         await self.futures_mk_ws.open_kline_connection(self.intervals)
-        print(f"  🔗 KlineReceiverWebsocket 연결 성공.")
-        print(f"  🚀 KlineReceiverWebsocket 시작")
+        print(f"  KlineReceiverWebsocket: 🔗 Connected successfully >> Kline")
+        print(f"  KlineReceiverWebsocket: 🚀 Starting to receive >> Kline")
         while not self.event_feed_stop_loop.is_set():
             message = await self.futures_mk_ws.receive_message()
             pack_data = tr_utils.Packager.pack_kline_websocket_message(message)
             await self.queue_feed.put(pack_data)
-        print(f"  ⁉️ KlineReceiverWebsocket Loop 종료됨")
+        print(f"  KlineReceiverWebsocket: ✋ Loop stopped >> Kline")
         await self.futures_mk_ws.close_connection()
-        print(f"  ⛓️‍💥 KlineReceiverWebsocket 연결 해제")
+        print(f"  KlineReceiverWebsocket: ⛓️‍💥 Disconnected >> Kline")
         self.event_fired_loop_status.set()
 
 if __name__ == "__main__":

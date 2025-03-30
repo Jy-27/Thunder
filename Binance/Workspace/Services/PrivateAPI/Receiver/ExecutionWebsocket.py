@@ -63,6 +63,8 @@ class ExecutionWebsocket:
         if self.websocket_client:
             await self.websocket_client.close()
             self.websocket_client = None
+        if self.session:
+            await self.session.close()
             # print("🔌 웹소켓 연결 해제됨")
 
     async def receive_message(self) -> Dict:

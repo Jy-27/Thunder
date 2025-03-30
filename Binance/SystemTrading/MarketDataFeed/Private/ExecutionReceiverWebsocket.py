@@ -29,10 +29,10 @@ class ExecutionReceiverWebsocket:
         self.event_fired_loop_status = event_fired_loop_status  #신호 수신시 이벤트 신를 생성한다.
 
     async def start(self):
-        print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")
+        print(f"  ExecutionReceiverWebsocket: ⏳ Connecting >> {self.stream_type}")
         await self.futures_execution_websocket.open_connection()
-        print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
-        print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
+        print(f"  ExecutionReceiverWebsocket: 🔗 Connected successfully >> {self.stream_type}")
+        print(f"  ExecutionReceiverWebsocket: 🚀 Starting to receive >> {self.stream_type}")
 
         while not self.event_trigger_stop_loop.is_set():
             try:
@@ -44,9 +44,9 @@ class ExecutionReceiverWebsocket:
             await self.queue_feed.put(message)
             self.event_fired.set()
 
-        print(f"  ⁉️ ReceiverWebsocket({self.stream_type}) Loop 종료됨")
+        print(f"  ExecutionReceiverWebsocket: ✋ Loop stopped >> {self.stream_type}")
         await self.futures_execution_websocket.close_connection()
-        print(f"  ⛓️‍💥 ReceiverWebsocket({self.stream_type}) 연결 해제")
+        print(f"  ExecutionReceiverWebsocket: ⛓️‍💥 Disconnected >> {self.stream_type}")
         self.event_fired_loop_status.set()
 
 if __name__ == "__main__":

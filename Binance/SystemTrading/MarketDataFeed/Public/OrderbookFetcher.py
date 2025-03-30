@@ -50,10 +50,10 @@ class OrderbookFechter:
         await asyncio.gather(*tasks)
 
     async def start(self):
-        print(f"  🚀 Orderbook 수신 시작")
+        print(f"  OrderbookFetcher: ⏳ Receiving initial orderbook data")
         await self.init_update()
-        print(f"  ✅ Orderbook 수신 완료.")
-        print(f"  🚀 OrderbookFetcher 시작 ")
+        print(f"  OrderbookFetcher: ✅ Initial orderbook data received")
+        print(f"  OrderbookFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
                 await asyncio.wait_for(self.event_trigger_orderbook.wait(), timeout=1.0)
@@ -62,7 +62,7 @@ class OrderbookFechter:
             await self.tasks()
             self.event_trigger_orderbook.clear()
             self.event_fired_done_orderbook.set()
-        print(f"  ⁉️ OrderBook Loop 종료됨.")
+        print(f"  OrderbookFetcher: ✋ Loop stopped")
         self.event_fired_loop_status.set()
 
 if __name__ == "__main__":

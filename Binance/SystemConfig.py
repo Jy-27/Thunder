@@ -53,7 +53,7 @@ class Position:
     
 class Info:
     # 데이터 단방향 전송용
-    transmission_queues = [
+    transmission_reciever_queues = [
         "queue_feed_ticker_ws",
         "queue_feed_trade_ws",
         "queue_feed_miniTicker_ws",
@@ -64,7 +64,12 @@ class Info:
         "queue_fetch_kline",
         "queue_fetch_orderbook",
         "queue_fetch_account_balance",
-        "queue_fetch_order_status"]
+        "queue_fetch_order_status",
+        ]
+    
+    transmission_feed_queues = [
+        "queue_feed_wallet",
+    ]
 
     # 자료 요청용
     args_queues = [
@@ -99,7 +104,7 @@ class Info:
     ]
 
     # 중앙 이벤트 컨트롤로가 수신일경우,
-    fired_event_signal = [
+    fired_event_storage_signal = [
         "event_fired_execution_ws",  #이벤트 발생을 알리고 fetcher를 실행하기 위한 기본 신호로 결정한다.
         "event_fired_clear_ticker",  # storage clear 완료 신호를 발신한다.
         "event_fired_clear_trade",  # storage clear 완료 신호를 발신한다.
@@ -112,6 +117,10 @@ class Info:
         "event_fired_clear_orderbook_fetcher",  # storage clear 완료 신호를 발신한다.
         "event_fired_clear_account_balance",  # storage clear 완료 신호를 발신한다.
         "event_fired_clear_order_status",  # storage clear 완료 신호를 발신한다.
+    ]
+
+    fired_event_private_signal = [
+        "event_fired_complete_private"
     ]
 
     # 중앙 이벤트 컨트롤러로 신호를 발신하여 데이터 수신 완료됐음을 알린다.

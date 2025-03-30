@@ -61,7 +61,7 @@ class PrivateFetcher:
         await asyncio.gather(*tasks)
 
     async def start(self):
-        print(f"  🚀 PrivateFetcher 시작.")
+        print(f"  PrivateFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
                 await asyncio.wait_for(self.event_trigger_private.wait(), timeout=1.0)
@@ -70,7 +70,7 @@ class PrivateFetcher:
             await self.tasks()
             self.event_trigger_private.clear()
             self.event_fired_done_private.set()
-        print(f"  ⁉️ PrivateFetcher 종료됨")
+        print(f"  PrivateFetcher: ✋ Loop stopped")
         self.event_fired_loop_status.set()
 
 if __name__ == "__main__":

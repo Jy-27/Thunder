@@ -64,10 +64,10 @@ class KlineFetcher:
             await asyncio.gather(*tasks)
 
     async def start(self):
-        print(f"  ⏳ kline data 전체 수신중")
+        print(f"  KlineFetcher: ⏳ Receiving initial Kline data")
         await self.init_update()
-        print(f"  ✅ kline data 수신 완료.")
-        print(f"  🚀 KlineFetcher 시작")
+        print(f"  KlineFetcher: ✅ Initial Kline data received")
+        print(f"  KlineFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
                 await asyncio.wait_for(self.event_trigger_kline.wait(), timeout=1.0)
@@ -76,7 +76,7 @@ class KlineFetcher:
             await self.tasks()
             self.event_trigger_kline.clear()
             self.event_fired_done_kline.set()
-        print(f"  ⁉️ KlineFetcher Loop 종료됨.")
+        print(f"  KlineFetcher: ✋ Loop stopped")
         self.event_fired_loop_status.set()
 
 

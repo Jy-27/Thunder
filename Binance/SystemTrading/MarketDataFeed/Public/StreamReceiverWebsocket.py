@@ -40,16 +40,16 @@ class StreamReceiverWebsocket:
         self.event_fired_loop_status = event_fired_loop_status
 
     async def start(self):
-        print(f"  ⏳ ReceiverWebsocket({self.stream_type}) 연결중.")
+        print(f"  StreamReceiverWebsocket: ⏳ Connecting >> {self.stream_type}")
         await self.futures_mk_ws.open_stream_connection(self.stream_type)
-        print(f"  🔗 ReceiverWebsocket({self.stream_type}) 연결 성공.")
-        print(f"  🚀 ReceiverWebsocket({self.stream_type}) 시작")
+        print(f"  StreamReceiverWebsocket: 🔗 Connected successfully >> {self.stream_type}")
+        print(f"  StreamReceiverWebsocket: 🚀 Starting to receive >> {self.stream_type}")
         while not self.event_trigger_stop_loop.is_set():
             message = await self.futures_mk_ws.receive_message()
             await self.queue_feed.put(message)
-        print(f"  ⁉️ ReceiverWebsocket({self.stream_type}) Loop 종료됨")
+        print(f"  StreamReceiverWebsocket: ✋ Loop stopped >> {self.stream_type}")
         await self.futures_mk_ws.close_connection()
-        print(f"  ⛓️‍💥 ReceiverWebsocket({self.stream_type}) 연결 해제")
+        print(f"  StreamReceiverWebsocket: ⛓️‍💥 Disconnected >> {self.stream_type}")
         self.event_fired_loop_status.set()
 
 

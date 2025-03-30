@@ -32,7 +32,7 @@ class RunTestFetcher:
 
     async def timer(self):
         await asyncio.sleep(2)
-        print(f"  ⏱️ timer: {self.timesleep} sec")
+        print(f"\n  ⏱️ timer: {self.timesleep} sec")
         await asyncio.sleep(self.timesleep)
         print(f"  🚀 kline event set")
         self.args[12].set()
@@ -87,16 +87,14 @@ class RunTestFetcher:
         await asyncio.sleep(1)
         while not self.receiver_manager.event_trigger_stop_loop.is_set():
             try:
-                q_data = await asyncio.wait_for(
+                data = await asyncio.wait_for(
                     self.receiver_manager.queue_fetch_order_status.get(), timeout=1
                 )
             except asyncio.TimeoutError:
                 continue
-            symbol, data = q_data
             for i in data:
-                
-                print(i)
-                
+                # print(i)
+                symbol = i["symbol"]
                 order_type = i["type"]
                 side = i["side"]
                 message = (
@@ -148,7 +146,7 @@ class RunTestFetcher:
                 await asyncio.wait_for(self.receiver_manager.event_fired_done_kline.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            print(f"        🚨 kline 완료 신호 발생")
+            print(f"        💥 Kline event signal activated")
             break
         
     async def monitor_event_orderbook(self):
@@ -157,7 +155,7 @@ class RunTestFetcher:
                 await asyncio.wait_for(self.receiver_manager.event_fired_done_orderbook.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            print(f"        🚨 orderbook 완료 신호 발생")
+            print(f"        💥 orderbook event signal activated")
             break
 
     async def monitor_event_private(self):
@@ -166,7 +164,7 @@ class RunTestFetcher:
                 await asyncio.wait_for(self.receiver_manager.event_fired_done_private.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            print(f"        🚨 private 완료 신호 발생")
+            print(f"        💥 private event signal activated")
             break
 
     def terminal_clear(self):

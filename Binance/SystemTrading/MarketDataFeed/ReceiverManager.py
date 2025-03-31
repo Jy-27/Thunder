@@ -263,13 +263,13 @@ if __name__ == "__main__":
             await asyncio.sleep(1)
             while not self.receiver_manager.event_trigger_stop_loop.is_set():
                 try:
-                    q_data = await asyncio.wait_for(
+                    data = await asyncio.wait_for(
                         self.receiver_manager.queue_fetch_order_status.get(), timeout=1
                     )
                 except asyncio.TimeoutError:
                     continue
-                symbol, data = q_data
                 for i in data:
+                    symbol = i["symbol"]
                     order_type = i["type"]
                     side = i["side"]
                     message = (

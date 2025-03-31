@@ -39,6 +39,25 @@ class ExponentialDataProcessor:
         self.event_start_exponential_cals = event_start_exponential_cals
         self.event_done_exponential_cals = event_done_exponential_cals
             
+        """NOTE!!
+
+            queue_request 시 
+            ticker
+            trade
+            miniTicker
+            depth
+            aggTrade
+            kline_ws
+            execution_ws
+            kline_fetch
+            orderbook_fetch
+            account_balance
+            order_status        
+            택 1
+            
+        """
+            
+            
     async def dequeue_and_assign(self):
         """
         데이터를 수신 후 속성에 각 데이터를 저장.

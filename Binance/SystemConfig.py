@@ -46,12 +46,32 @@ class Path:
     telegram = os.path.join(main_path, "API-KEY", "telegram.json")
     project = os.path.join(main_path, "Thunder", "Binance")
 
+class Keys:
+    position_keys = ['feeTier',
+                    'canTrade',
+                    'canDeposit',
+                    'canWithdraw',
+                    'feeBurn',
+                    'tradeGroupId',
+                    'updateTime',
+                    'multiAssetsMargin',
+                    'totalInitialMargin',
+                    'totalMaintMargin',
+                    'totalWalletBalance',
+                    'totalUnrealizedProfit',
+                    'totalMarginBalance',
+                    'totalPositionInitialMargin',
+                    'totalOpenOrderInitialMargin',
+                    'totalCrossWalletBalance',
+                    'totalCrossUnPnl',
+                    'availableBalance',
+                    'maxWithdrawAmount']
 
 class Position:
     leverage:int = 5
     margin_type:str = "ISOLATED"
     
-class Info:
+class QueueList:
     # 데이터 단방향 전송용
     transmission_reciever_queues = [
         "queue_feed_ticker_ws",
@@ -81,6 +101,8 @@ class Info:
         "queue_response_orders"
     ]
 
+    
+class EventList:
     # 중앙 이벤트 컨트롤로가 발신 일경우,
     trigger_event = [
         "event_trigger_stop_loop",
@@ -143,3 +165,4 @@ class Info:
         "event_fired_orderbook_loop",
         "event_fired_private_loop"
         ]
+    

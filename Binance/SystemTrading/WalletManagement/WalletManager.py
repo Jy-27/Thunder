@@ -9,7 +9,6 @@ home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 import SystemConfig
-
 class WalletManager:
     def __init__(self,
                  queue_request_wallet:asyncio.Queue,
@@ -17,38 +16,20 @@ class WalletManager:
                  queue_feed_wallet:asyncio.Queue,
                  event_trigger_stop_loop:asyncio.Event,
                  event_trigger_private:asyncio.Event,
-                 event_fired_complete_private:asyncio.Event):
+                 event_fired_done_private:asyncio.Event):
         
         self.queue_request_wallet = queue_request_wallet
         self.queue_response_wallet = queue_response_wallet
         self.queue_feed_wallet = queue_feed_wallet
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_trigger_private = event_trigger_private
-        self.event_fired_complete_private = event_fired_complete_private
+        self.event_fired_done_private = event_fired_done_private
         
         self._event_data_ready = asyncio.Event()
         
         self.symbols = SystemConfig.Streaming.symbols
         self.account_position = None
-        self.target_keys = ['feeTier',
-                            'canTrade',
-                            'canDeposit',
-                            'canWithdraw',
-                            'feeBurn',
-                            'tradeGroupId',
-                            'updateTime',
-                            'multiAssetsMargin',
-                            'totalInitialMargin',
-                            'totalMaintMargin',
-                            'totalWalletBalance',
-                            'totalUnrealizedProfit',
-                            'totalMarginBalance',
-                            'totalPositionInitialMargin',
-                            'totalOpenOrderInitialMargin',
-                            'totalCrossWalletBalance',
-                            'totalCrossUnPnl',
-                            'availableBalance',
-                            'maxWithdrawAmount']
+        self.target_keys = SystemConfig.Keys.position_keys
     
     async def convert_to_enqueue_wallet(self, account_position:Dict) -> Dict:
         result = {}

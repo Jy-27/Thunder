@@ -17,9 +17,9 @@ class KlineFetcher:
     def __init__(
         self,
         queue_fetch_kline: asyncio.Queue,
+        event_trigger_stop_loop: asyncio.Event,
         event_trigger_fetch_kline: asyncio.Event,
         event_fired_done_fetch_kline: asyncio.Event,
-        event_trigger_stop_loop: asyncio.Event,
         event_fired_stop_loop_done_fetch_kline:asyncio.Event,
         limit: int = 480
     ):

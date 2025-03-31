@@ -14,8 +14,8 @@ class OrderbookFechter:
     def __init__(
         self,
         queue_fetch_orderbook: asyncio.Queue,
-        event_trigger_fetch_orderbook: asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
+        event_trigger_fetch_orderbook: asyncio.Event,
         event_fired_done_fetch_orderbook: asyncio.Event,
         event_fired_stop_loop_done_fetch_orderbook: asyncio.Event,
         

@@ -35,16 +35,16 @@ class RunTestFetcher:
         print(f"\n  ⏱️ timer: {self.timesleep} sec")
         await asyncio.sleep(self.timesleep)
         print(f"  🚀 kline event set")
-        self.args[12].set()
+        self.receiver_manager.event_trigger_fetch_kline.set()
         await asyncio.sleep(self.timesleep)
         print(f"  🚀 orderbook event set")
-        self.args[13].set()
+        self.receiver_manager.event_trigger_fetch_orderbook.set()
         await asyncio.sleep(self.timesleep)
         print(f"  🚀 private event set")
-        self.args[14].set()
+        self.receiver_manager.event_trigger_fetch_private.set()
         await asyncio.sleep(self.timesleep)
         print(f"  🚀 stop event set")
-        self.args[11].set()
+        self.receiver_manager.event_trigger_stop_loop.set()
 
     async def print_from_queue_kline(self):
         await asyncio.sleep(5)
@@ -60,7 +60,7 @@ class RunTestFetcher:
             for i, v in q_data.items():
                 for n_i, n_v in v.items():
                     ...
-            if self.receiver_manager.event_trigger_kline.is_set():
+            if self.receiver_manager.event_trigger_fetch_kline.is_set():
                 message = f"      👉🏻 kline: {i} / {n_i}"
                 print(message)
         print(f"    ✋ STOP - kline")
@@ -76,7 +76,7 @@ class RunTestFetcher:
                 )
             except asyncio.TimeoutError:
                 continue
-            if self.receiver_manager.event_trigger_orderbook.is_set():
+            if self.receiver_manager.event_trigger_fetch_orderbook.is_set():
                 message = f"      👉🏽 orderbook: {q_data[0]}"
                 print(message)
         print(f"    ✋ STOP - orderbook")
@@ -143,7 +143,7 @@ class RunTestFetcher:
     async def monitor_event_kline(self):
         while True:
             try:
-                await asyncio.wait_for(self.receiver_manager.event_fired_done_kline.wait(), timeout=1.0)
+                await asyncio.wait_for(self.receiver_manager.event_fired_done_fetch_kline.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             print(f"        💥 Kline event signal activated")
@@ -152,7 +152,7 @@ class RunTestFetcher:
     async def monitor_event_orderbook(self):
         while True:
             try:
-                await asyncio.wait_for(self.receiver_manager.event_fired_done_orderbook.wait(), timeout=1.0)
+                await asyncio.wait_for(self.receiver_manager.event_fired_done_fetch_orderbook.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             print(f"        💥 orderbook event signal activated")
@@ -161,7 +161,7 @@ class RunTestFetcher:
     async def monitor_event_private(self):
         while True:
             try:
-                await asyncio.wait_for(self.receiver_manager.event_fired_done_private.wait(), timeout=1.0)
+                await asyncio.wait_for(self.receiver_manager.event_fired_done_fetch_private.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             print(f"        💥 private event signal activated")

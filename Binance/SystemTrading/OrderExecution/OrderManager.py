@@ -14,3 +14,16 @@ class OrderManager:
         self.event_feed_stop_loop = event_feed_stop_loop
         self.event_complete_order_signal = event_complete_order_signal
         self.event_trigger_order = event_trigger_order
+        
+    
+    async def create_order(self):
+        pass
+    
+    async def cancel_order(self):
+        pass
+    
+    async def request_orders_data(self):
+        pass
+    
+    async def queue_and_send(self):
+        

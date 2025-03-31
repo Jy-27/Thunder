@@ -17,13 +17,13 @@ class ExecutionReceiverWebsocket:
     def __init__(
         self,
         queue_feed_execution_ws: asyncio.Queue,
-        event_fired: asyncio.Event,
+        event_fired_execution_ws: asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
         event_fired_stop_loop_done_execution_ws:asyncio.Event
         ):
         self.futures_execution_websocket = FuturesExecutionWebsocket(**api_key)
         self.queue_feed_execution_ws = queue_feed_execution_ws
-        self.event_fired = event_fired
+        self.event_fired_execution_ws = event_fired_execution_ws
         self.stream_type = "Execution"
         self.event_trigger_stop_loop = event_trigger_stop_loop
         self.event_fired_stop_loop_done_execution_ws = event_fired_stop_loop_done_execution_ws  #신호 수신시 이벤트 신를 생성한다.
@@ -42,7 +42,7 @@ class ExecutionReceiverWebsocket:
             except asyncio.TimeoutError:
                 continue  # stop_loop 이벤트 확인용 타임슬롯
             await self.queue_feed_execution_ws.put(message)
-            self.event_fired.set()
+            self.event_fired_execution_ws.set()
 
         print(f"  ExecutionReceiverWebsocket: ✋ Loop stopped >> {self.stream_type}")
         await self.futures_execution_websocket.close_connection()

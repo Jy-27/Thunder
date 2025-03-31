@@ -51,7 +51,7 @@ class ReceiverManager:
 
         # fetch 함수 동작 신호
         event_trigger_fetch_kline: asyncio.Event,
-        event_trigger_orderbook: asyncio.Event,
+        event_trigger_fetch_orderbook: asyncio.Event,
         event_trigger_fetch_private: asyncio.Event,  # set 신호 발생시 PrivateFetcher를 실행한다.
 
         # execution ws 수신 상태 신호
@@ -90,7 +90,7 @@ class ReceiverManager:
         self.event_trigger_stop_loop = event_trigger_stop_loop
         
         self.event_trigger_fetch_kline = event_trigger_fetch_kline
-        self.event_trigger_orderbook = event_trigger_orderbook
+        self.event_trigger_fetch_orderbook = event_trigger_fetch_orderbook
         self.event_trigger_fetch_private = event_trigger_fetch_private
 
         self.event_fired_execution_ws = event_fired_execution_ws
@@ -153,15 +153,15 @@ class ReceiverManager:
         )
         self.fetcher_kline = KlineFetcher(
             self.queue_fetch_kline,
-            self.event_trigger_fetch_kline,
             self.event_trigger_stop_loop,
+            self.event_trigger_fetch_kline,
             self.event_fired_done_fetch_kline,
             self.event_fired_stop_loop_done_fetch_kline,
         )
         self.fetcher_orderbook = OrderbookFechter(
             self.queue_fetch_orderbook,
-            self.event_trigger_fetch_orderbook,
             self.event_trigger_stop_loop,
+            self.event_trigger_fetch_orderbook,
             self.event_fired_done_fetch_orderbook,
             self.event_fired_stop_loop_done_fetch_orderbook,
         )

@@ -1,6 +1,10 @@
 import asyncio
 
 class OrderManager:
+    """
+    주문과 관련된 작업을 수행한다.
+    """
+    
     def __init__(self,
                  queue_request_result:asyncio.Queue,
                  queue_response_order:asyncio.Queue,
@@ -15,6 +19,8 @@ class OrderManager:
         self.event_complete_order_signal = event_complete_order_signal
         self.event_trigger_order = event_trigger_order
         
+    async def validate_order(self):
+        pass
     
     async def create_order(self):
         pass
@@ -26,4 +32,5 @@ class OrderManager:
         pass
     
     async def queue_and_send(self):
-        
+        pass
+    

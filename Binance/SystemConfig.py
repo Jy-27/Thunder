@@ -46,7 +46,7 @@ class Path:
     telegram = os.path.join(main_path, "API-KEY", "telegram.json")
     project = os.path.join(main_path, "Thunder", "Binance")
 
-class Keys:
+class Keys: #실제 사용중
     position_keys = ['feeTier',
                     'canTrade',
                     'canDeposit',

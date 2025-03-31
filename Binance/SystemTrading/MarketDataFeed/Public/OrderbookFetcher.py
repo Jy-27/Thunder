@@ -13,18 +13,20 @@ from SystemConfig import Streaming
 class OrderbookFechter:
     def __init__(
         self,
-        queue_fetch: asyncio.Queue,
-        event_trigger_orderbook: asyncio.Event,
-        event_fired_done_orderbook: asyncio.Event,
+        queue_fetch_orderbook: asyncio.Queue,
+        event_trigger_fetch_orderbook: asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
-        event_fired_loop_status: asyncio.Event,
+        event_fired_done_fetch_orderbook: asyncio.Event,
+        event_fired_stop_loop_done_fetch_orderbook: asyncio.Event,
+        
         limit: int = Streaming.orderbook_limit,
     ):
-        self.queue_fetch = queue_fetch
-        self.event_trigger_orderbook = event_trigger_orderbook
-        self.event_fired_done_orderbook = event_fired_done_orderbook
+        self.queue_fetch_orderbook = queue_fetch_orderbook
+        self.event_trigger_fetch_orderbook = event_trigger_fetch_orderbook
+        self.event_fired_done_fetch_orderbook = event_fired_done_fetch_orderbook
         self.event_trigger_stop_loop = event_trigger_stop_loop
-        self.event_fired_loop_status = event_fired_loop_status
+        self.event_fired_stop_loop_done_fetch_orderbook = event_fired_stop_loop_done_fetch_orderbook
+        
         self.limit = limit
         
         self.symbols = Streaming.symbols
@@ -40,7 +42,7 @@ class OrderbookFechter:
     async def fetch_and_queue(self, symbol: str):
         data = await self.ins_futures_mk_fetcher.fetch_order_book(symbol, self.limit)
         pack_data = (symbol, data)
-        await self.queue_fetch.put(pack_data)
+        await self.queue_fetch_orderbook.put(pack_data)
 
     async def tasks(self):
         tasks = [
@@ -56,14 +58,14 @@ class OrderbookFechter:
         print(f"  OrderbookFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_orderbook.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_fetch_orderbook.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             await self.tasks()
-            self.event_trigger_orderbook.clear()
-            self.event_fired_done_orderbook.set()
+            self.event_trigger_fetch_orderbook.clear()
+            self.event_fired_done_fetch_orderbook.set()
         print(f"  OrderbookFetcher: ✋ Loop stopped")
-        self.event_fired_loop_status.set()
+        self.event_fired_stop_loop_done_fetch_orderbook.set()
 
 if __name__ == "__main__":
     q_ = asyncio.Queue()

@@ -28,16 +28,16 @@ class StreamReceiverWebsocket:
     def __init__(
         self,
         stream_type: str,
-        queue_feed: asyncio.Queue,
+        queue_feed_ws_stream: asyncio.Queue,
         event_trigger_stop_loop: asyncio.Event,
-        event_fired_loop_status: asyncio.Event
+        event_fired_stop_loop_done_ws_stream: asyncio.Event
         ):
         self.symbols = Streaming.symbols
         self.stream_type = stream_type
         self.futures_mk_ws = futures_mk_ws(self.symbols)
-        self.queue_feed = queue_feed
+        self.queue_feed_ws_stream = queue_feed_ws_stream
         self.event_trigger_stop_loop = event_trigger_stop_loop
-        self.event_fired_loop_status = event_fired_loop_status
+        self.event_fired_stop_loop_done_ws_stream = event_fired_stop_loop_done_ws_stream
 
     async def start(self):
         print(f"  StreamReceiverWebsocket: ⏳ Connecting >> {self.stream_type}")
@@ -46,11 +46,11 @@ class StreamReceiverWebsocket:
         print(f"  StreamReceiverWebsocket: 🚀 Starting to receive >> {self.stream_type}")
         while not self.event_trigger_stop_loop.is_set():
             message = await self.futures_mk_ws.receive_message()
-            await self.queue_feed.put(message)
+            await self.queue_feed_ws_stream.put(message)
         print(f"  StreamReceiverWebsocket: ✋ Loop stopped >> {self.stream_type}")
         await self.futures_mk_ws.close_connection()
         print(f"  StreamReceiverWebsocket: ⛓️‍💥 Disconnected >> {self.stream_type}")
-        self.event_fired_loop_status.set()
+        self.event_fired_stop_loop_done_ws_stream.set()
 
 
 if __name__ == "__main__":

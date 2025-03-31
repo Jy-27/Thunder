@@ -29,18 +29,18 @@ class PrivateFetcher:
     def __init__(
         self,
         queue_fetch_account_balance:asyncio.Queue,
-        queue_fetch_order:asyncio.Queue,
-        event_trigger_private:asyncio.Event,
-        event_fired_done_private:asyncio.Event,
+        queue_fetch_order_status:asyncio.Queue,
         event_trigger_stop_loop: asyncio.Event,
-        event_fired_loop_status:asyncio.Event):
+        event_trigger_fetch_private:asyncio.Event,
+        event_fired_done_fetch_private:asyncio.Event,
+        event_fired_stop_loop_done_fetch_private:asyncio.Event):
         
         self.queue_fetch_account_balance = queue_fetch_account_balance
-        self.queue_fetch_order = queue_fetch_order
-        self.event_trigger_private = event_trigger_private
-        self.event_fired_done_private = event_fired_done_private
+        self.queue_fetch_order_status = queue_fetch_order_status
+        self.event_trigger_fetch_private = event_trigger_fetch_private
+        self.event_fired_done_fetch_private = event_fired_done_fetch_private
         self.event_trigger_stop_loop = event_trigger_stop_loop
-        self.event_fired_loop_status = event_fired_loop_status
+        self.event_fired_stop_loop_done_fetch_private = event_fired_stop_loop_done_fetch_private
 
     async def fetch_account_balance(self):
         data = await ins_futures_tr_client.fetch_account_balance()
@@ -50,7 +50,7 @@ class PrivateFetcher:
     async def fetch_order_status(self, symbol: str):
         data = await ins_futures_tr_client.fetch_order_status(symbol)
         if data:
-            await self.queue_fetch_order.put(data)
+            await self.queue_fetch_order_status.put(data)
         return data
 
     async def tasks(self):
@@ -64,14 +64,14 @@ class PrivateFetcher:
         print(f"  PrivateFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_private.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_fetch_private.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             await self.tasks()
-            self.event_trigger_private.clear()
-            self.event_fired_done_private.set()
+            self.event_trigger_fetch_private.clear()
+            self.event_fired_done_fetch_private.set()
         print(f"  PrivateFetcher: ✋ Loop stopped")
-        self.event_fired_loop_status.set()
+        self.event_fired_stop_loop_done_fetch_private.set()
 
 if __name__ == "__main__":
     class RunTest:

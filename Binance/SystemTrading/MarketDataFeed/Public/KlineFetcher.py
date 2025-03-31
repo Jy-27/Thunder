@@ -16,18 +16,18 @@ from SystemConfig import Streaming
 class KlineFetcher:
     def __init__(
         self,
-        queue_fetch: asyncio.Queue,
-        event_trigger_kline: asyncio.Event,
-        event_fired_done_kline: asyncio.Event,
+        queue_fetch_kline: asyncio.Queue,
+        event_trigger_fetch_kline: asyncio.Event,
+        event_fired_done_fetch_kline: asyncio.Event,
         event_trigger_stop_loop: asyncio.Event,
-        event_fired_loop_status:asyncio.Event,
+        event_fired_stop_loop_done_fetch_kline:asyncio.Event,
         limit: int = 480
     ):
-        self.queue_fetch = queue_fetch
-        self.event_trigger_kline = event_trigger_kline
-        self.event_fired_done_kline = event_fired_done_kline
+        self.queue_fetch_kline = queue_fetch_kline
+        self.event_trigger_fetch_kline = event_trigger_fetch_kline
         self.event_trigger_stop_loop = event_trigger_stop_loop
-        self.event_fired_loop_status = event_fired_loop_status
+        self.event_fired_done_fetch_kline = event_fired_done_fetch_kline
+        self.event_fired_stop_loop_done_fetch_kline = event_fired_stop_loop_done_fetch_kline
         self.limit = limit
         
         self.symbols = Streaming.symbols
@@ -47,7 +47,7 @@ class KlineFetcher:
             symbol, interval, self.limit
         )
         pack_data = tr_utils.Packager.pack_kline_fetcher_message(symbol, interval, data)
-        await self.queue_fetch.put(pack_data)
+        await self.queue_fetch_kline.put(pack_data)
 
     async def tasks(self):
         valid_intervals = [
@@ -70,14 +70,14 @@ class KlineFetcher:
         print(f"  KlineFetcher: 🚀 Starting to fetch")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_kline.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_fetch_kline.wait(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             await self.tasks()
-            self.event_trigger_kline.clear()
-            self.event_fired_done_kline.set()
+            self.event_trigger_fetch_kline.clear()
+            self.event_fired_done_fetch_kline.set()
         print(f"  KlineFetcher: ✋ Loop stopped")
-        self.event_fired_loop_status.set()
+        self.event_fired_stop_loop_done_fetch_kline.set()
 
 
 if __name__ == "__main__":

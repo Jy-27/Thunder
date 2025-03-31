@@ -188,6 +188,7 @@ class ReceiverDataStorage:
         self.event_fired_stop_loop_done_update_orderbook_fetch = event_fired_stop_loop_done_update_orderbook_fetch
         self.event_fired_stop_loop_done_update_account_balance = event_fired_stop_loop_done_update_account_balance
         self.event_fired_stop_loop_done_update_orders_status = event_fired_stop_loop_done_update_orders_status
+
         #  >> cleaner method stop loop
         self.event_fired_stop_loop_done_clear_ticker_storage = event_fired_stop_loop_done_clear_ticker_storage
         self.event_fired_stop_loop_done_clear_trade_storage = event_fired_stop_loop_done_clear_trade_storage

@@ -1,5 +1,16 @@
 import asyncio
+from typing import Dict
 
+import sys, os
+home_path = os.path.expanduser("~")
+sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
+
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
+import SystemConfig
+import Workspace.Utils.BaseUtils as base_utils
+
+path_binance_api = SystemConfig.Path.bianace
+api_binance = base_utils.load_json(path_binance_api)
 
 
 """
@@ -82,7 +93,9 @@ validate 항목
         >> 최대 보유 항목 수 제한. (예: 3종목)
     3. 최대 주문 가능 
         >> max(minQty, tragetQty)
-        
+    
+    4. 손절은 최대 분할매수 초과시에도 ROI -50% (또는 지정)일 경우 매도처리.
+        30달러 3회 90달러, -45$
 주문 취소 기능
 """
 
@@ -98,96 +111,97 @@ class OrderManager:
                  queue_feed_order_status:asyncio.Queue,
                  event_tirgger_stop_loop:asyncio.Event,
                  event_fired_done_receive_order_message: asyncio.Event,
-                 
                  event_feed_stop_loop:asyncio.Event,
-                 event_complete_order_signal:asyncio.Event,
-                 event_trigger_order:asyncio.Event):
+                 event_complete_order_signal:asyncio.Event):
         self.queue_request_result = queue_request_result
         self.queue_response_order = queue_response_order
         self.queue_feed_order_status = queue_feed_order_status
-        
-        self.event_trigger_stop_loop = event_trigger_stop_loop
-        
-        
+        self.event_trigger_stop_loop = event_tirgger_stop_loop
         self.event_fired_done_receive_order_message = event_fired_done_receive_order_message
-        self.event_trigger_order = event_trigger_order
-        
-        
-        
         self.event_feed_stop_loop = event_feed_stop_loop
         self.event_complete_order_signal = event_complete_order_signal
-    
-    
-        # self.event_trigger_request_orders_status = 
         self._event_request_to_validate = asyncio.Event()
         self._queue_request_to_validate = asyncio.Queue()
-    
         self.purchase_order_message = None
-    
-    async def _create_entry_order_market(self, *args, **kwargs):
+        self.trading_client = FuturesTradingClient(**api_binance)
+
+    async def create_entry_order(self, po_message:Dict):
         """
-        시장가 진입 주문 함수
+        진입 관련 주문을 생성한다.
         """
         pass
 
-    async def _create_entry_order_limit(self, *args, **kwargs):
-        """
-        지정가 진입 주문 함수
-        """
-        pass
+        async def _create_entry_trigger_market(self, *args, **kwargs):
+            """
+            시장가/조건부 진입 주문 함수
+            """
+            pass
 
-    async def _create_exit_order_market(self, *args, **kwargs):
-        """
-        시장가 종료 주문 함수
-        """
-        pass
+        async def _create_entry_trigger_limit(self, *args, **kwargs):
+            """
+            지정가/조건부 진입 주문 함수
+            """
+            pass
 
-    async def _create_exit_order_limit(self, *args, **kwargs):
-        """
-        지정가 종료 주문 함수
-        """
-        pass
+        async def _create_entry_order_market(self, *args, **kwargs):
+            """
+            시장가 진입 주문 함수
+            """
+            pass
 
-    async def _create_entry_trigger_market(self, *args, **kwargs):
-        """
-        시장가/조건부 진입 주문 함수
-        """
-        pass
+        async def _create_entry_order_limit(self, *args, **kwargs):
+            """
+            지정가 진입 주문 함수
+            """
+            pass
 
-    async def _create_entry_trigger_limit(self, *args, **kwargs):
+    async def create_exit_order(self, po_message:Dict):
         """
-        지정가/조건부 진입 주문 함수
-        """
-        pass
-
-    async def _create_cancel_order(self, *args, **kwargs):
-        """
-        조건부 및 지정가 주문 취소
+        이탈 관련 주문을 생성한다.
         """
         pass
     
-    async def cancel_all_order_force(self):
+        async def _create_exit_order_market(self, *args, **kwargs):
+            """
+            시장가 종료 주문 함수
+            """
+            pass
+
+        async def _create_exit_order_limit(self, *args, **kwargs):
+            """
+            지정가 종료 주문 함수
+            """
+            pass
+    
+    async def create_cancel_order(self, po_message:Dict):
         """
-        현재 걸려있는 전체 주문을 취소
+        취소 관련 함수 상위 함수
         """
         pass
-    
-    async def cancel_all_orders_by_symbol(self, symbol:str):
-        """
-        지정한 심볼에 대한 전체 주문 취소
 
-        Args:
-            symbol (str): 심볼값
-        """
-        pass
-    
-    async def cancel_order_by_id(self, order_id:str):
-        """
-        특정 주문 하나만 취소
+        async def _cancel_all_order_force(self):
+            """
+            현재 걸려있는 전체 주문을 취소
+            """
+            pass
+        
+        async def _cancel_all_orders_by_symbol(self, symbol:str):
+            """
+            지정한 심볼에 대한 전체 주문 취소
 
-        Args:
-            order_id (str): order id
-        """
+            Args:
+                symbol (str): 심볼값
+            """
+            pass
+        
+        async def _cancel_order_by_id(self, order_id:str):
+            """
+            특정 주문 하나만 취소
+
+            Args:
+                order_id (str): order id
+            """
+            pass
 
     async def request_order_message(self):
         """
@@ -199,78 +213,12 @@ class OrderManager:
             except asyncio.TimeoutError:
                 continue
             # await 
-    
-            
         pass
-    
-    async def request_orders_status(self):
-        pass
-    
-    async def validate_orders(self):
-        pass
-    
-    async def create_order(self):
-        pass
-    
-    async def cancel_order(self):
-        pass
-    
-    async def request_orders_data(self):
-        pass
-    
-    async def queue_and_send(self):
-        pass
-    
-import asyncio
-
-class TestClass:
-    def __init__(self):
-        self.q_ = asyncio.Queue()
-        self.e_ = asyncio.Event()
-        self._e_stop = asyncio.Event()
-        self.timesleep = 1
-        self.count = 10
-    
-    async def event_set(self):
-        for i in range(self.count):
-            await asyncio.slee(self.timesleep)
-            self.e_.set()
-            print(f"  🚀 Event 발생: {i} 회차")
-        print(f"  🛑 Event set 종료")
-    
-    async def queue_put(self):
-        for i in range(self.count):
-            await asyncio.sleep(self.timesleep)
-            message = f"Mesasge 발송: {i} 회차"
-            await self.q_.put(message)
-        print(f"  🛑 Queue put 종료")
-        
-    async def print_event_set(self):
-        while not self._e_stop.is_set():
-            try:
-                await asyncio.wait_for(self.e_.wait(), timeout=0.5)
-            except asyncio.Timeout:
-                continue
-            print(f"    👉 Event set 확인")
-            self.e_.clear()
-        print(f"    ✋ Event set 출력 종료")
-
-    async def print_queue_put(self):
-        while not self._e_stop.is_set():
-            message = await self.q_.get()
-            print(message)
-            await self.q_.task_done()
-        print(f"    ✋ Queue put 출력 종료")
-    
-    async def start(self):
-        tasks = [
-            asyncio.create_task(self.event_set()),
-            asyncio.create_task(self.queue_put()),
-            asyncio.create_task(self.print_event_set()),
-            asyncio.create_task(self.print_queue_put())]
 
 if __name__ == "__main__":
-    instance = TestClass()
-    asyncio.run(instance.start())
-             
-    
+    args = []
+    for _ in range(3):
+        args.append(asyncio.Queue())
+    for _ in range(4):
+        args.append(asyncio.Queue())
+    dummy = OrderManager(*args)

@@ -225,9 +225,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket stream(ticker) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_ticker_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_ticker_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_ticker_ws.get()
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -243,9 +244,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket stream(trade) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_trade_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_trade_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_trade_ws.get()
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -261,9 +263,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket stream(miniTicker) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_miniTicker_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_miniTicker_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_miniTicker_ws.get()
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -279,9 +282,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket stream(depth) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_depth_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_depth_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_depth_ws.get()
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -297,9 +301,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket stream(aggTrade) storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_aggTrade_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_aggTrade_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_aggTrade_ws.get()
             stream: str = message["stream"]
             symbol: str = stream.split("@")[0].upper()
             data: Dict = message["data"]
@@ -315,9 +320,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket kline data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                packing_message = await asyncio.wait_for(self.queue_feed_kline_ws.get(), timeout=1.0)
+                packing_message = await asyncio.wait_for(self.queue_feed_kline_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # packing_message = await self.queue_feed_kline_ws.get()
             symbol, interval, data = tr_utils.Extractor.unpack_message(packing_message)
             convert_to_interval = f"interval_{interval}"
             self.storage_kline_ws.set_data(symbol, convert_to_interval, data)
@@ -332,9 +338,10 @@ class ReceiverDataStorage:
         print(f"  💾 websocket execution data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_feed_execution_ws.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_feed_execution_ws.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_feed_execution_ws.get()
             data_type = message["e"]
             if data_type == "TRADE_LITE":
                 symbol = message["s"]
@@ -355,9 +362,10 @@ class ReceiverDataStorage:
         print(f"  💾 kline fetch data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                packing_message = await asyncio.wait_for(self.queue_fetch_kline.get(), timeout=1.0)
+                packing_message = await asyncio.wait_for(self.queue_fetch_kline.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # packing_message = await self.queue_fetch_kline.get()
             symbol, interval, data = tr_utils.Extractor.unpack_message(packing_message)
             convert_to_interval = f"interval_{interval}"
             self.storage_kline_fetch.set_data(symbol, convert_to_interval, data)
@@ -372,9 +380,10 @@ class ReceiverDataStorage:
         print(f"  💾 orderbook fetch data storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_fetch_orderbook.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_fetch_orderbook.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_fetch_orderbook.get()
             symbol, data = message
             self.storage_orderbook_fetch.add_data(symbol, data)
             self.queue_fetch_orderbook.task_done()
@@ -386,9 +395,10 @@ class ReceiverDataStorage:
         field = "account_balance"
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_fetch_account_balance.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_fetch_account_balance.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_fetch_account_balance.get()
             self.storage_account_balance.set_data(field, message)
             # print(self.storage_account_balance.get_data(field))
             self.queue_fetch_account_balance.task_done()
@@ -399,9 +409,10 @@ class ReceiverDataStorage:
         print(f"  💾 order status storage 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_fetch_order_status.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_fetch_order_status.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_fetch_order_status.get()
             for data in message:
                 symbol = data["symbol"]
                 reduceOnly = data["reduceOnly"]
@@ -426,9 +437,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(ticker) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_ticker.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_ticker.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_ticker.wait()
             self.storage_ticker.clear_all()
             self.event_trigger_clear_ticker.clear()
             self.event_fired_clear_done_ticker.set()
@@ -439,9 +451,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(trade) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_trade.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_trade.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_trade.wait()
             self.storage_trade.clear_all()
             self.event_trigger_clear_trade.clear()
             self.event_fired_clear_done_trade.set()
@@ -452,9 +465,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(miniTicker) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_miniTicker.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_miniTicker.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_miniTicker.wait()
             self.storage_miniTicker.clear_all()
             self.event_trigger_clear_miniTicker.clear()
             self.event_fired_clear_done_miniTicker.set()
@@ -465,9 +479,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(depth) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_depth.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_depth.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_depth.wait()
             self.storage_depth.clear_all()
             self.event_trigger_clear_depth.clear()
             self.event_fired_clear_done_depth.set()
@@ -478,9 +493,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(aggTrade) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_aggTrade.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_aggTrade.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_aggTrade.wait()
             self.storage_aggTrade.clear_all()
             self.event_trigger_clear_aggTrade.clear()
             self.event_fired_clear_done_aggTrade.set()
@@ -491,9 +507,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(kline ws) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_kline_ws.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_kline_ws.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_kline_ws.wait()
             self.storage_kline_ws.clear_all()
             self.event_trigger_clear_kline_ws.clear()
             self.event_fired_clear_done_kline_ws.set()
@@ -504,9 +521,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(execution_ws) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_execution_ws.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_execution_ws.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_execution_ws.wait()
             self.storage_execution_ws.clear_all()
             self.event_trigger_clear_execution_ws.clear()
             self.event_fired_clear_done_execution_ws.set()
@@ -517,9 +535,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(kline fetch) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_kline_fetch.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_kline_fetch.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_kline_fetch.wait()
             self.storage_kline_fetch.clear_all()
             self.event_trigger_clear_kline_fetch.clear()
             self.event_fired_clear_done_kline_fetch.set()
@@ -530,9 +549,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(orderbook fetch) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_orderbook_fetch.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_orderbook_fetch.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_orderbook_fetch.wait()
             self.storage_orderbook_fetch.clear_all()
             self.event_trigger_clear_orderbook_fetch.clear()
             self.event_fired_clear_done_orderbook_fetch.set()
@@ -543,9 +563,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(account balance) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_account_balance.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_account_balance.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_account_balance.wait()
             self.storage_account_balance.clear_all()
             self.event_trigger_clear_account_balance.clear()
             self.event_fired_clear_done_account_balance.set()
@@ -556,9 +577,10 @@ class ReceiverDataStorage:
         print(f"  🧹 storage(order status fetch) cleaner 시작")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                await asyncio.wait_for(self.event_trigger_clear_order_status.wait(), timeout=1.0)
+                await asyncio.wait_for(self.event_trigger_clear_order_status.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # await self.event_trigger_clear_order_status.wait()
             self.storage_orders_status.clear_all()
             self.event_trigger_clear_order_status.clear()
             self.event_fired_clear_done_order_status.set()
@@ -572,9 +594,10 @@ class ReceiverDataStorage:
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_request_exponential.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_request_exponential.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_request_exponential.get()
             attr = message["attr"]
             main_field = message["main_field"]
             sub_field = message["sub_field"]
@@ -596,9 +619,10 @@ class ReceiverDataStorage:
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_request_orders.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_request_orders.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_request_orders.get()
             # symbol, order type 필요.
             data = self.storage_orders_status.get_data(*message)
             await self.queue_response_orders.put(data)
@@ -614,10 +638,11 @@ class ReceiverDataStorage:
         print(f"  📬 storage 데이터 발신 실행")
         while not self.event_trigger_stop_loop.is_set():
             try:
-                message = await asyncio.wait_for(self.queue_request_wallet.get(), timeout=1.0)
+                message = await asyncio.wait_for(self.queue_request_wallet.get(), timeout=0.5)
                 #기본값: "account_balance"
             except asyncio.TimeoutError:
                 continue
+            # message = await self.queue_request_wallet.get()
             await self.queue_response_wallet.put(self.storage_account_balance.get_data(message))
             self.queue_request_wallet.task_done()
             self.event_fired_response_done_account_balance.set()

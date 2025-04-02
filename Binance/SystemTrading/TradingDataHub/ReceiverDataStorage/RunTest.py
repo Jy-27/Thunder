@@ -13,7 +13,7 @@ stop_event = asyncio.Event()
 q_storage = [asyncio.Queue() for _ in range(6)]
 
 e_recv = [asyncio.Event() for _ in range(17)]
-e_storage = [asyncio.Event() for _ in range(22)]
+e_storage = [asyncio.Event() for _ in range(58)]
 
 class RunTest:
     def __init__(self):

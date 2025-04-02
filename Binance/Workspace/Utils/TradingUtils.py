@@ -5,6 +5,9 @@ import subprocess
 import sys
 from typing import Union, Tuple, List, Dict
 
+
+import inspect
+import functools
 import psutil
 
 home_path = os.path.expanduser("~")
@@ -41,6 +44,21 @@ async def init_data():
 
 asyncio.run(init_data())
 
+class Decorator:
+    @staticmethod
+    def log_lifecycle():
+        def decorator(func):
+            @functools.wraps(func)
+            async def wrapper(self, *args, **kwargs):
+                class_name = self.__class__.__name__
+                function_name = func.__name__
+                status = f"{class_name}({function_name})"
+                print(f"  🟢 Startup: {status}")
+                result = await func(self, *args, **kwargs)
+                print(f"  🔴 Shutdown: {status}")
+                return result
+            return wrapper
+        return decorator
 
 class Validator:
     ### 함수 동작을 위한 내함수

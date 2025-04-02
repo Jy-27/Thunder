@@ -1,11 +1,27 @@
 import asyncio
 from typing import Dict, Optional
 
+
 import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
+import Workspace.Utils.TradingUtils as tr_utils
+
+# def log_lifecycle():
+#     def decorator(func):
+#         @functools.wraps(func)
+#         async def wrapper(self, *args, **kwargs):
+#             class_name = self.__class__.__name__
+#             function_name = func.__name__
+#             status = f"{class_name}({function_name})"
+#             print(f"  🟢 Startup: {status}")
+#             result = await func(self, *args, **kwargs)
+#             print(f"  🔴 Shutdown: {status}")
+#             return result
+#         return wrapper
+#     return decorator
 
 class PrivateRestFetcher:
     """
@@ -21,13 +37,14 @@ class PrivateRestFetcher:
                  queue_feed_fetch_trade_history:asyncio.Queue,
                  queue_feed_fetch_order_details:asyncio.Queue,
                  
-                 event_trigger_shutdown_loop:asyncio.Event,
                  
                  queue_request_fetch_order_status:asyncio.Queue,
                  queue_request_fetch_leverage_brackets:asyncio.Queue,
                  queue_request_fetch_order_history:asyncio.Queue,
                  queue_request_fetch_trade_history:asyncio.Queue,
                  queue_request_fetch_order_details:asyncio.Queue,
+                 
+                 event_trigger_shutdown_loop:asyncio.Event,
                  
                  event_trigger_fetch_account_balance:asyncio.Event,
                  
@@ -83,6 +100,7 @@ class PrivateRestFetcher:
 
         self.instance_futures_trading_client = FuturesTradingClient(**api_key)
 
+    @tr_utils.Decorator.log_lifecycle()
     async def account_balance(self):
         """
         asyncio.Event신호 기반의 함수.
@@ -95,12 +113,13 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_account_balance.set()
         self.event_fired_done_shutdown_loop_fetch_account_balance.set()
     
-    
+    @tr_utils.Decorator.log_lifecycle()
     async def order_status(self):
         """
         asyncio.Queue데이터(매개변수) 기반의 동작 함수.
         주문 상태를 수신 후 data를 Queue에 넣는다.
         """
+        status_message = "PrivateRestFetcher(account balance)"
         while not self.event_trigger_shutdown_loop.is_set():
             request_message:str = await self.queue_request_fetch_order_status.get()
             if request_message is None:
@@ -110,7 +129,7 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_order_status.set()
         self.event_fired_done_shutdown_loop_fetch_order_status.set()
 
-
+    @tr_utils.Decorator.log_lifecycle()
     async def leverage_brackets(self):
         """
         asyncio.Queue데이터(매개변수) 기반의 동작 함수.
@@ -125,7 +144,7 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_leverage_brackets.set()
         self.event_fired_done_shutdown_loop_fetch_leverage_brackets.set()
 
-
+    @tr_utils.Decorator.log_lifecycle()
     async def order_history(self):
         """
         asyncio.Qeueu데이터(매개변수) 기반 동작 함수.
@@ -143,7 +162,7 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_order_history.set()
         self.event_fired_done_shutdown_loop_fetch_order_history.set()
 
-    
+    @tr_utils.Decorator.log_lifecycle()
     async def trade_history(self):
         """
         asyncio.Queue데이터(매개변수) 기반 동작 함수.
@@ -160,7 +179,7 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_trade_history.set()
         self.event_fired_done_shutdown_loop_fetch_trade_history.set()
             
-    
+    @tr_utils.Decorator.log_lifecycle()
     async def order_details(self):
         """
         asyncio.Queue데이터(매개변수) 기반 동작 함수.
@@ -177,6 +196,7 @@ class PrivateRestFetcher:
             self.event_fired_done_fetch_order_details.set()
         self.event_fired_done_shutdown_loop_fetch_order_details.set()
         
+    @tr_utils.Decorator.log_lifecycle()
     async def shutdown_all_loops(self):
         """
         본 class의 무한 루프를 중단시키기 위한 Dummy signal을 생성시킨다.
@@ -203,3 +223,4 @@ class PrivateRestFetcher:
             asyncio.create_task(self.shutdown_all_loops()),
         ]
         await asyncio.gather(*tasks)
+        print(f"  🔴 Shutdown: PrivateRestFetcher.py")

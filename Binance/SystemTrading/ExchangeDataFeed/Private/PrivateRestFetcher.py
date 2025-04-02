@@ -9,20 +9,6 @@ sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient
 import Workspace.Utils.TradingUtils as tr_utils
 
-# def log_lifecycle():
-#     def decorator(func):
-#         @functools.wraps(func)
-#         async def wrapper(self, *args, **kwargs):
-#             class_name = self.__class__.__name__
-#             function_name = func.__name__
-#             status = f"{class_name}({function_name})"
-#             print(f"  🟢 Startup: {status}")
-#             result = await func(self, *args, **kwargs)
-#             print(f"  🔴 Shutdown: {status}")
-#             return result
-#         return wrapper
-#     return decorator
-
 class PrivateRestFetcher:
     """
     ℹ️ Binance Futures Market의 비공개 REST데이터를 수신한다.
@@ -219,8 +205,61 @@ class PrivateRestFetcher:
             asyncio.create_task(self.leverage_brackets()),
             asyncio.create_task(self.order_history()),
             asyncio.create_task(self.trade_history()),
-            asyncio.create_task(self.order_details()),
+            # asyncio.create_task(self.order_details()),
             asyncio.create_task(self.shutdown_all_loops()),
         ]
         await asyncio.gather(*tasks)
-        print(f"  🔴 Shutdown: PrivateRestFetcher.py")
+        print(f"  🔴 Shutdown: 💻 PrivateRestFetcher.py")
+        
+if __name__ == "__main__":
+    import SystemConfig
+    import Workspace.Utils.BaseUtils as base_utils
+    
+    q_count = 11
+    e_count = 15
+    
+    path = SystemConfig.Path.bianace
+    api = base_utils.load_json(path)
+    args = []
+    for _ in range(q_count):
+        args.append(asyncio.Queue())
+    for _ in range(e_count):
+        args.append(asyncio.Event())
+    args = tuple(args)
+
+
+    private_fetcher = PrivateRestFetcher(*args, api)
+    
+    async def put_args():
+        args_order_status = "BTCUSDT"
+        args_leverage_brackets = "BTCUSDT"
+        args_order_history = {"symbol":"BTCUSDT",
+                              "limit":10}
+        args_trade_history = {"symbol":"BTCUSDT",
+                              "limit":10}
+        
+        await private_fetcher.queue_request_fetch_order_status.put(args_order_status)
+        await private_fetcher.queue_request_fetch_leverage_brackets.put(args_leverage_brackets)
+        await private_fetcher.queue_request_fetch_order_history.put(args_order_history)
+        await private_fetcher.queue_request_fetch_trade_history.put(args_trade_history)
+
+    
+    async def stop_siganl():
+        await asyncio.sleep(5)
+        print("SIGNAL")
+        args[11].set()
+
+    async def main():
+        tasks = [
+            asyncio.create_task(stop_siganl()),
+            asyncio.create_task(private_fetcher.start()),
+            asyncio.create_task(put_args())
+        ]
+        await asyncio.gather(*tasks)
+        
+        for i in range(q_count):
+            data = await args[i].get()
+            print(f"{i}st data: {len(data)}")
+            args[i].task_done()
+
+    asyncio.run(main())

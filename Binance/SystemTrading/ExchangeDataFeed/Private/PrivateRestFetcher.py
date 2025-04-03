@@ -16,36 +16,36 @@ class PrivateRestFetcher:
     asyncio.Event 및 asyncio.Queue기반으로 동작하며, 함수의 실행상태, 데이터 수/발신 을 실시간으로 실행한다.
     """
     def __init__(self,
-                 queue_feed_fetch_account_balance:asyncio.Queue,
-                 queue_feed_fetch_order_status:asyncio.Queue,
-                 queue_feed_fetch_leverage_brackets:asyncio.Queue,
-                 queue_feed_fetch_order_history:asyncio.Queue,
-                 queue_feed_fetch_trade_history:asyncio.Queue,
-                 queue_feed_fetch_order_details:asyncio.Queue,
+                #  queue_feed_fetch_account_balance:asyncio.Queue,
+                #  queue_feed_fetch_order_status:asyncio.Queue,
+                #  queue_feed_fetch_leverage_brackets:asyncio.Queue,
+                #  queue_feed_fetch_order_history:asyncio.Queue,
+                #  queue_feed_fetch_trade_history:asyncio.Queue,
+                #  queue_feed_fetch_order_details:asyncio.Queue,
                  
-                 queue_request_fetch_order_status:asyncio.Queue,
-                 queue_request_fetch_leverage_brackets:asyncio.Queue,
-                 queue_request_fetch_order_history:asyncio.Queue,
-                 queue_request_fetch_trade_history:asyncio.Queue,
-                 queue_request_fetch_order_details:asyncio.Queue,
+                #  queue_request_fetch_order_status:asyncio.Queue,
+                #  queue_request_fetch_leverage_brackets:asyncio.Queue,
+                #  queue_request_fetch_order_history:asyncio.Queue,
+                #  queue_request_fetch_trade_history:asyncio.Queue,
+                #  queue_request_fetch_order_details:asyncio.Queue,
                  
-                 event_trigger_shutdown_loop:asyncio.Event,
+                #  event_trigger_shutdown_loop:asyncio.Event,
                  
-                 event_trigger_fetch_account_balance:asyncio.Event,
+                #  event_trigger_fetch_account_balance:asyncio.Event,
                  
-                 event_fired_done_account_balance:asyncio.Event,
-                 event_fired_done_fetch_order_status:asyncio.Event,
-                 event_fired_done_fetch_leverage_brackets:asyncio.Event,
-                 event_fired_done_fetch_order_history:asyncio.Event,
-                 event_fired_done_fetch_trade_history:asyncio.Event,
-                 event_fired_done_fetch_order_details:asyncio.Event,
+                #  event_fired_done_account_balance:asyncio.Event,
+                #  event_fired_done_fetch_order_status:asyncio.Event,
+                #  event_fired_done_fetch_leverage_brackets:asyncio.Event,
+                #  event_fired_done_fetch_order_history:asyncio.Event,
+                #  event_fired_done_fetch_trade_history:asyncio.Event,
+                #  event_fired_done_fetch_order_details:asyncio.Event,
                  
-                 event_fired_done_shutdown_loop_fetch_account_balance:asyncio.Event,
-                 event_fired_done_shutdown_loop_fetch_order_status:asyncio.Event,
-                 event_fired_done_shutdown_loop_fetch_leverage_brackets:asyncio.Event,
-                 event_fired_done_shutdown_loop_fetch_order_history:asyncio.Event,
-                 event_fired_done_shutdown_loop_fetch_trade_history:asyncio.Event,
-                 event_fired_done_shutdown_loop_fetch_order_details:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_account_balance:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_order_status:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_leverage_brackets:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_order_history:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_trade_history:asyncio.Event,
+                #  event_fired_done_shutdown_loop_fetch_order_details:asyncio.Event,
                  
                  event_fired_done_private_rest_fetcher:asyncio.Event,
                  
@@ -208,7 +208,7 @@ class PrivateRestFetcher:
             asyncio.create_task(self.shutdown_all_loops()),
         ]
         await asyncio.gather(*tasks)
-        print(f"  🔴 Shutdown > PrivateRestFetcher.py")
+        print(f"  \033[91m🔴 Shutdown\033[0m >> \033[91mPrivateRestFetcher.py\033[0m")
         
 if __name__ == "__main__":
     import SystemConfig

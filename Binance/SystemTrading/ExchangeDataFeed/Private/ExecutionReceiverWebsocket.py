@@ -1,9 +1,11 @@
 import asyncio
-
+import aiohttp
+import websockets
+from typing import Optional, Dict
 import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
-
+import Workspace.Utils.TradingUtils as tr_utils
 from Workspace.Services.PrivateAPI.Receiver.FuturesExecutionWebsocket import (
     FuturesExecutionWebsocket,
 )
@@ -14,52 +16,89 @@ path_api = SystemConfig.Path.bianace
 api_key = base_utils.load_json(path_api)
 
 class ExecutionReceiverWebsocket:
-    def __init__(
-        self,
-        queue_feed_execution_ws: asyncio.Queue,
-        event_fired_execution_ws: asyncio.Event,
-        event_trigger_stop_loop: asyncio.Event,
-        event_fired_stop_loop_done_execution_ws:asyncio.Event
-        ):
-        self.futures_execution_websocket = FuturesExecutionWebsocket(**api_key)
-        self.queue_feed_execution_ws = queue_feed_execution_ws
-        self.event_fired_execution_ws = event_fired_execution_ws
-        self.stream_type = "Execution"
-        self.event_trigger_stop_loop = event_trigger_stop_loop
-        self.event_fired_stop_loop_done_execution_ws = event_fired_stop_loop_done_execution_ws  #신호 수신시 이벤트 신를 생성한다.
+    def __init__(self,
+                 api_key:Dict,
+                 queue_feed_websocket_execution:asyncio.Queue,
+                 event_trigger_shutdown_loop:asyncio.Event,
+                 event_fired_done_exectuion_receiver_message:asyncio.Event,
+                 event_fired_done_shutdown_loop_websocket_execution:asyncio.Event,
+                 
+                 event_fired_done_shutdown_loop_listen_key_cycle:asyncio.Event,
+                 event_fired_done_execution_receiver_websocket:asyncio.Event,
+                 websocket_timeout:float=1.0,
+                 listen_key_update_interval:int = 1_500):
+        self.queue_feed_websocket_execution = queue_feed_websocket_execution
+        self.event_trigger_shutdown_loop = event_trigger_shutdown_loop
+        self.event_fired_done_exectuion_receiver_message = event_fired_done_exectuion_receiver_message
+        self.event_fired_done_shutdown_loop_websocket_execution = event_fired_done_shutdown_loop_websocket_execution
+        self.event_fired_done_shutdown_loop_listen_key_cycle = event_fired_done_shutdown_loop_listen_key_cycle
+        self.event_fired_done_execution_receiver_websocket = event_fired_done_execution_receiver_websocket
+        self.websocket_timeout = websocket_timeout
+        self.listen_key_update_interval = listen_key_update_interval
+        
+        self.instance_futures_execution_websocket = FuturesExecutionWebsocket(**api_key)
+        
+    @tr_utils.Decorator.log_complete()
+    async def initialize_session(self, session:Optional[aiohttp.ClientSession]=None):
+        if session is None:
+            self.session = aiohttp.ClientSession()
+        else:
+            self.session = session
+        self.instance_futures_execution_websocket.session = self.session
+        
+    @tr_utils.Decorator.log_complete()
+    async def create_listen_key(self):
+        await self.instance_futures_execution_websocket.create_listen_key()
+    
+    @tr_utils.Decorator.log_lifecycle()
+    async def listen_key_cycle(self):
+        while not self.event_trigger_shutdown_loop.is_set():
+            await asyncio.sleep(self.listen_key_update_interval)
+            await self.instance_futures_execution_websocket.renew_listen_key()
+        self.event_fired_done_shutdown_loop_listen_key_cycle.set()
 
-    async def start(self):
-        print(f"  ExecutionReceiverWebsocket: ⏳ Connecting >> {self.stream_type}")
-        await self.futures_execution_websocket.open_connection()
-        print(f"  ExecutionReceiverWebsocket: 🔗 Connected successfully >> {self.stream_type}")
-        print(f"  ExecutionReceiverWebsocket: 🚀 Starting to receive >> {self.stream_type}")
-
-        while not self.event_trigger_stop_loop.is_set():
+    @tr_utils.Decorator.log_lifecycle()
+    async def route_message_execution(self):
+        while not self.event_trigger_shutdown_loop.is_set():
             try:
-                message = await asyncio.wait_for(
-                    self.futures_execution_websocket.receive_message(), timeout=1.0
-                )
+                message = await asyncio.wait_for(self.instance_futures_execution_websocket.receive_message(), timeout=self.websocket_timeout)
             except asyncio.TimeoutError:
-                continue  # stop_loop 이벤트 확인용 타임슬롯
-            await self.queue_feed_execution_ws.put(message)
-            self.event_fired_execution_ws.set()
+                continue
+            await self.queue_feed_websocket_execution.put(message)
+        self.event_fired_done_shutdown_loop_websocket_execution.set()
 
-        print(f"  ExecutionReceiverWebsocket: ✋ Loop stopped >> {self.stream_type}")
-        await self.futures_execution_websocket.close_connection()
-        print(f"  ExecutionReceiverWebsocket: ⛓️‍💥 Disconnected >> {self.stream_type}")
-        self.event_fired_stop_loop_done_execution_ws.set()
+    @tr_utils.Decorator.log_ws_connect()
+    async def connect_execution_websockets(self):
+        await self.create_listen_key()
+        url = f"{self.instance_futures_execution_websocket.websocket_base_url}{self.instance_futures_execution_websocket.listen_key}"
+        self.instance_futures_execution_websocket.websocket_client = await websockets.connect(url)
+
+    @tr_utils.Decorator.log_complete()
+    async def disconnect_execution_websockets(self):
+        await self.instance_futures_execution_websocket.close_connection()
+
+    @tr_utils.Decorator.log_lifecycle()
+    async def start(self):
+        await self.connect_execution_websockets()
+        tasks = [
+            asyncio.create_task(self.listen_key_cycle()),
+            asyncio.create_task(self.route_message_execution()),
+        ]
+        await asyncio.gather(*tasks)
+        await self.disconnect_execution_websockets()
+        
 
 if __name__ == "__main__":
-    dummy_message_1_new = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993586598, 'E': 1742993586598, 'o': {'s': 'BTCUSDT', 'c': 'ios_ArfzDKDqp7FLwwpFUqYz', 'S': 'BUY', 'o': 'STOP_MARKET', 'f': 'GTE_GTC', 'q': '0', 'p': '0', 'ap': '0', 'sp': '94326.6', 'x': 'NEW', 'X': 'NEW', 'i': 637084704043, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993586598, 't': 0, 'b': '0', 'a': '0', 'm': False, 'R': True, 'wt': 'CONTRACT_PRICE', 'ot': 'STOP_MARKET', 'ps': 'BOTH', 'cp': True, 'rp': '0', 'pP': True, 'si': 0, 'ss': 0, 'V': 'NONE', 'pm': 'NONE', 'gtd': 0}}
-    dummy_message_2_new = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993586600, 'E': 1742993586600, 'o': {'s': 'BTCUSDT', 'c': 'ios_SGow7N1VNdXGXwCc0KQB', 'S': 'BUY', 'o': 'TAKE_PROFIT_MARKET', 'f': 'GTE_GTC', 'q': '0', 'p': '0', 'ap': '0', 'sp': '77176.3', 'x': 'NEW', 'X': 'NEW', 'i': 637084704049, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993586600, 't': 0, 'b': '0', 'a': '0', 'm': False, 'R': True, 'wt': 'MARK_PRICE', 'ot': 'TAKE_PROFIT_MARKET', 'ps': 'BOTH', 'cp': True, 'rp': '0', 'pP': True, 'si': 0, 'ss': 0, 'V': 'NONE', 'pm': 'NONE', 'gtd': 0}}
-    dummy_message_3_new = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993624958, 'E': 1742993624959, 'o': {'s': 'BTCUSDT', 'c': 'ios_4uVhqNJ1I9vUtTPziCQ9', 'S': 'SELL', 'o': 'LIMIT', 'f': 'GTC', 'q': '0.001', 'p': '104393.6', 'ap': '0', 'sp': '0', 'x': 'NEW', 'X': 'NEW', 'i': 637084889970, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993624958, 't': 0, 'b': '0', 'a': '104.3936', 'm': False, 'R': False, 'wt': 'CONTRACT_PRICE', 'ot': 'LIMIT', 'ps': 'BOTH', 'cp': False, 'rp': '0', 'pP': False, 'si': 0, 'ss': 0, 'V': 'EXPIRE_MAKER', 'pm': 'NONE', 'gtd': 0}}
-    dummy_message_1_cancel = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993652966, 'E': 1742993652966, 'o': {'s': 'BTCUSDT', 'c': 'ios_SGow7N1VNdXGXwCc0KQB', 'S': 'BUY', 'o': 'TAKE_PROFIT_MARKET', 'f': 'GTE_GTC', 'q': '0', 'p': '0', 'ap': '0', 'sp': '77176.3', 'x': 'CANCELED', 'X': 'CANCELED', 'i': 637084704049, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993652966, 't': 0, 'b': '0', 'a': '104.3936', 'm': False, 'R': True, 'wt': 'MARK_PRICE', 'ot': 'TAKE_PROFIT_MARKET', 'ps': 'BOTH', 'cp': True, 'rp': '0', 'pP': True, 'si': 0, 'ss': 0, 'V': 'NONE', 'pm': 'NONE', 'gtd': 0}}
-    dummy_message_2_cancel = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993652966, 'E': 1742993652966, 'o': {'s': 'BTCUSDT', 'c': 'ios_4uVhqNJ1I9vUtTPziCQ9', 'S': 'SELL', 'o': 'LIMIT', 'f': 'GTC', 'q': '0.001', 'p': '104393.6', 'ap': '0', 'sp': '0', 'x': 'CANCELED', 'X': 'CANCELED', 'i': 637084889970, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993652966, 't': 0, 'b': '0', 'a': '0', 'm': False, 'R': False, 'wt': 'CONTRACT_PRICE', 'ot': 'LIMIT', 'ps': 'BOTH', 'cp': False, 'rp': '0', 'pP': False, 'si': 0, 'ss': 0, 'V': 'EXPIRE_MAKER', 'pm': 'NONE', 'gtd': 0}}
-    dummy_message_3_cancel = {'e': 'ORDER_TRADE_UPDATE', 'T': 1742993652966, 'E': 1742993652966, 'o': {'s': 'BTCUSDT', 'c': 'ios_ArfzDKDqp7FLwwpFUqYz', 'S': 'BUY', 'o': 'STOP_MARKET', 'f': 'GTE_GTC', 'q': '0', 'p': '0', 'ap': '0', 'sp': '94326.6', 'x': 'CANCELED', 'X': 'CANCELED', 'i': 637084704043, 'l': '0', 'z': '0', 'L': '0', 'n': '0', 'N': 'USDT', 'T': 1742993652966, 't': 0, 'b': '0', 'a': '0', 'm': False, 'R': True, 'wt': 'CONTRACT_PRICE', 'ot': 'STOP_MARKET', 'ps': 'BOTH', 'cp': True, 'rp': '0', 'pP': True, 'si': 0, 'ss': 0, 'V': 'NONE', 'pm': 'NONE', 'gtd': 0}}
+    import SystemConfig
+    import Workspace.Utils.BaseUtils as base_utils
+    
+    path = SystemConfig.Path.bianace
+    api = base_utils.load_json(path)
     q_ = asyncio.Queue()
-    events = []
+    e_ = []
     for _ in range(3):
-        events.append(asyncio.Event())
-    events = tuple(events)
-    obj = ExecutionReceiverWebsocket(q_, *events)
-    asyncio.run(obj.start())
+        e_.append(asyncio.Event())
+    e_ = tuple(e_)
+    
+    test_instance = ExecutionReceiverWebsocket(api_key, q_, *e_)
+    asyncio.run(test_instance.start())

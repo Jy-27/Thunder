@@ -27,6 +27,7 @@ class PublicRestFetcher:
         queue_feed_fetch_mark_price: asyncio.Queue,
         queue_feed_fetch_funding_rate: asyncio.Queue,
         queue_feed_fetch_open_interest: asyncio.Queue,
+        
         queue_request_fetch_ticker_price: asyncio.Queue,
         queue_request_fetch_book_tickers: asyncio.Queue,
         queue_request_fetch_24hr_ticker: asyncio.Queue,
@@ -37,10 +38,13 @@ class PublicRestFetcher:
         queue_request_fetch_mark_price: asyncio.Queue,
         queue_request_fetch_funding_rate: asyncio.Queue,
         queue_request_fetch_open_interest: asyncio.Queue,
+        
         event_trigger_shutdown_loop: asyncio.Event,
+        
         event_trigger_fetch_server_time: asyncio.Event,
         event_trigger_fetch_ping_balance: asyncio.Event,
         event_trigger_fetch_exchange_info: asyncio.Event,
+        
         event_fired_done_fetch_ticker_price: asyncio.Event,
         event_fired_done_fetch_book_tickers: asyncio.Event,
         event_fired_done_fetch_ticker_24hr: asyncio.Event,
@@ -54,6 +58,21 @@ class PublicRestFetcher:
         event_fired_done_fetch_mark_price: asyncio.Event,
         event_fired_done_fetch_funding_rate: asyncio.Event,
         event_fired_done_fetch_open_interest: asyncio.Event,
+        
+        event_fired_done_shutdown_loop_fetch_ticker_price:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_book_tickers:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_ticker_24hr:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_kline_limit:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_order_book:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_recent_trades:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_agg_trade:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_server_time:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_ping_balance:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_exchange_info:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_mark_price:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_funding_rate:asyncio.Event,
+        event_fired_done_shutdown_loop_fetch_open_interest:asyncio.Event,
+        
         event_fired_done_public_rest_fetcher: asyncio.Event,
     ):
 
@@ -102,6 +121,20 @@ class PublicRestFetcher:
         self.event_fired_done_fetch_funding_rate = event_fired_done_fetch_funding_rate
         self.event_fired_done_fetch_open_interest = event_fired_done_fetch_open_interest
 
+        self.event_fired_done_shutdown_loop_fetch_ticker_price = event_fired_done_shutdown_loop_fetch_ticker_price
+        self.event_fired_done_shutdown_loop_fetch_book_tickers = event_fired_done_shutdown_loop_fetch_book_tickers
+        self.event_fired_done_shutdown_loop_fetch_ticker_24hr = event_fired_done_shutdown_loop_fetch_ticker_24hr
+        self.event_fired_done_shutdown_loop_fetch_kline_limit = event_fired_done_shutdown_loop_fetch_kline_limit
+        self.event_fired_done_shutdown_loop_fetch_order_book = event_fired_done_shutdown_loop_fetch_order_book
+        self.event_fired_done_shutdown_loop_fetch_recent_trades = event_fired_done_shutdown_loop_fetch_recent_trades
+        self.event_fired_done_shutdown_loop_fetch_agg_trade = event_fired_done_shutdown_loop_fetch_agg_trade
+        self.event_fired_done_shutdown_loop_fetch_server_time = event_fired_done_shutdown_loop_fetch_server_time
+        self.event_fired_done_shutdown_loop_fetch_ping_balance = event_fired_done_shutdown_loop_fetch_ping_balance
+        self.event_fired_done_shutdown_loop_fetch_exchange_info = event_fired_done_shutdown_loop_fetch_exchange_info
+        self.event_fired_done_shutdown_loop_fetch_mark_price = event_fired_done_shutdown_loop_fetch_mark_price
+        self.event_fired_done_shutdown_loop_fetch_funding_rate = event_fired_done_shutdown_loop_fetch_funding_rate
+        self.event_fired_done_shutdown_loop_fetch_open_interest = event_fired_done_shutdown_loop_fetch_open_interest
+        
         self.event_fired_done_public_rest_fetcher = event_fired_done_public_rest_fetcher
 
         self.instance_futures_market_fetcher = FuturesMarketFetcher()
@@ -121,7 +154,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_ticker_price.put(fetched_ticker_price)
             self.event_fired_done_fetch_ticker_price.set()
-        self.event_fired_done_fetch_ticker_price.set()
+        self.event_fired_done_shutdown_loop_fetch_ticker_price.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def book_tickers(self):
@@ -138,7 +171,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_book_tickers.put(fetched_book_tickers)
             self.event_fired_done_fetch_book_tickers.set()
-        self.event_fired_done_fetch_book_tickers.set()
+        self.event_fired_done_shutdown_loop_fetch_book_tickers.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def ticker_24hr(self):
@@ -155,7 +188,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_24hr_ticker.put(fetched_ticker_24hr)
             self.event_fired_done_fetch_ticker_24hr.set()
-        self.event_fired_done_fetch_ticker_24hr.set()
+        self.event_fired_done_shutdown_loop_fetch_ticker_24hr.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def kline_limit(self):
@@ -175,7 +208,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_kline_limit.put(fetched_kline_limit)
             self.event_fired_done_fetch_kline_limit.set()
-        self.event_fired_done_fetch_kline_limit.set()
+        self.event_fired_done_shutdown_loop_fetch_kline_limit.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def order_book(self):
@@ -194,7 +227,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_order_book.put(fetched_order_book)
             self.event_fired_done_fetch_order_book.set()
-        self.event_fired_done_fetch_order_book.set()
+        self.event_fired_done_shutdown_loop_fetch_order_book.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def recent_trades(self):
@@ -213,7 +246,7 @@ class PublicRestFetcher:
             )
             await self.queue_feed_fetch_recent_trades.put(fetched_recent_trades)
             self.event_fired_done_fetch_recent_trades.set()
-        self.event_fired_done_fetch_recent_trades.set()
+        self.event_fired_done_shutdown_loop_fetch_recent_trades.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def agg_trade(self):
@@ -231,7 +264,7 @@ class PublicRestFetcher:
                 )
             )
             await self.queue_feed_fetch_agg_trades.put(fetched_agg_trade)
-        self.event_fired_done_fetch_agg_trade.set()
+        self.event_fired_done_shutdown_loop_fetch_agg_trade.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def server_time(self):
@@ -241,7 +274,8 @@ class PublicRestFetcher:
                 await self.instance_futures_market_fetcher.fetch_server_time()
             )
             await self.queue_feed_fetch_server_time.put(fetched_server_time)
-        self.event_fired_done_fetch_server_time.set()
+            self.event_fired_done_fetch_server_time.set()
+        self.event_fired_done_shutdown_loop_fetch_server_time.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def ping_binance(self):
@@ -251,7 +285,8 @@ class PublicRestFetcher:
                 await self.instance_futures_market_fetcher.fetch_ping_binance()
             )
             await self.queue_feed_fetch_ping_balance.put(fetched_ping_balance)
-        self.event_fired_done_fetch_ping_balance.set()
+            self.event_fired_done_fetch_ping_balance.set()
+        self.event_fired_done_shutdown_loop_fetch_ping_balance.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def exchange_info(self):
@@ -261,7 +296,8 @@ class PublicRestFetcher:
                 await self.instance_futures_market_fetcher.fetch_exchange_info()
             )
             await self.queue_feed_fetch_exchange_info.put(fetched_exchange_info)
-        self.event_fired_done_fetch_exchange_info.set()
+            self.event_fired_done_fetch_exchange_info.set()
+        self.event_fired_done_shutdown_loop_fetch_exchange_info.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def mark_price(self):
@@ -277,7 +313,8 @@ class PublicRestFetcher:
                 )
             )
             await self.queue_feed_fetch_mark_price.put(fetched_mark_price)
-        self.event_fired_done_fetch_mark_price.set()
+            self.event_fired_done_fetch_mark_price.set()
+        self.event_fired_done_shutdown_loop_fetch_mark_price.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def funding_rate(self):
@@ -295,7 +332,8 @@ class PublicRestFetcher:
                 )
             )
             await self.queue_feed_fetch_funding_rate.put(fetched_funding_rate)
-        self.event_fired_done_fetch_funding_rate.set()
+            self.event_fired_done_fetch_funding_rate.set()
+        self.event_fired_done_shutdown_loop_fetch_funding_rate.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def open_interest(self):
@@ -311,7 +349,8 @@ class PublicRestFetcher:
                 )
             )
             await self.queue_feed_fetch_open_interest.put(fetched_open_interest)
-        self.event_fired_done_fetch_open_interest.set()
+            self.event_fired_done_fetch_open_interest.set()
+        self.event_fired_done_shutdown_loop_fetch_open_interest.set()
 
     @tr_utils.Decorator.log_lifecycle()
     async def shutdown_all_loops(self):

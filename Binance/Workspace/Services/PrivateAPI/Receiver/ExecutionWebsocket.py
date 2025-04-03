@@ -42,9 +42,9 @@ class ExecutionWebsocket:
         """🔄 Listen Key 갱신 (30분마다 실행)"""
         async with self.session.put(f"{self.market_base_url}{self.endpoint}", headers=self.headers) as response:
             if response.status != 200:
-                print(f"Listen Key 갱신 실패: {await response.text()}")
+                print(f"  Listen Key 갱신 실패: {await response.text()}")
             else:
-                print("✅ Listen Key 갱신 완료")
+                print("  ✅ Listen Key 갱신 완료")
 
     async def open_connection(self):
         """🔗 웹소켓 연결"""

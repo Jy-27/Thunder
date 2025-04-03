@@ -29,7 +29,7 @@ class MarketFetcher:
                 return await response.json()
 
     async def fetch_ticker_price(
-        self, symbol: Optional[str]
+        self, symbol: Optional[str] = None
     ) -> Union[List[Dict[str, Union[int, str]]], Dict[str, Union[int, str]]]:
         """
         지정 symbol 또는 전체(symbol:None) symbol에 대한 최신 가격을 조회 및 반환한다.
@@ -113,7 +113,7 @@ class MarketFetcher:
         """
         return await self._retrieve_api_data("time")
 
-    async def ping_binance(self):
+    async def fetch_ping_binance(self):
         """
         서버 상태를 확인한다.
         """

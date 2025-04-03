@@ -12,7 +12,7 @@ class MarketWebsocket:
     def __init__(self, base_url: str, symbols: List[str]):
         self.base_url = base_url.rstrip("/")  # ✅ URL 끝의 / 제거
         self.symbols = symbols
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session:Optional[aiohttp.ClientSession] = None
         self.websocket: Optional[aiohttp.ClientWebSocketResponse] = None
         self.stream_type: Optional[str] = None
         self.interval_streams: Optional[List[str]] = None
@@ -31,11 +31,11 @@ class MarketWebsocket:
         )
         return f"{self.base_url}/stream?streams={stream_path}"  # ✅ Binance의 올바른 WebSocket URL
 
-    async def open_kline_connection(self, intervals: List[str]):
+    async def open_kline_connection(self, intervals: List[str], session:aiohttp.ClientSession):
         """
         🐣 'kline' 스트림 설정
         """
-        self.session = aiohttp.ClientSession()  # ✅ 세션을 별도로 유지
+        self.session = session
         self.stream_type = "kline"
         self.interval_streams = [f"{self.stream_type}_{i}" for i in intervals]
         stream_url = self._build_stream_url(self.interval_streams)
@@ -43,7 +43,7 @@ class MarketWebsocket:
             stream_url
         )  # ✅ WebSocket 연결 유지
 
-    async def open_stream_connection(self, stream_type: str):
+    async def open_stream_connection(self, stream_type: str, session:aiohttp.ClientSession):
         """
         🐣 'kline'이 아닌 일반 WebSocket 스트림 설정
 
@@ -55,7 +55,7 @@ class MarketWebsocket:
                 - depth: 주문서 정보 제공
                 - aggTrade: 집계된 거래 정보 제공
         """
-        self.session = aiohttp.ClientSession()  # ✅ 세션을 별도로 유지
+        self.session = session  # ✅ 세션을 별도로 유지
         self.stream_type = [stream_type]
         url = self._build_stream_url(self.stream_type)
         self.websocket = await self.session.ws_connect(url)

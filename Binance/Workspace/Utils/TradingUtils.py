@@ -52,10 +52,25 @@ class Decorator:
             async def wrapper(self, *args, **kwargs):
                 class_name = self.__class__.__name__
                 function_name = func.__name__
-                status = f"{class_name}({function_name})"
-                print(f"  🟢 Startup: {status}")
+                status = f"\033[97m{class_name}\033[0m {function_name}"
+                print(f"  \033[93m🟢 Startup\033[0m >> {status}")
                 result = await func(self, *args, **kwargs)
-                print(f"  🔴 Shutdown: {status}")
+                print(f"  \033[92m🟠 Shutdown\033[0m >> {status}")
+                return result
+            return wrapper
+        return decorator
+    
+    @staticmethod
+    def log_ws_connect():
+        def decorator(func):
+            @functools.wraps(func)
+            async def wrapper(self, *args, **kwargs):
+                class_name = self.__class__.__name__
+                function_name = func.__name__
+                status = f"\033[97m{class_name}\033[0m {function_name}"
+                print(f"  \033[92m 🔌 Connecting\033[0m >> {status}")
+                result = await func(self, *args, **kwargs)
+                print(f"  \033[93m 🔗 Connected\033[0m >> {status}")
                 return result
             return wrapper
         return decorator

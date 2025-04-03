@@ -2,7 +2,7 @@ import asyncio
 import json
 import aiohttp
 import websockets
-from typing import Dict
+from typing import Dict, Optional
 
 
 class ExecutionWebsocket:
@@ -25,9 +25,9 @@ class ExecutionWebsocket:
         self.listen_key = None
         self.headers = {"X-MBX-APIKEY": self._api_key}
         self.websocket_client = None
-        self.session = None
+        self.session:Optional[aiohttp.ClientSession] = None
 
-    async def init_setting(self):
+    async def initialize_session(self, session:aiohttp.ClientSession):
         self.session = aiohttp.ClientSession()
 
     async def create_listen_key(self):
@@ -48,7 +48,7 @@ class ExecutionWebsocket:
 
     async def open_connection(self):
         """🔗 웹소켓 연결"""
-        await self.init_setting()
+        await self.initialize_session()
         await self.create_listen_key()
         # await self.renew_listen_key()
         if not self.listen_key:

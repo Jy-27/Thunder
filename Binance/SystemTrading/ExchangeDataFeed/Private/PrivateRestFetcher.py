@@ -23,7 +23,6 @@ class PrivateRestFetcher:
                  queue_feed_fetch_trade_history:asyncio.Queue,
                  queue_feed_fetch_order_details:asyncio.Queue,
                  
-                 
                  queue_request_fetch_order_status:asyncio.Queue,
                  queue_request_fetch_leverage_brackets:asyncio.Queue,
                  queue_request_fetch_order_history:asyncio.Queue,
@@ -107,7 +106,7 @@ class PrivateRestFetcher:
         """
         status_message = "PrivateRestFetcher(account balance)"
         while not self.event_trigger_shutdown_loop.is_set():
-            request_message:str = await self.queue_request_fetch_order_status.get()
+            request_message:Optional[str] = await self.queue_request_fetch_order_status.get()
             if request_message is None:
                 continue
             fetched_order_status = await self.instance_futures_trading_client.fetch_order_status(request_message)
@@ -122,7 +121,7 @@ class PrivateRestFetcher:
         지정 symbol의 레버리지 정보를 수신 및 Queue에 넣는다.
         """
         while not self.event_trigger_shutdown_loop.is_set():
-            request_message:str = await self.queue_request_fetch_leverage_brackets.get()
+            request_message:Optional[str] = await self.queue_request_fetch_leverage_brackets.get()
             if request_message is None:
                 continue
             fetched_leverage_brackets = await self.instance_futures_trading_client.fetch_leverage_brackets(request_message)
@@ -137,7 +136,7 @@ class PrivateRestFetcher:
         지정 symbol의 주문 내역을 수신 및 Queue에 담는다.
         """
         while not self.event_trigger_shutdown_loop.is_set():
-            request_message:dict = await self.queue_request_fetch_order_history.get()
+            request_message:Optional[Dict] = await self.queue_request_fetch_order_history.get()
             if request_message is None:
                 continue
             symbol = request_message["symbol"]
@@ -155,7 +154,7 @@ class PrivateRestFetcher:
         지정 symbol 및 limit값 기준 거래내역을 수신 및 Queue에 넣는다.
         """
         while not self.event_trigger_shutdown_loop.is_set():
-            request_message:dict = await self.queue_request_fetch_trade_history.get()
+            request_message:Optional[Dict] = await self.queue_request_fetch_trade_history.get()
             if request_message is None:
                 continue
             symbol = request_message["symbol"]
@@ -172,7 +171,7 @@ class PrivateRestFetcher:
         지정 symbol 및 order_id 기준 거래내역을 수신 및 Queue에 넣는다.
         """
         while not self.event_trigger_shutdown_loop.is_set():
-            request_message:dict = await self.queue_request_fetch_order_details.get()
+            request_message:Optional[Dict] = await self.queue_request_fetch_order_details.get()
             if request_message is None:
                 continue
             symbol = request_message["symbol"]
@@ -205,11 +204,11 @@ class PrivateRestFetcher:
             asyncio.create_task(self.leverage_brackets()),
             asyncio.create_task(self.order_history()),
             asyncio.create_task(self.trade_history()),
-            # asyncio.create_task(self.order_details()),
+            asyncio.create_task(self.order_details()),
             asyncio.create_task(self.shutdown_all_loops()),
         ]
         await asyncio.gather(*tasks)
-        print(f"  🔴 Shutdown: 💻 PrivateRestFetcher.py")
+        print(f"  🔴 Shutdown > PrivateRestFetcher.py")
         
 if __name__ == "__main__":
     import SystemConfig
@@ -226,7 +225,6 @@ if __name__ == "__main__":
     for _ in range(e_count):
         args.append(asyncio.Event())
     args = tuple(args)
-
 
     private_fetcher = PrivateRestFetcher(*args, api)
     

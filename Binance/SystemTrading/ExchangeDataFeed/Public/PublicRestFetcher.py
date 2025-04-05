@@ -264,6 +264,7 @@ class PublicRestFetcher:
                 )
             )
             await self.queue_feed_fetch_agg_trades.put(fetched_agg_trade)
+            self.event_fired_done_fetch_agg_trade.set()
         self.event_fired_done_shutdown_loop_fetch_agg_trade.set()
 
     @tr_utils.Decorator.log_lifecycle()

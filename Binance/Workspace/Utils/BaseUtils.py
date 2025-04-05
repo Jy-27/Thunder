@@ -959,3 +959,15 @@ async def sleep_next_minute(minutes: int = 1, buffer_time_sec: float = 0) -> dat
     diff_second = sleep_seconds - elapsed_seconds
     await asyncio.sleep(max(1, diff_second + buffer_time_sec))
     return datetime.now()
+
+
+def start_message(self, clear:bool=False):
+    os.system("pkill -f *.py")
+    os.system("clear")
+    print_line = "=" * 50
+    print_title = "**     TEST MODE     **"
+    print("\n")
+    print(print_line.center(80))
+    print(print_title.center(80))
+    print(print_line.center(80))
+    print("\n")

@@ -65,33 +65,38 @@ if __name__ == "__main__":
 
     q_ = tuple(asyncio.Queue() for _ in range(2))
     e_ = tuple(asyncio.Event() for _ in range(4))
-    
+    main_instance = YahooFinanceFetcher(*q_, *e_)
     class RunTest:
-        def __init__(self):
-            self.q_ = tuple(asyncio.Queue() for _ in range(2))
-            self.e_ = tuple(asyncio.Event() for _ in range(4))
-            self.timesleep = timesleep
+        def __init__(self,
+                     instance:YahooFinanceFetcher,
+                     stop_timer:int,
+                     create_event_timer:int):
+            self.instance = instance
+            self.stop_timer = stop_timer
+            self.create_event_timer = create_event_timer
         
-        async def stop_timer(self):
-            await asyncio.slee(self.timesleep)
-            e_[0].set()
+        async def stopper(self):
+            await asyncio.sleep(self.stop_timer)
+            self.instance.event_trigger_shutdown_loop.set()
             print(f"     ✋ Timer")
     
-    
-    test_instance = YahooFinanceFetcher(*q_, *e_)
-    async def dummy_timer():
-        print(f"  ⏱️ 타이머 시작.")
-        await asyncio.sleep(5)
-        e_[0].set()
-    
-    async def create_event():
+        async def send_request_message(self):
+            await asyncio.sleep(self.create_event_timer)
+            message = {
+                "symbol":"^GSPC",
+                "period":"1mo",
+                "interval":"1d"
+            }
+            await self.instance.queue_request_fetch_yfinance_indices.put(message)
+            print(f"   🚀 send request message")
         
+        async def main(self):
+            tasks = [
+                asyncio.create_task(self.stopper()),
+                asyncio.create_task(self.send_request_message()),
+                asyncio.create_task(self.instance.start())
+            ]
+            await asyncio.gather(*tasks)
     
-    async def main():
-        tasks = [
-            asyncio.create_task(test_instance.start()),
-            asyncio.create_task(dummy_timer())
-        ]
-        await asyncio.gather(*tasks)
-    base_utils.start_message(True)
-    asyncio.run(main())
+    test_instance = RunTest(main_instance, 10, 3)
+    asyncio.run(test_instance.main())

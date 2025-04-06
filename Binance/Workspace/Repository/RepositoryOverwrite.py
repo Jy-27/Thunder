@@ -7,16 +7,17 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-from Workspace.Abstract.AbstractStorage import ReplaceStorage
+from Workspace.Abstract.AbstractRepository import ReplaceRepository
 
 from SystemConfig import Streaming
 
 fields = Streaming.symbols
 
 
-class StorageOverwrite(ReplaceStorage):
+class RepositoryOverwrite(ReplaceRepository):
     """
-    💾 Deque를 활용한 스토리지이며, 기존 데이터를 새로운 값으로 덮어쓰는 방식(Set/Replace)을 사용한다.
+    💾 slots기반 class.
+    Deque를 활용한 스토리지이며, 기존 데이터를 새로운 값으로 덮어쓰는 방식(Set/Replace)을 사용한다.
     """
     def __init__(self, base_type: Optional[Any]):
         self.base_type = base_type
@@ -64,7 +65,7 @@ class StorageOverwrite(ReplaceStorage):
         """
         🧹 전체 필드 데이터를 초기화한다.
         """
-        for field in self.__dict__:
+        for field in self.__slots__:
             if field in fields:
                 setattr(self, field, deepcopy(self.base_type))
 
@@ -75,7 +76,7 @@ class StorageOverwrite(ReplaceStorage):
         Returns:
             List: 필드명 리스트
         """
-        return [field for field in self.__dict__]
+        return [field for field in self.__slots__]
 
     def to_dict(self) -> Dict:
         """
@@ -85,7 +86,7 @@ class StorageOverwrite(ReplaceStorage):
             Dict: 속성값 데이터
         """
         result = {}
-        for field in self.__dict__:
+        for field in self.__slot__:
             if field not in fields:
                 continue
             result[field] = getattr(self, field)
@@ -102,8 +103,8 @@ class StorageOverwrite(ReplaceStorage):
         Notes:
             속성에서 symbol이 아닌값은 제외함.
         """
-        message = [f"\n{self.__dict__} Data Lenght info\n"]
-        for attr in self.__dict__:
+        message = [f"\n{self.__slots__} Data Lenght info\n"]
+        for attr in self.__slot__:
             if attr.endswith("USDT"):
                 data = getattr(self, attr)
                 if data is None:
@@ -127,7 +128,7 @@ class StorageOverwrite(ReplaceStorage):
         📏 속성의 갯수를 출력한다.
         """
         valid_attr = []
-        for slot in self.__dict__:
+        for slot in self.__slot__:
             if slot.endswith("USDT"):
                 valid_attr.append(slot)
         return len(valid_attr)

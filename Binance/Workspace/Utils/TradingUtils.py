@@ -13,8 +13,8 @@ import psutil
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-import Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher as futures_market
-import Workspace.Services.PrivateAPI.Trading.FuturesTradingClient as futures_client
+from Workspace.Services.PublicData.Fetcher.FuturesMarketFetcher import FuturesMarketFetcher as futures_market
+from Workspace.Services.PrivateAPI.Trading.FuturesTradingClient import FuturesTradingClient as futures_client
 import SystemConfig
 import Workspace.Utils.BaseUtils as utils
 
@@ -29,20 +29,20 @@ SYMBOLS_STATUS: List = ["TRADING", "SETTLING", "PENDING_TRADING", "BREAK"]
 ### API 로드
 api_keys = utils.load_json(SystemConfig.Path.bianace)
 ### 인스턴스 생성
-ins_futures_market = futures_market.FuturesMarketFetcher()
-ins_futures_client = futures_client.FuturesTradingClient(**api_keys)
+ins_futures_market = futures_market()#.FuturesMarketFetcher()
+ins_futures_client = futures_client(**api_keys)#.FuturesTradingClient(**api_keys)
 
-### 백테스트용 base data
-async def init_data():
-    global init_account_balance, init_exchange_info, init_brackets_data
-    init_account_balance = await ins_futures_client.fetch_account_balance()
-    init_exchange_info = await ins_futures_market.fetch_exchange_info()
-    init_brackets_data = {
-        symbol: await ins_futures_client.fetch_leverage_brackets(symbol)
-        for symbol in SystemConfig.Streaming.symbols
-    }
+# ### 백테스트용 base data
+# async def init_data():
+#     global init_account_balance, init_exchange_info, init_brackets_data
+#     init_account_balance = await ins_futures_client.fetch_account_balance()
+#     init_exchange_info = await ins_futures_market.fetch_exchange_info()
+#     init_brackets_data = {
+#         symbol: await ins_futures_client.fetch_leverage_brackets(symbol)
+#         for symbol in SystemConfig.Streaming.symbols
+#     }
 
-asyncio.run(init_data())
+# asyncio.run(init_data())
 
 class Decorator:
     @staticmethod
@@ -491,7 +491,7 @@ class Extractor:
     # API availableBalance 필터 및 반환
     @staticmethod
     def available_balance(
-        account_data: ins_futures_client.fetch_account_balance,
+        account_data: futures_client.fetch_account_balance,
     ) -> float:
         """
         Futures 계좌의 예수금을 필터한다.
@@ -502,35 +502,35 @@ class Extractor:
     # API totalWalletBalance 필터 및 반환
     @staticmethod
     def total_wallet_balance(
-        account_data: ins_futures_client.fetch_account_balance,
+        account_data: futures_client.fetch_account_balance,
     ) -> float:
         result = account_data["totalWalletBalance"]
         return float(result)
 
     @staticmethod
     def total_margin_balance(
-        account_data: ins_futures_client.fetch_account_balance,
+        account_data: futures_client.fetch_account_balance,
     ) -> float:
         result = account_data["totalMarginBalance"]
         return float(result)
     
     @staticmethod
     def total_unrealized_pnl(
-        account_data: ins_futures_client.fetch_account_balance,
+        account_data: futures_client.fetch_account_balance,
     ) -> float:
         result = account_data["totalUnrealizedProfit"]
         return float(result)
 
     @staticmethod
     def total_position_init_margin(
-        account_data: ins_futures_client.fetch_account_balance,
+        account_data: futures_client.fetch_account_balance,
     ) -> float:
         result = account_data["totalPositionInitialMargin"]
         return float(result)
 
     # API 최대 레버리지값 필터 및 반환
     @staticmethod
-    def max_leverage(brackets_data: ins_futures_client.fetch_leverage_brackets) -> int:
+    def max_leverage(brackets_data: futures_client.fetch_leverage_brackets) -> int:
         leverage = brackets_data[0]["brackets"][0]["initialLeverage"]
         return int(leverage)
 

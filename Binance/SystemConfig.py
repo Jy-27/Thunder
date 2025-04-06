@@ -36,6 +36,45 @@ class Streaming:
     max_lengh_aggTrade = 300
     max_lengh_orderbook = 300
 
+    yfinance_symbols = [
+        "^GSPC",    #SP500
+        "^DJI",     #^DJI
+        "^IXIC",    #나스닥 종합지수
+        "^KS11",    #코스피
+        "^KQ11",    #코스닥
+        "^N255",    #니케 255
+        "^HSI",     #항생 지수
+        "^GDAXI",   #독일
+    ]
+    
+    yfinance_periods = [
+        "1d",   #1일
+        "5d",   #5일
+        "1mo",  #1개월
+        "3mo",  #3개월
+        "6mo",  #6개월
+        "1y",   #1년
+        "2y",   #2년
+        "5y",   #5년
+        "10y",  #10년
+        "ytd",  #올해 초부터 현재까지
+        "max"   #수신 가능한 최대
+    ]
+    
+    yfinance_intervals = [
+        "1m",   #1일
+        "2m",   #2일
+        "5m",   #5일
+        "15m",  #15일
+        "30m",  #30일
+        "60m",  #60일
+        "90m",  #90
+        "1d",   #1d
+        "5d",   #5d
+        "1wk",  #1wk
+        "1mo",  #1mo
+        "3mo"   #3mo
+    ]
 
 
 home = os.path.expanduser("~")

@@ -961,7 +961,7 @@ async def sleep_next_minute(minutes: int = 1, buffer_time_sec: float = 0) -> dat
     return datetime.now()
 
 
-def start_message(self, clear:bool=False):
+def start_test_mode_message(clear:bool=False):
     os.system("pkill -f *.py")
     os.system("clear")
     print_line = "=" * 50

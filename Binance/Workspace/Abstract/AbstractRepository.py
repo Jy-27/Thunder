@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-class BaseStorage(ABC):
+class BaseRepository(ABC):
     """
     Storage에 사용될 추상메소드 항목
     """
@@ -65,7 +65,7 @@ class BaseStorage(ABC):
         """
 
 
-class AppendStorage(BaseStorage):
+class AppendRepository(BaseRepository):
     @abstractmethod
     def add_data(self, field: str, data: Any):
         """
@@ -77,7 +77,7 @@ class AppendStorage(BaseStorage):
         """
         pass
 
-class ReplaceStorage(BaseStorage):
+class ReplaceRepository(BaseRepository):
     @abstractmethod
     def set_data(self, field: str, data: Any):
         """

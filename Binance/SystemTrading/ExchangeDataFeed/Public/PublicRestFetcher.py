@@ -392,36 +392,82 @@ class PublicRestFetcher:
         await asyncio.gather(*tasks)
         print(f"  \033[91m🔴 Shutdown\033[0m >> \033[91mPublicRestFetcher.py\033[0m")
 
-
-
-
 if __name__ == "__main__":
+    import Workspace.Utils.BaseUtils as base_utils
     q_count = 23
-    e_count = 18
+    e_count = 31
 
-    q_ = []
-    e_ = []
+    q_ = tuple(asyncio.Queue() for _ in range(q_count))
+    e_ = tuple(asyncio.Event() for _ in range(e_count))
 
-    for _ in range(q_count):
-        q_.append(asyncio.Queue())
-    for _ in range(e_count):
-        e_.append(asyncio.Event())
-
-    q_ = tuple(q_)
-    e_ = tuple(e_)
-
-    test_instance = PublicRestFetcher(*q_, *e_)
-
-    async def timer():
-        await asyncio.sleep(10)
-        print(f"  🚀 Event Set!!")
-        e_[0].set()
-
-    async def main():
-        tasks = [
-            asyncio.create_task(test_instance.start()),
-            asyncio.create_task(timer()),
-        ]
-        await asyncio.gather(*tasks)
-
-    asyncio.run(main())
+    class RunTest:
+        def __init__(self, q_:tuple, e_:tuple, step:int, stop_timer:int):
+            self.main_instance = PublicRestFetcher(*q_, *e_)
+            self.step = step
+            self.stop_timer = stop_timer
+        
+        async def run_stopper(self):
+            await asyncio.sleep(self.stop_timer)
+            print(f"   Stop!!")
+            self.main_instance.event_trigger_shutdown_loop.set()
+        
+        async def run_ticker_price(self):
+            self.step += 1
+            await asyncio.sleep(self.step)
+            await self.main_instance.queue_request_fetch_ticker_price.put("BTCUSDT")
+            # message = await self.main_instance.queue_feed_fetch_ticker_price.get()
+            data = await self.main_instance.ticker_price()
+            print(data)
+            if data:
+                print(f"      run_ticker_price: 👍🏻")
+            else:
+                print(f"      run_ticker_price: 👎🏻")
+        
+        async def run_book_tickers(self):
+            self.step +=1
+            await asyncio.sleep(self.step)
+            await self.main_instance.queue_request_fetch_book_tickers.put("BTCUSDT")
+            data = await self.main_instance.queue_feed_fetch_book_tickers.get()
+            if data:
+                print(f"      run_book_tickers: 👍🏻")
+            else:
+                print(f"      run_book_tickers: 👎🏻")
+        
+        async def run_24hr_ticker(self):
+            self.step +=1
+            await asyncio.sleep(self.step)
+            await self.main_instance.queue_request_fetch_24hr_ticker.put("BTCUSDT")
+            data = await self.main_instance.queue_feed_fetch_24hr_ticker.get()
+            if data:
+                print(f"      run_24hr_ticker: 👍🏻")
+            else:
+                print(f"      run_24hr_ticker: 👎🏻")
+        
+        # async def run_kline_limit(self):
+        #     self.step +=1
+        #     await asyncio.sleep(self.step)
+        #     message = {"symbol":"BTCUSDT",
+        #                "interval":"5m",
+        #                "limit":50}
+        #     await self.main_instance.queue_request_fetch_kline_limit.put(message)
+        #     data = await self.main_instance.queue
+        #     if data:
+        #         print(f"      run_kline_limit: 👍🏻")
+        #     else:
+        #         print(f"      run_kline_limit: 👎🏻")
+        
+        async def start(self):
+            base_utils.start_test_mode_message()
+            tasks = [
+                asyncio.create_task(self.run_stopper()),
+                asyncio.create_task(self.run_ticker_price()),
+                asyncio.create_task(self.run_book_tickers()),
+                asyncio.create_task(self.run_24hr_ticker()),
+                # asyncio.create_task(self.run_kline_limit()),
+                asyncio.create_task(self.main_instance.start())
+            ]
+            
+            await asyncio.gather(*tasks)
+    
+    test_instance = RunTest(q_, e_, 1, 60)
+    asyncio.run(test_instance.start())

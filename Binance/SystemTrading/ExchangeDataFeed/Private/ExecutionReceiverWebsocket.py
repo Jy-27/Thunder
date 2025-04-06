@@ -64,6 +64,7 @@ class ExecutionReceiverWebsocket:
                 message = await asyncio.wait_for(self.instance_futures_execution_websocket.receive_message(), timeout=self.websocket_timeout)
             except asyncio.TimeoutError:
                 continue
+            print(message)
             await self.queue_feed_websocket_execution.put(message)
         self.event_fired_done_shutdown_loop_websocket_execution.set()
 
@@ -94,11 +95,16 @@ if __name__ == "__main__":
     
     path = SystemConfig.Path.bianace
     api = base_utils.load_json(path)
+    
     q_ = asyncio.Queue()
-    e_ = []
-    for _ in range(3):
-        e_.append(asyncio.Event())
-    e_ = tuple(e_)
+    e_ = tuple([asyncio.Event() for _ in range(5)])
     
     test_instance = ExecutionReceiverWebsocket(api_key, q_, *e_)
-    asyncio.run(test_instance.start())
+    
+    async def main():
+        base_utils.start_test_mode_message()
+        s_ = aiohttp.ClientSession()
+        await test_instance.initialize_session(s_)
+        await test_instance.start()
+    
+    asyncio.run(main())

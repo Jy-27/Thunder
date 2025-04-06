@@ -4,9 +4,9 @@ import os, sys
 home_path = os.path.expanduser("~")
 sys.path.append(os.path.join(home_path, "github", "Thunder", "Binance"))
 
-from Workspace.Abstract.AbstractStorage import ReplaceStorage
+from Workspace.Abstract.AbstractRepository import ReplaceRepository
 
-class StorageRecorder(ReplaceStorage):
+class RepositoryAppend(ReplaceRepository):
     """
     💾 저장용으로 사용할 스토리지로써 Dict 자료형을 클라스화 한 것이다.
     """
